@@ -6,5 +6,6 @@ resources:
   - external-dns.yaml
   - cloudflared.yaml
   - helmrepository.yaml
+  - ingress-nginx.yaml
   # TODO: Re-enable after configuring Infisical secrets properly
   # - cloudflare-sealed-secrets.yaml
