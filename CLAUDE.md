@@ -10,7 +10,7 @@ Claude Code guidance for GitOps application deployment on the K3s cluster. For d
 
 Export your kubeconfig and use kubectl only for monitoring
 ```
-export KUBECONFIG=infrastructure/ansible/config/kubeconfig.yaml
+export KUBECONFIG={workspace}infrastructure/config/kubeconfig.yaml
 ```
 
 ## Application Deployment Convention

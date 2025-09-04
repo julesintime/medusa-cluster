@@ -3,4 +3,4 @@ kind: Kustomization
 resources:
   - coder.yaml
   - gitea.yaml
-  - hello-world.yaml
+  - hello.xuperson.org
