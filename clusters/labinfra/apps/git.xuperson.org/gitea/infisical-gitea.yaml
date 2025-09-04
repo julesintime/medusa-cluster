@@ -1,0 +1,30 @@
+apiVersion: secrets.infisical.com/v1alpha1
+kind: InfisicalSecret
+metadata:
+  name: gitea-admin-secret
+  namespace: gitea
+spec:
+  hostAPI: https://app.infisical.com/api
+  resyncInterval: 60
+  
+  authentication:
+    serviceToken:
+      secretsScope:
+        envSlug: prod
+        secretsPath: "/"
+        recursive: false
+      serviceTokenSecretReference:
+        secretName: infisical-service-token
+        secretNamespace: gitea
+  
+  managedKubeSecretReferences:
+    - secretName: gitea-admin-secret
+      secretNamespace: gitea
+      creationPolicy: "Orphan"
+      template:
+        data:
+          email: "{{ .GITEA_ADMIN_EMAIL.Value }}"
+          username: "{{ .GITEA_ADMIN_USERNAME.Value }}"
+          password: "{{ .GITEA_ADMIN_PASSWORD.Value }}"
+          gitea-secret-key: "{{ .GITEA_SECRET_KEY.Value }}"
+          postgres-password: "{{ .GITEA_POSTGRES_PASSWORD.Value }}"

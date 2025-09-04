@@ -9,7 +9,8 @@ resources:
   - gitea-helmrepository.yaml
   - gitea-helmrelease.yaml
   - gitea-ingress.yaml
-  - git-sealed-secrets.yaml
+  - infisical-gitea.yaml
+  # TODO: Migrate runner sealed secret to Infisical
   - runner-sealed-secret.yaml
 
 labels:
