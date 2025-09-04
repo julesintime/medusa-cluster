@@ -11,15 +11,3 @@ spec:
   sourceRef:
     kind: GitRepository
     name: flux-system
-  healthChecks:
-    - apiVersion: apps/v1
-      kind: Deployment
-      name: cloudflared
-      namespace: cloudflare
-    - apiVersion: apps/v1
-      kind: Deployment
-      name: external-dns
-      namespace: cloudflare
-  dependsOn:
-    - name: metallb
-    - name: infisical-operator
