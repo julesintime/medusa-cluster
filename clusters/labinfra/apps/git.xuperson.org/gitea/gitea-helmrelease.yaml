@@ -15,10 +15,10 @@ spec:
         namespace: flux-system
       interval: 12h
   values:
-    # Single instance deployment (no HA)
+    # Minimal single instance deployment
     replicaCount: 1
     strategy:
-      type: RollingUpdate
+      type: Recreate  # Simpler than RollingUpdate for single instance
     
     image:
       tag: "1.21"
@@ -27,8 +27,6 @@ spec:
         type: ClusterIP
         port: 3000
     extraEnvs:
-    - name: GITEA__ACTIONS__ENABLED
-      value: "true"
     - name: GITEA__SECURITY__SECRET_KEY
       valueFrom:
         secretKeyRef:
@@ -65,18 +63,20 @@ spec:
     postgresql:
       enabled: true
       auth:
-        existingSecret: "gitea-admin-secret"
+        database: "gitea"
+        username: "gitea"
+        password: "" # Will be set via existingSecret
+        existingSecret: "gitea-postgresql-secret"
         secretKeys:
           adminPasswordKey: "postgres-password"
           userPasswordKey: "postgres-password"
-        username: "gitea"
-        database: "gitea"
       primary:
         persistence:
           enabled: true
           storageClass: local-path  # Temporary: Switch back to longhorn-retain when Longhorn is fixed
+      architecture: standalone  # Minimal single instance
     postgresql-ha:
-      enabled: false  # Explicitly disable HA for single instance
+      enabled: false  # Explicitly disable HA
     persistence:
       enabled: true
       size: 10Gi
@@ -102,3 +102,9 @@ spec:
       requests:
         cpu: 100m
         memory: 128Mi
+    
+    # Disable Redis/Valkey for minimal setup
+    redis-cluster:
+      enabled: false
+    valkey:
+      enabled: false

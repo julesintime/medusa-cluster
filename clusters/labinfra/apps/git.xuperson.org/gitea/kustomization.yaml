@@ -10,6 +10,7 @@ resources:
   - gitea-helmrelease.yaml
   - gitea-ingress.yaml
   - infisical-gitea.yaml
+  - infisical-postgresql.yaml
   - infisical-runner.yaml
 
 labels:
