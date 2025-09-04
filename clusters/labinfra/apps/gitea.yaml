@@ -18,7 +18,7 @@ spec:
       namespace: gitea
     - apiVersion: apps/v1
       kind: Deployment
-      name: gitea-actions-runner
+      name: act-runner
       namespace: gitea
   dependsOn:
     - name: cloudflare-ingress
