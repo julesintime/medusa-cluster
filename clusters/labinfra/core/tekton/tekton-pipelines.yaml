@@ -1,12 +1,13 @@
 ---
+# Use GitRepository instead of OCIRepository for Tekton
 apiVersion: source.toolkit.fluxcd.io/v1beta2
-kind: OCIRepository
+kind: GitRepository
 metadata:
   name: tekton-pipelines
   namespace: flux-system
 spec:
   interval: 30m
-  url: oci://gcr.io/tekton-releases/pipeline/config
+  url: https://github.com/tektoncd/pipeline
   ref:
     tag: v0.65.0
 ---
@@ -19,8 +20,8 @@ spec:
   interval: 10m
   timeout: 5m
   sourceRef:
-    kind: OCIRepository
+    kind: GitRepository
     name: tekton-pipelines
-  path: ./
+  path: ./config
   prune: true
   targetNamespace: tekton-pipelines
