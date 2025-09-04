@@ -16,9 +16,9 @@ spec:
       kind: HelmRelease
       name: gitea
       namespace: gitea
-    - apiVersion: helm.toolkit.fluxcd.io/v2beta1
-      kind: HelmRelease
-      name: gitea-actions
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: gitea-actions-runner
       namespace: gitea
   dependsOn:
     - name: cloudflare-ingress

@@ -5,10 +5,9 @@ metadata:
   name: gitea-runner
 
 resources:
-  - gitea-actions-helmrepository.yaml
   - gitea-runner-rbac.yaml
   - gitea-runner-token-job.yaml
-  - gitea-actions-helmrelease.yaml
+  - gitea-actions-deployment.yaml
 
 labels:
   - includeSelectors: true
