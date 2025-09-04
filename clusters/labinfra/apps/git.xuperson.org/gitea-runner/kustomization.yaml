@@ -4,8 +4,11 @@ kind: Kustomization
 metadata:
   name: gitea-runner
 
-# No resources yet - placeholder for future Gitea runner deployment
-resources: []
+resources:
+  - gitea-actions-helmrepository.yaml
+  - gitea-runner-rbac.yaml
+  - gitea-runner-token-job.yaml
+  - gitea-actions-helmrelease.yaml
 
 labels:
   - includeSelectors: true
