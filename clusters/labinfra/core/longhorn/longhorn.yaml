@@ -14,6 +14,11 @@ spec:
         name: longhorn
         namespace: flux-system
   targetNamespace: longhorn-system
+  install:
+    createNamespace: true
+    crds: CreateReplace  # Ensure CRDs are installed/replaced
+  upgrade:
+    crds: CreateReplace  # Ensure CRDs are updated during upgrades
   values:
     # Storage configuration - reverted to original working settings
     defaultSettings:
