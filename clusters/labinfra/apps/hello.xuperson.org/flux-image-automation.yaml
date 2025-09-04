@@ -5,7 +5,7 @@ metadata:
   name: hello-cicd-demo
   namespace: flux-system
 spec:
-  image: 192.168.80.104:5000/sample-ci-app
+  image: registry.gitea.svc.cluster.local:5000/hello-app
   interval: 1m0s
   insecure: true
 ---

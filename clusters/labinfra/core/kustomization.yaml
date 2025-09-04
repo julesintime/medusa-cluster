@@ -6,4 +6,3 @@ resources:
   - infisical-operator.yaml
   - cloudflare-ingress.yaml
   - tekton.yaml
-  - ci-cd.yaml
