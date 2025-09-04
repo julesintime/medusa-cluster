@@ -16,6 +16,7 @@ spec:
       serviceTokenSecretReference:
         secretName: infisical-service-token
         secretNamespace: cloudflare
+        keyName: infisicalToken
   
   managedKubeSecretReferences:
     - secretName: cloudflare-secrets
@@ -23,5 +24,5 @@ spec:
       creationPolicy: "Orphan"
       template:
         data:
-          CLOUDFLARE_API_TOKEN: "{{ .CLOUDFLARE_API_TOKEN.Value }}"
-          CLOUDFLARE_TUNNEL_TOKEN: "{{ .CLOUDFLARE_TUNNEL_TOKEN.Value }}"
+          api-token: "{{ .CLOUDFLARE_API_TOKEN.Value }}"
+          tunnel-token: "{{ .CLOUDFLARE_TUNNEL_TOKEN.Value }}"
