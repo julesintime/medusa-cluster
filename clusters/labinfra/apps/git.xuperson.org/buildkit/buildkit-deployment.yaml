@@ -36,7 +36,8 @@ spec:
           cp /tmp/certs/cert.pem /certs/cert.pem
           cp /tmp/certs/key.pem /certs/key.pem
           
-          # Set proper permissions
+          # Set proper ownership and permissions for user 1000
+          chown 1000:1000 /certs/*.pem
           chmod 444 /certs/ca.pem /certs/cert.pem
           chmod 400 /certs/key.pem
           
