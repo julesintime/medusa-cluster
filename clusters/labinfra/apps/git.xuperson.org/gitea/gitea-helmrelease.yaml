@@ -74,13 +74,13 @@ spec:
       primary:
         persistence:
           enabled: true
-          storageClass: longhorn-retain  # CRITICAL: Use Retain policy for database
+          storageClass: local-path  # Temporary: Switch back to longhorn-retain when Longhorn is fixed
     postgresql-ha:
       enabled: false  # Explicitly disable HA for single instance
     persistence:
       enabled: true
       size: 10Gi
-      storageClass: longhorn-retain  # CRITICAL: Use Retain policy for data persistence
+      storageClass: local-path  # Temporary: Switch back to longhorn-retain when Longhorn is fixed
     
     # Security context for enhanced security
     podSecurityContext:
