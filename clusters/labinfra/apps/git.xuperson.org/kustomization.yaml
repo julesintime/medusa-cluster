@@ -9,6 +9,9 @@ resources:
   - gitea
   # Then deploy runner (depends on gitea being ready)
   - gitea-runner
+  # Deploy CI/CD services integrated with gitea
+  - registry
+  - buildkit
 
 labels:
   - includeSelectors: true

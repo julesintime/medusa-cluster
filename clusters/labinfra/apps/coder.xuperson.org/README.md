@@ -2,6 +2,47 @@
 
 Production-ready Coder deployment with PostgreSQL backend, DERP network support, and automatic HTTPS via Cloudflare tunnel.
 
+## � How to Login to Coder (READ THIS FIRST!)
+
+**TO ACCESS THE CODER WEB UI:**
+1. Go to `https://coder.xuperson.org`
+2. **First time setup**: You'll create the initial admin account
+   - **Email**: Use your actual email address (e.g., `admin@example.com`)
+   - **Password**: Create a new password (NOT related to any database password)
+   - **Username**: Optional display name (NOT used for login)
+3. **Future logins**: Use your **EMAIL** and the password you created
+
+**AUTHENTICATION METHODS:**
+- ✅ **Built-in**: Login with email + password
+- ✅ **GitHub OAuth**: Can be configured as external authentication
+- ✅ **Other OAuth**: GitLab, Azure DevOps, etc. can be added
+
+⚠️ **CRITICAL**: Coder login uses **EMAIL**, never username! The login page shows an email field.
+
+## �🔥 CRITICAL: Database Login Logic (Read This First!)
+
+**WHO LOGS IN WITH WHAT PASSWORD:**
+
+1. **Database Admin Login:**
+   - **Username**: `postgres` 
+   - **Password**: `CODER_POSTGRES_ADMIN_PASSWORD` (random generated)
+   - **Purpose**: Database administration ONLY (backups, maintenance)
+   - **Used by**: Database admins manually connecting
+
+2. **Application Database Login:**
+   - **Username**: `coder`
+   - **Password**: `CODER_USER_PASSWORD` (random generated) 
+   - **Purpose**: Coder application connects to database
+   - **Used by**: Coder application automatically
+
+3. **Coder Web UI Login:**
+   - **Email**: Set up during first visit to https://coder.xuperson.org
+   - **Password**: Set up during first visit to https://coder.xuperson.org
+   - **Purpose**: Human users logging into Coder web interface
+   - **Used by**: Developers accessing Coder dashboard
+
+**IMPORTANT**: Database passwords (#1 and #2) are random and automatic. Web UI login (#3) is set up by you when you first visit the site using your EMAIL address!
+
 ## Architecture
 
 ```
@@ -128,7 +169,43 @@ The following secrets must be created in Infisical (prod environment, root path 
 # Create secrets using Infisical CLI
 infisical secrets set CODER_POSTGRES_ADMIN_PASSWORD=$(openssl rand -base64 32) --env=prod
 infisical secrets set CODER_USER_PASSWORD=$(openssl rand -base64 32) --env=prod
-infisical secrets set CODER_DATABASE_URL="postgresql://coder:PASSWORD@coder-coder-postgresql:5432/coder" --env=prod
+infisical secrets set CODER_DATABASE_URL="postgresql://coder:PASSWORD@coder-postgresql:5432/coder" --env=prod
+```
+
+### **🔥 CRITICAL: PostgreSQL Password Logic (Don't Get Confused!)**
+
+**PostgreSQL uses THREE different passwords - here's what each one actually does:**
+
+1. **`CODER_POSTGRES_ADMIN_PASSWORD`** → **`postgres-admin-password`**
+   - **What it's for**: PostgreSQL **`postgres`** superuser account
+   - **Used by**: Database administration, backups, maintenance ONLY
+   - **Login username**: `postgres` (built-in PostgreSQL superuser)
+   - **Application uses this**: ❌ NO - Coder app never uses this
+
+2. **`CODER_USER_PASSWORD`** → **`coder-user-password`**  
+   - **What it's for**: PostgreSQL **`coder`** application user account
+   - **Used by**: PostgreSQL Helm chart to CREATE the `coder` user
+   - **Login username**: `coder` (created by Helm chart)
+   - **Application uses this**: ❌ NO - just for user creation
+
+3. **`CODER_DATABASE_URL`** → **`database-url`**
+   - **What it's for**: Full connection string that Coder application actually uses
+   - **Format**: `postgresql://coder:PASSWORD@service:5432/database`
+   - **Used by**: Coder application for ALL database connections
+   - **Application uses this**: ✅ YES - this is what matters!
+
+**🚨 FOR SUCCESSFUL DEPLOYMENT:**
+- All three passwords MUST be identical: `mGLa22NGmoYRD7Ux4F`
+- The `database-url` MUST use the same password as `coder-user-password`
+- Service name MUST be `coder-postgresql` (not `coder-coder-postgresql`)
+- NO special characters like `/`, `@`, `:` in passwords (breaks URL parsing)
+
+**Working Example:**
+```bash
+# All three use the same safe password
+infisical secrets set CODER_POSTGRES_ADMIN_PASSWORD="mGLa22NGmoYRD7Ux4F" --env=prod
+infisical secrets set CODER_USER_PASSWORD="mGLa22NGmoYRD7Ux4F" --env=prod  
+infisical secrets set CODER_DATABASE_URL="postgresql://coder:mGLa22NGmoYRD7Ux4F@coder-postgresql:5432/coder?sslmode=disable" --env=prod
 ```
 
 **Secret Mapping**:
