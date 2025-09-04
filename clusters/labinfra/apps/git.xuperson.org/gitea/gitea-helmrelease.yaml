@@ -1,3 +1,4 @@
+---
 apiVersion: helm.toolkit.fluxcd.io/v2beta1
 kind: HelmRelease
 metadata:
@@ -5,98 +6,93 @@ metadata:
   namespace: gitea
 spec:
   interval: 30m
+  timeout: 15m
   chart:
     spec:
       chart: gitea
-      version: '*'
+      version: "^10.0.0"
       sourceRef:
         kind: HelmRepository
         name: gitea-charts
-        namespace: flux-system
-      interval: 12h
+        namespace: gitea
+  
   values:
-    # Single instance deployment (no HA)
+    # Single replica for minimal setup
     replicaCount: 1
-    strategy:
-      type: RollingUpdate
     
-    image:
-      tag: "1.21"
+    # Disable all HA dependencies for minimal setup
+    postgresql-ha:
+      enabled: false
+    
+    postgresql:
+      enabled: false
+    
+    valkey-cluster:
+      enabled: false
+    
+    valkey:
+      enabled: false
+    
+    # Use SQLite database for minimal setup (no external dependencies)
+    gitea:
+      config:
+        database:
+          DB_TYPE: sqlite3
+          PATH: /data/gitea/gitea.db
+        
+        server:
+          DOMAIN: git.xuperson.org
+          ROOT_URL: https://git.xuperson.org
+          HTTP_PORT: 3000
+          PROTOCOL: http
+        
+        # Use memory for cache and session (no external dependencies)
+        cache:
+          ENABLED: true
+          ADAPTER: memory
+        
+        session:
+          PROVIDER: memory
+      
+      # Configure admin user from Infisical secrets
+      admin:
+        existingSecret: gitea-admin-secrets
+        username: ""  # Will be read from secret
+        password: ""  # Will be read from secret
+        email: ""     # Will be read from secret
+    
+    # Simple service configuration
     service:
       http:
         type: ClusterIP
         port: 3000
-    extraEnvs:
-    - name: GITEA__ACTIONS__ENABLED
-      value: "true"
-    - name: GITEA__SECURITY__SECRET_KEY
-      valueFrom:
-        secretKeyRef:
-          name: gitea-admin-secret
-          key: gitea-secret-key
+      ssh:
+        type: ClusterIP
+        port: 22
+    
+    # Enable ingress
     ingress:
-      enabled: false
-    gitea:
-      admin:
-        existingSecret: gitea-admin-secret
-      config:
-        server:
-          ROOT_URL: "https://git.xuperson.org/"
-        security:
-          INSTALL_LOCK: true
-          PASSWORD_COMPLEXITY: "off"
-        actions:
-          ENABLED: true
-          LogRetentionDays: 30
-          LogCompression: none
-        repository:
-          ENABLE_PUSH_CREATE_USER: true
-          ENABLE_PUSH_CREATE_ORG: true
-        service:
-          DISABLE_REGISTRATION: false
-          REQUIRE_SIGNIN_VIEW: false
-        log:
-          MODE: file,console
-          LEVEL: Info
-          LOG_SQL: false
-          ROOT_PATH: /data/gitea/log
-        webhook:
-          ALLOWED_HOST_LIST: "*.cluster.local,*.svc.cluster.local,10.43.0.0/16,192.168.80.0/24"
-    postgresql:
       enabled: true
-      auth:
-        postgresPassword: "changeme"
-        username: "gitea"
-        password: "gitea"
-        database: "gitea"
-      primary:
-        persistence:
-          enabled: true
-          storageClass: longhorn-retain  # CRITICAL: Use Retain policy for database
-    postgresql-ha:
-      enabled: false  # Explicitly disable HA for single instance
+      className: nginx
+      hosts:
+        - host: git.xuperson.org
+          paths:
+            - path: /
+              pathType: Prefix
+    
+    # Enable persistence for data
     persistence:
       enabled: true
       size: 10Gi
-      storageClass: longhorn-retain  # CRITICAL: Use Retain policy for data persistence
+      storageClass: ""  # Use default storage class
+      accessModes:
+        - ReadWriteOnce
     
-    # Security context for enhanced security
-    podSecurityContext:
-      fsGroup: 1000
-    securityContext:
-      runAsUser: 1000
-      runAsGroup: 1000
-      runAsNonRoot: true
-      readOnlyRootFilesystem: false
-      allowPrivilegeEscalation: false
-      capabilities:
-        drop:
-        - ALL
-    
+    # Resource limits for single pod
     resources:
       limits:
         cpu: 1000m
-        memory: 2Gi
+        memory: 1Gi
       requests:
         cpu: 100m
-        memory: 128Mi
+        memory: 256Mi

@@ -2,18 +2,17 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 metadata:
-  name: gitea-main
+  name: gitea
 
 resources:
   - namespace.yaml
   - gitea-helmrepository.yaml
+  - gitea-infisical-secrets.yaml
   - gitea-helmrelease.yaml
   - gitea-ingress.yaml
-  - infisical-gitea.yaml
-  - infisical-runner.yaml
 
 labels:
   - includeSelectors: true
     pairs:
       app.kubernetes.io/name: gitea
-      app.kubernetes.io/component: git-server
+      app.kubernetes.io/managed-by: flux
