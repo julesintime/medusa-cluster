@@ -12,7 +12,11 @@ spec:
     kind: GitRepository
     name: flux-system
   healthChecks:
-    - apiVersion: operator.tekton.dev/v1alpha1
-      kind: TektonPipeline
-      name: pipelines
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: tekton-pipelines-controller
+      namespace: tekton-pipelines
+    - apiVersion: apps/v1
+      kind: Deployment  
+      name: tekton-pipelines-webhook
       namespace: tekton-pipelines
