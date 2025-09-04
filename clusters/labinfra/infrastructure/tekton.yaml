@@ -1,0 +1,18 @@
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: tekton
+  namespace: flux-system
+spec:
+  interval: 10m0s
+  path: ./clusters/labinfra/core/tekton
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  healthChecks:
+    - apiVersion: operator.tekton.dev/v1alpha1
+      kind: TektonPipeline
+      name: pipelines
+      namespace: tekton-pipelines

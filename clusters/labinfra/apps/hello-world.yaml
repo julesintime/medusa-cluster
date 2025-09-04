@@ -1,0 +1,20 @@
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: hello-world
+  namespace: flux-system
+spec:
+  interval: 10m0s
+  path: ./clusters/labinfra/apps/hello.xuperson.org
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  healthChecks:
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: hello-app
+      namespace: hello
+  dependsOn:
+    - name: cloudflare-ingress
