@@ -24,7 +24,7 @@ jobs:
         echo "Act runner environment:"
         env | grep -E "(HOME|USER|XDG|TMPDIR|DOCKER|BUILDKIT)" || echo "No relevant env vars found"
         echo "Connecting to remote BuildKit service..."
-        # BUILDKIT_HOST=tcp://buildkitd.buildkit.svc.cluster.local:1235 buildctl debug workers
+        BUILDKIT_HOST=tcp://buildkitd.gitea.svc.cluster.local:1235 buildctl debug workers
 
     - name: Set image metadata
       run: |
@@ -55,7 +55,7 @@ jobs:
     - name: Build and push to Docker Registry (HTTP)
       run: |
         echo "🐳 Building and pushing to Docker Registry (insecure HTTP)..."
-        buildctl build \
+        BUILDKIT_HOST=tcp://buildkitd.gitea.svc.cluster.local:1235 buildctl build \
           --frontend dockerfile.v0 \
           --local context=. \
           --local dockerfile=. \
@@ -68,7 +68,7 @@ jobs:
     - name: Build and push to Gitea Registry
       run: |
         echo "📦 Building and pushing to Gitea Registry..."
-        buildctl build \
+        BUILDKIT_HOST=tcp://buildkitd.gitea.svc.cluster.local:1235 buildctl build \
           --frontend dockerfile.v0 \
           --local context=. \
           --local dockerfile=. \
@@ -81,7 +81,7 @@ jobs:
     - name: Build and push to Harbor Registry
       run: |
         echo "🏗️ Building and pushing to Harbor Registry..."
-        buildctl build \
+        BUILDKIT_HOST=tcp://buildkitd.gitea.svc.cluster.local:1235 buildctl build \
           --frontend dockerfile.v0 \
           --local context=. \
           --local dockerfile=. \
