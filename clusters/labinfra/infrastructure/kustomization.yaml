@@ -8,4 +8,3 @@ resources:
   - infisical-operator.yaml
   - tekton.yaml
   - ci-cd.yaml
-  - ci-cd
