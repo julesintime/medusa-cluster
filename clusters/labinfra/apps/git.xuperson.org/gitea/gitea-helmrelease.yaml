@@ -65,8 +65,7 @@ spec:
       auth:
         database: "gitea"
         username: "gitea"
-        password: "" # Will be set via existingSecret
-        existingSecret: "gitea-postgresql-secret"
+        existingSecret: "gitea-admin-secret"
         secretKeys:
           adminPasswordKey: "postgres-password"
           userPasswordKey: "postgres-password"
