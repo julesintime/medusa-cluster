@@ -10,4 +10,4 @@ resources:
   - coder-helmrepository.yaml
   - coder-helmrelease.yaml
   - coder-ingress.yaml
-  - coder-sealed-secrets.yaml
+  - coder-infisical-secrets.yaml

@@ -23,15 +23,17 @@ apps/coder.xuperson.org/
 ├── coder-helmrepository.yaml     # Coder Helm repository
 ├── coder-helmrelease.yaml        # Coder server deployment (Helm)
 ├── coder-ingress.yaml            # Ingress with DERP WebSocket support
+├── coder-infisical-secrets.yaml  # Infisical secret synchronization
 ├── proxy-headers.yaml            # NGINX proxy headers for WebSocket
-└── database-secret.yaml          # [Deprecated] - Now using SOPS
+└── templates/                     # Coder workspace templates (Terraform)
 ```
 
 ## Key Features
 
 ### 🔐 Security
-- **SOPS Encryption**: All passwords encrypted with Age
-- **No Plaintext Secrets**: Zero "changeme" passwords in manifests
+- **Infisical Integration**: All secrets managed via Infisical and synced automatically
+- **No Plaintext Secrets**: Zero hardcoded passwords in manifests
+- **Shared Service Token**: Cross-namespace service token from infisical-operator
 - **RBAC**: Dedicated service account with minimal permissions
 - **Security Context**: Non-root containers, read-only filesystem
 
@@ -93,49 +95,71 @@ config:
 
 ## Secrets Management
 
-All sensitive data is encrypted with SOPS and stored in `/secrets/sops/coder-secrets.yaml`:
+All sensitive data is managed via **Infisical** and synchronized to Kubernetes using the InfisicalSecret operator.
 
-```yaml
-# Encrypted with Age - never store plaintext!
-stringData:
-  postgres-admin-password: "[SOPS-ENCRYPTED]"
-  coder-user-password: "[SOPS-ENCRYPTED]"  
-  database-url: "postgresql://coder:[PASSWORD]@coder-coder-postgresql:5432/coder?sslmode=disable"
+### Setup Infisical Service Token
+
+**This application uses the shared Infisical service token from the `infisical-operator` namespace**, eliminating the need for per-namespace service token creation.
+
+**Benefits of Shared Service Token**:
+- ✅ **Single token management** - One service token for all applications
+- ✅ **Consistent permissions** - Same access scope across projects
+- ✅ **Reduced complexity** - No need to create tokens per namespace
+- ✅ **Better security** - Centralized token rotation and management
+
+**Verify Secret Sync**:
+```bash
+# Check if InfisicalSecret is syncing
+kubectl get infisicalsecrets -n coder
+kubectl describe infisicalsecret coder-database-secrets -n coder
+
+# Check if managed secret is created
+kubectl get secret coder-database-secrets -n coder
+
+# Verify the shared service token exists
+kubectl get secret infisical-service-token -n infisical-operator
 ```
 
-### Secret Generation
+### Required Secrets in Infisical
+
+The following secrets must be created in Infisical (prod environment, root path `/`):
 
 ```bash
-# Generate secure passwords
-openssl rand -base64 32  # For postgres admin
-openssl rand -base64 32  # For coder user
-
-# Edit encrypted secrets
-SOPS_AGE_KEY_FILE=secrets/age/age-key.txt sops edit secrets/sops/coder-secrets.yaml
-
-# Encrypt new secrets
-SOPS_AGE_KEY_FILE=secrets/age/age-key.txt sops --encrypt --in-place secrets/sops/coder-secrets.yaml
+# Create secrets using Infisical CLI
+infisical secrets set CODER_POSTGRES_ADMIN_PASSWORD=$(openssl rand -base64 32) --env=prod
+infisical secrets set CODER_USER_PASSWORD=$(openssl rand -base64 32) --env=prod
+infisical secrets set CODER_DATABASE_URL="postgresql://coder:PASSWORD@coder-coder-postgresql:5432/coder" --env=prod
 ```
+
+**Secret Mapping**:
+- `CODER_POSTGRES_ADMIN_PASSWORD` → `postgres-admin-password`
+- `CODER_USER_PASSWORD` → `coder-user-password`  
+- `CODER_DATABASE_URL` → `database-url`
 
 ## Deployment
 
 ### Prerequisites
-1. Flux CD running with SOPS decryption
-2. Age private key in `secrets/age/age-key.txt`
-3. MetalLB configured with IP pool `192.168.80.100-150`
-4. NGINX Ingress with DERP support enabled
-5. Cloudflare tunnel and ExternalDNS configured
+1. **Flux CD**: GitOps controller with Infisical operator installed
+2. **Infisical Service Token**: Shared token in `infisical-operator` namespace
+3. **MetalLB**: IP pool `192.168.80.100-150` configured
+4. **NGINX Ingress**: WebSocket and DERP protocol support enabled
+5. **CloudFlare**: Tunnel and ExternalDNS for automatic domain management
+6. **Required Secrets**: Database passwords stored in Infisical (`prod` environment)
 
 ### Deploy Application
 ```bash
 # Add to main apps kustomization
-cd clusters/minikube
-echo "  - ../../apps/coder.xuperson.org" >> applications/kustomization.yaml
+cd clusters/labinfra/apps
+echo "  - coder.xuperson.org" >> kustomization.yaml
 
 # Commit and push - Flux handles deployment
-git add apps/coder.xuperson.org/
-git commit -m "Add Coder development environment"
+git add coder.xuperson.org/
+git commit -m "Add Coder development environment with Infisical secrets"
 git push
+
+# Monitor deployment
+flux get kustomizations -A
+kubectl get pods -n coder -w
 ```
 
 ### Verify Deployment
@@ -167,7 +191,8 @@ error: dial tcp: lookup coder-postgresql on 10.43.0.10:53: no such host
 kubectl get svc -n coder | grep postgresql
 
 # Should show: coder-coder-postgresql (not coder-postgresql)
-# Update database-url in SOPS secrets if needed
+# Update database-url in Infisical if needed:
+# infisical secrets set CODER_DATABASE_URL="postgresql://coder:PASSWORD@coder-coder-postgresql:5432/coder" --env=prod
 ```
 
 #### 2. SSL Connection Errors
@@ -265,10 +290,15 @@ kubectl exec -n coder coder-coder-postgresql-0 -- pg_dump -U coder coder > coder
 
 ### Update Secrets
 ```bash
-# Rotate passwords
-SOPS_AGE_KEY_FILE=secrets/age/age-key.txt sops edit secrets/sops/coder-secrets.yaml
+# Rotate passwords in Infisical
+infisical secrets set CODER_POSTGRES_ADMIN_PASSWORD=$(openssl rand -base64 32) --env=prod
+infisical secrets set CODER_USER_PASSWORD=$(openssl rand -base64 32) --env=prod
 
-# Force pod restart to pick up new secrets
+# Update database URL with new password
+NEW_PASSWORD=$(infisical secrets get CODER_USER_PASSWORD --env=prod --plain)
+infisical secrets set CODER_DATABASE_URL="postgresql://coder:${NEW_PASSWORD}@coder-coder-postgresql:5432/coder" --env=prod
+
+# Secrets sync automatically - optionally restart for immediate pickup
 kubectl rollout restart deployment/coder -n coder
 ```
 
