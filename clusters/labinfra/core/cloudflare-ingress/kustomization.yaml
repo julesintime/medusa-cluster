@@ -7,5 +7,6 @@ resources:
   - cloudflared.yaml
   - helmrepository.yaml
   - ingress-nginx.yaml
-  # TODO: Re-enable after configuring Infisical secrets properly
+  - infisical-config.yaml
+  # TODO: Enable after configuring Infisical secrets properly (see setup-infisical.md)
   # - cloudflare-sealed-secrets.yaml

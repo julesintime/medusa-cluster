@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: infisical-config
+  namespace: cloudflare
+data:
+  project-id: "REPLACE_WITH_PROJECT_ID"  # Replace with your Infisical project ID
+  environment: "prod"
+  secret-path: "/cloudflare"
+  host-api: "https://app.infisical.com/api"
