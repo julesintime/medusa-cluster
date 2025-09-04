@@ -20,39 +20,34 @@ spec:
     # Single replica for minimal setup
     replicaCount: 1
     
-    # Disable all HA dependencies for minimal setup
+    # Single-pod configuration as per official docs
     postgresql-ha:
       enabled: false
     
     postgresql:
-      enabled: false
+      enabled: true
     
     valkey-cluster:
       enabled: false
     
     valkey:
-      enabled: false
+      enabled: true
     
-    # Use SQLite database for minimal setup (no external dependencies)
+    # Use PostgreSQL database with proper indexer config
     gitea:
       config:
         database:
-          DB_TYPE: sqlite3
-          PATH: /data/gitea/gitea.db
+          DB_TYPE: postgres
+        
+        indexer:
+          ISSUE_INDEXER_TYPE: bleve
+          REPO_INDEXER_ENABLED: true
         
         server:
           DOMAIN: git.xuperson.org
           ROOT_URL: https://git.xuperson.org
           HTTP_PORT: 3000
           PROTOCOL: http
-        
-        # Use memory for cache and session (no external dependencies)
-        cache:
-          ENABLED: true
-          ADAPTER: memory
-        
-        session:
-          PROVIDER: memory
       
       # Configure admin user from Infisical secrets
       admin:
