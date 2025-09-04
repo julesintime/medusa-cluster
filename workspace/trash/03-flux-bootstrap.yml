@@ -1,0 +1,184 @@
+---
+# Bootstrap Flux CD for GitOps management
+- name: Bootstrap Flux CD on K3s cluster
+  hosts: k3s_control[0]
+  gather_facts: true
+  vars_files:
+    - "../config/group_vars.yml"
+  vars:
+    kubeconfig_path: "{{ playbook_dir }}/../config/kubeconfig.yaml"
+# GitHub variables will be fetched from Infisical at runtime
+    flux_version: "v2.4.0"
+
+  tasks:
+    - name: Fetch GitHub owner from Infisical
+      shell: infisical secrets get GITHUB_OWNER --env=dev --plain --silent
+      register: github_owner_result
+      delegate_to: localhost
+      become: false
+      
+    - name: Fetch GitHub repo from Infisical
+      shell: infisical secrets get GITHUB_REPO --env=dev --plain --silent
+      register: github_repo_result
+      delegate_to: localhost
+      become: false
+      
+    - name: Fetch GitHub token from Infisical
+      shell: infisical secrets get GITHUB_TOKEN --env=dev --plain --silent
+      register: github_token_result
+      delegate_to: localhost
+      become: false
+      
+    - name: Set GitHub variables
+      set_fact:
+        github_owner: "{{ github_owner_result.stdout }}"
+        github_repo: "{{ github_repo_result.stdout }}"
+        github_token: "{{ github_token_result.stdout }}"
+        
+    - name: Verify GitHub variables are available
+      debug:
+        msg: |
+          GitHub configuration fetched from Infisical:
+          - Owner: {{ github_owner }}
+          - Repository: {{ github_repo }}
+          - Token: [REDACTED]
+
+    - name: Set KUBECONFIG environment
+      set_fact:
+        kubeconfig_env:
+          KUBECONFIG: "{{ kubeconfig_path }}"
+      delegate_to: localhost
+      become: false
+
+    - name: Check if Flux CLI is installed
+      shell: which flux
+      register: flux_installed
+      failed_when: false
+      changed_when: false
+      delegate_to: localhost
+      become: false
+
+    - name: Install Flux CLI
+      shell: |
+        curl -s https://fluxcd.io/install.sh | bash
+        sudo mv flux /usr/local/bin/
+      when: flux_installed.rc != 0
+      delegate_to: localhost
+      become: false
+
+    - name: Verify Flux CLI installation
+      shell: flux version --client
+      register: flux_version_output
+      delegate_to: localhost
+      become: false
+
+    - name: Display Flux CLI version
+      debug:
+        msg: "Flux CLI installed: {{ flux_version_output.stdout }}"
+
+    - name: Check if Flux is already bootstrapped
+      shell: kubectl get namespace flux-system
+      environment: "{{ kubeconfig_env }}"
+      register: flux_namespace_check
+      failed_when: false
+      changed_when: false
+      delegate_to: localhost
+      become: false
+
+    - name: Check if FluxCD manifests exist in repository
+      stat:
+        path: "{{ playbook_dir }}/../../../clusters/labinfra/flux-system/gotk-components.yaml"
+      register: flux_manifests_exist
+      delegate_to: localhost
+      become: false
+
+    - name: Apply existing FluxCD manifests if available
+      shell: |
+        kubectl apply -k {{ playbook_dir }}/../../../clusters/labinfra/flux-system
+      environment: 
+        KUBECONFIG: "{{ kubeconfig_path }}"
+      when: 
+        - flux_namespace_check.rc != 0
+        - flux_manifests_exist.stat.exists
+      delegate_to: localhost
+      become: false
+      register: flux_apply_result
+
+    - name: Bootstrap Flux CD (if manifests don't exist)
+      shell: |
+        flux bootstrap github \
+          --owner="{{ github_owner }}" \
+          --repository="{{ github_repo }}" \
+          --branch=master \
+          --path=./clusters/labinfra \
+          --personal \
+          --token-auth
+      environment: 
+        GITHUB_TOKEN: "{{ github_token }}"
+        KUBECONFIG: "{{ kubeconfig_path }}"
+      when: 
+        - flux_namespace_check.rc != 0
+        - not flux_manifests_exist.stat.exists
+      delegate_to: localhost
+      become: false
+      register: flux_bootstrap_result
+
+    - name: Create GitHub token secret for existing manifests
+      shell: |
+        kubectl create secret generic flux-system \
+          --from-literal=username=git \
+          --from-literal=password="{{ github_token }}" \
+          --namespace=flux-system \
+          --dry-run=client -o yaml | kubectl apply -f -
+      environment: "{{ kubeconfig_env }}"
+      when: flux_apply_result is defined and flux_apply_result.changed
+      delegate_to: localhost
+      become: false
+
+    - name: Display bootstrap results
+      debug:
+        var: flux_bootstrap_result.stdout_lines
+      when: flux_bootstrap_result is defined
+
+    - name: Wait for Flux system to be ready
+      shell: kubectl wait --for=condition=ready pod -l app=source-controller -n flux-system --timeout=300s
+      environment: "{{ kubeconfig_env }}"
+      delegate_to: localhost
+      become: false
+
+    # Infisical integration skipped - using CLI approach instead
+
+    - name: Verify Flux installation
+      shell: flux get sources git
+      environment: "{{ kubeconfig_env }}"
+      register: flux_sources
+      delegate_to: localhost
+      become: false
+
+    - name: Display Flux sources
+      debug:
+        var: flux_sources.stdout_lines
+
+    - name: Display success message
+      debug:
+        msg: |
+          🎉 Flux CD Bootstrap Completed Successfully!
+          
+          📊 Flux Status:
+          - Namespace: flux-system created
+          - Repository: {{ github_owner }}/{{ github_repo }} connected
+          - Path: ./clusters/labinfra monitored
+          - SOPS decryption: Age key configured
+          
+          🔧 Next Steps:
+          1. Commit GitOps manifests to repository
+          2. Flux will automatically deploy infrastructure components
+          3. Monitor deployments: flux get all -A
+          
+          📁 GitOps Structure:
+          ./clusters/labinfra/
+          ├── flux-system/     (managed by Flux)
+          ├── core/            (Longhorn, MetalLB, etc.)
+          └── apps/            (your apps)
+          
+          🚀 Ready for GitOps workflow!

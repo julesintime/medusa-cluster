@@ -6,7 +6,7 @@ metadata:
   annotations:
     external-dns.alpha.kubernetes.io/hostname: "hello.xuperson.org"
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/proxy-set-headers: "ingress-nginx/proxy-headers"
+    nginx.ingress.kubernetes.io/proxy-set-headers: "cloudflare/proxy-headers"
   labels:
     app.kubernetes.io/name: hello-cicd-demo
     app.kubernetes.io/part-of: hello

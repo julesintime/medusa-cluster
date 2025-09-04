@@ -57,20 +57,23 @@ labinfra/
 │   │   ├── ansible_minikube_key         # SSH automation key
 │   │   └── kubeconfig.yaml              # Generated K3s access
 │   └── playbooks/
+│       ├── 00-vm-removal.yml            # Proxmox VM cleanup
 │       ├── 01-vm-creation.yml           # Proxmox VM creation
 │       ├── 02-k3s-installation.yml      # K3s cluster deployment  
-│       └── 03-flux-bootstrap.yml        # GitOps initialization
+│       └── 03-flux-bootstrap.yml        # GitOps + Infisical initialization
 ├── clusters/labinfra/                   # GitOps manifests (Flux managed)
 │   ├── flux-system/                 # Flux CD controllers
 │   ├── core/                            # Core cluster components
 │   │   ├── longhorn/                    # Distributed storage
 │   │   ├── metallb/                     # BGP load balancer
-│   │   ├── nginx-ingress/               # Ingress + DERP WebSocket
-│   │   ├── cloudflare/                  # Tunnel + ExternalDNS
+│   │   ├── infisical-operator/          # Secrets management
+│   │   ├── cloudflare-ingress/          # Tunnel + ExternalDNS + NGINX
+│   │   ├── tekton/                      # CI/CD pipelines
 │   │   └── kustomization.yaml           # Core orchestration
 │   ├── apps/                            # User applications
 │   │   ├── hello.xuperson.org/          # Test application
 │   │   ├── coder.xuperson.org/          # Development environment
+│   │   ├── git.xuperson.org/            # Git hosting + CI/CD runners
 │   │   └── kustomization.yaml           # App orchestration
 │   └── kustomization.yaml               # Main cluster config
 ├── docs/                                # Documentation
