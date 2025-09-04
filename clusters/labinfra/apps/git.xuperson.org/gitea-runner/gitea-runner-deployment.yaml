@@ -38,7 +38,7 @@ spec:
         app: act-runner
     spec:
       restartPolicy: Always
-      serviceAccountName: gitea-runner
+      serviceAccountName: gitea-runner-init
       initContainers:
       - name: wait-for-secret
         image: bitnami/kubectl:latest
@@ -46,12 +46,12 @@ spec:
         - /bin/bash
         - -c
         - |
-          echo "🔍 Waiting for runner-secret to be created by bootstrap job..."
-          while ! kubectl get secret runner-secret -n gitea >/dev/null 2>&1; do
+          echo "🔍 Waiting for gitea-runner-token to be created by bootstrap job..."
+          while ! kubectl get secret gitea-runner-token -n gitea >/dev/null 2>&1; do
             echo "   Secret not found, waiting 10 seconds..."
             sleep 10
           done
-          echo "✅ Found runner-secret! Act-runner can now start."
+          echo "✅ Found gitea-runner-token! Act-runner can now start."
         resources:
           requests:
             memory: "32Mi"
@@ -125,13 +125,13 @@ spec:
         - name: DOCKER_CONFIG
           value: "/home/runner/.local/share/docker"
         - name: BUILDKIT_HOST
-          value: tcp://buildkitd.buildkit.svc.cluster.local:1235
+          value: tcp://buildkitd.gitea.svc.cluster.local:1235
         - name: GITEA_INSTANCE_URL
           value: https://git.xuperson.org
         - name: GITEA_RUNNER_REGISTRATION_TOKEN
           valueFrom:
             secretKeyRef:
-              name: runner-secret
+              name: gitea-runner-token
               key: token
         - name: GITEA_RUNNER_NAME
           value: "minikube-runner-host"
