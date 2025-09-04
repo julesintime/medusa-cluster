@@ -1,0 +1,21 @@
+apiVersion: secrets.infisical.com/v1alpha1
+kind: InfisicalSecret
+metadata:
+  name: cloudflare-api-token
+  namespace: cloudflare
+spec:
+  hostAPI: https://app.infisical.com/api
+  projectId: "66fb6b8ee3a3f6b39b8b8d88"
+  environment: "prod"
+  secretsPath: "/"
+  tokenSecretReference:
+    secretName: infisical-service-token
+    secretNamespace: infisical-operator-system
+    tokenKey: token
+  managedSecretReference:
+    secretName: cloudflare-api-token
+    secretNamespace: cloudflare
+    creationPolicy: "Owner"
+  secretsToSync:
+    - secretName: CLOUDFLARE_API_TOKEN
+      secretKey: api-token

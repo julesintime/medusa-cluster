@@ -7,6 +7,8 @@ resources:
   - cloudflared.yaml
   - helmrepository.yaml
   - ingress-nginx.yaml
+  - infisical-api-token.yaml
+  - infisical-tunnel-token.yaml
   - infisical-config.yaml
   - infisical-cloudflare.yaml
   # TODO: Enable after configuring Infisical secrets properly (see setup-infisical.md)
