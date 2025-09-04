@@ -11,12 +11,4 @@ spec:
   sourceRef:
     kind: GitRepository
     name: flux-system
-  healthChecks:
-    - apiVersion: apps/v1
-      kind: Deployment
-      name: tekton-pipelines-controller
-      namespace: tekton-pipelines
-    - apiVersion: apps/v1
-      kind: Deployment  
-      name: tekton-pipelines-webhook
-      namespace: tekton-pipelines
+  # Let Flux auto-detect health from the official Tekton release
