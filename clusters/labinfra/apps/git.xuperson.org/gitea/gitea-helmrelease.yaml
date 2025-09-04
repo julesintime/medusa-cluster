@@ -60,6 +60,12 @@ spec:
           ROOT_PATH: /data/gitea/log
         webhook:
           ALLOWED_HOST_LIST: "*.cluster.local,*.svc.cluster.local,10.43.0.0/16,192.168.80.0/24"
+        database:
+          DB_TYPE: postgres
+          HOST: gitea-postgresql:5432
+          NAME: gitea
+          USER: gitea
+          PASSWD: "yxUBzVSeEypK6+GNnXC8OiHly55xVqf/F9esY0IXs/o="
     postgresql:
       enabled: true
       auth:
