@@ -26,7 +26,7 @@ spec:
     spec:
       containers:
       - name: hello-cicd-demo
-        image: git.xuperson.org/demo/hello-cicd-demo:latest # {"$imagepolicy": "flux-system:hello-cicd-demo"}
+        image: git.xuperson.org/admin/hello-labinfra:latest # {"$imagepolicy": "flux-system:hello-cicd-demo"}
         imagePullPolicy: Always
         ports:
         - containerPort: 3000

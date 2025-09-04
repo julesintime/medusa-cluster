@@ -10,6 +10,9 @@ resources:
   - gitea-infisical-secrets.yaml
   - gitea-helmrelease.yaml
   - gitea-ingress.yaml
+  - gitea-repo-init.yaml
+  - gitea-source-push.yaml
+  - gitea-workflow-config.yaml
 
 labels:
   - includeSelectors: true

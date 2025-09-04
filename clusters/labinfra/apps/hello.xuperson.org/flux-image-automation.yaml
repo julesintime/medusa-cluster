@@ -5,7 +5,7 @@ metadata:
   name: hello-cicd-demo
   namespace: flux-system
 spec:
-  image: git.xuperson.org/demo/hello-cicd-demo
+  image: git.xuperson.org/admin/hello-labinfra
   interval: 1m0s
   insecure: false
 ---

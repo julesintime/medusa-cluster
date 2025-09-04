@@ -8,12 +8,12 @@ on:
 
 jobs:
   build:
-    name: Build with BuildKit
+    name: Build with BuildKit and Push to Gitea Registry
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
       run: |
-        git clone https://git.xuperson.org/giteaadmin/hello-xuperson-org.git .
+        git clone https://git.xuperson.org/demo/hello-cicd-demo.git .
         ls -la
 
     - name: Test BuildKit connection
@@ -21,8 +21,6 @@ jobs:
         echo "Testing BuildKit connectivity..."
         echo "BuildKit client version:"
         buildctl --version
-        echo "Act runner environment:"
-        env | grep -E "(HOME|USER|XDG|TMPDIR|DOCKER|BUILDKIT)" || echo "No relevant env vars found"
         echo "Connecting to remote BuildKit service..."
         BUILDKIT_HOST=tcp://buildkitd.gitea.svc.cluster.local:1235 buildctl debug workers
 
@@ -45,58 +43,31 @@ jobs:
         echo "- Short SHA: $SHORT_SHA"
         echo "- Image Tag: $IMAGE_TAG"
 
-    - name: Configure registry authentication
+    - name: Configure Gitea registry authentication
       run: |
-        echo "Configuring registry authentication..."
+        echo "Configuring Gitea package registry authentication..."
         mkdir -p $DOCKER_CONFIG
-        echo '{"auths":{"harbor-1756731822-registry.default.svc.cluster.local:5000":{"auth":"YWRtaW46SGFyYm9yMTIzNDUK"},"git.xuperson.org":{"auth":"Z2l0ZWFhZG1pbjoyYXAxN0xMVkpEckNqYW50bWNCSDBkTk12ZTljZzV6emdhZHlDWWxHCg=="}},"HttpHeaders":{"User-Agent":"Docker-Client/19.03.0 (linux)"},"credsStore":""}' > $DOCKER_CONFIG/config.json
-        echo "Registry auth configured for Harbor (K8s service) and Gitea (access token)"
+        echo '{"auths":{"git.xuperson.org":{"auth":"Z2l0ZWFhZG1pbjoyYXAxN0xMVkpEckNqYW50bWNCSDBkTk12ZTljZzV6emdhZHlDWWxHCg=="}},"HttpHeaders":{"User-Agent":"Docker-Client/19.03.0 (linux)"}}' > $DOCKER_CONFIG/config.json
+        echo "Registry auth configured for Gitea package registry"
 
-    - name: Build and push to Docker Registry (HTTP)
+    - name: Build and push to Gitea Package Registry
       run: |
-        echo "🐳 Building and pushing to Docker Registry (insecure HTTP)..."
+        echo "📦 Building and pushing to Gitea Package Registry..."
         BUILDKIT_HOST=tcp://buildkitd.gitea.svc.cluster.local:1235 buildctl build \
           --frontend dockerfile.v0 \
           --local context=. \
           --local dockerfile=. \
           --opt build-arg:BUILD_DATE=$BUILD_DATE \
           --opt build-arg:BUILD_REF=$BUILD_REF \
-          --output type=image,name=registry.gitea.svc.cluster.local:5000/hello-app:$IMAGE_TAG,push=true,registry.insecure=true \
-          --output type=image,name=registry.gitea.svc.cluster.local:5000/hello-app:latest,push=true,registry.insecure=true \
+          --output type=image,name=git.xuperson.org/demo/hello-cicd-demo:$IMAGE_TAG,push=true \
+          --output type=image,name=git.xuperson.org/demo/hello-cicd-demo:latest,push=true \
           --progress=plain
-
-    - name: Build and push to Gitea Registry
-      run: |
-        echo "📦 Building and pushing to Gitea Registry..."
-        BUILDKIT_HOST=tcp://buildkitd.gitea.svc.cluster.local:1235 buildctl build \
-          --frontend dockerfile.v0 \
-          --local context=. \
-          --local dockerfile=. \
-          --opt build-arg:BUILD_DATE=$BUILD_DATE \
-          --opt build-arg:BUILD_REF=$BUILD_REF \
-          --output type=image,name=git.xuperson.org/giteaadmin/hello-app:$IMAGE_TAG,push=true \
-          --output type=image,name=git.xuperson.org/giteaadmin/hello-app:latest,push=true \
-          --progress=plain || echo "Gitea push failed - continuing (auth issues still being debugged)"
-
-    - name: Build and push to Harbor Registry
-      run: |
-        echo "🏗️ Building and pushing to Harbor Registry..."
-        BUILDKIT_HOST=tcp://buildkitd.gitea.svc.cluster.local:1235 buildctl build \
-          --frontend dockerfile.v0 \
-          --local context=. \
-          --local dockerfile=. \
-          --opt build-arg:BUILD_DATE=$BUILD_DATE \
-          --opt build-arg:BUILD_REF=$BUILD_REF \
-          --output type=image,name=harbor-1756731822-registry.default.svc.cluster.local:5000/library/hello-app:$IMAGE_TAG,push=true \
-          --output type=image,name=harbor-1756731822-registry.default.svc.cluster.local:5000/library/hello-app:latest,push=true \
-          --progress=plain || echo "Harbor push failed - continuing (may need registry.insecure=true)"
 
     - name: Validate deployment
       run: |
-        echo "✅ Multi-registry deployment completed!"
-        echo "📋 Images pushed to:"
-        echo "  🐳 Docker Registry: registry.gitea.svc.cluster.local:5000/hello-app:$IMAGE_TAG"
-        echo "  📦 Gitea Registry: git.xuperson.org/giteaadmin/hello-app:$IMAGE_TAG (may fail - auth debugging)"  
-        echo "  🏗️ Harbor Registry: harbor-1756731822-registry.default.svc.cluster.local:5000/library/hello-app:$IMAGE_TAG (may fail - K8s internal)"
+        echo "✅ Build and push completed successfully!"
+        echo "� Image pushed to Gitea Package Registry:"
+        echo "  - git.xuperson.org/demo/hello-cicd-demo:$IMAGE_TAG"
+        echo "  - git.xuperson.org/demo/hello-cicd-demo:latest"
         echo ""
-        echo "🚀 Ready for Flux image automation!"
+        echo "🚀 Flux ImageRepository will detect the new image and update deployment automatically!"
