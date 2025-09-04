@@ -211,6 +211,13 @@ spec:
           echo "📁 Copying source files..."
           cp /configmaps/* . 2>/dev/null || true
           
+          # Create .gitea/workflows directory and copy workflow file
+          mkdir -p .gitea/workflows
+          if [ -f "/configmaps-workflow/buildkit-ci.yml" ]; then
+            cp /configmaps-workflow/buildkit-ci.yml .gitea/workflows/ci.yml
+            echo "✅ Copied CI workflow file"
+          fi
+          
           # Ensure we have a .gitignore
           if [ ! -f ".gitignore" ]; then
             cat > .gitignore << 'EOF'
@@ -253,34 +260,14 @@ spec:
           echo "   - Branch: main"
           echo "   - Next: Gitea Actions will build and publish container image"
         volumeMounts:
-        - name: package-json
-          mountPath: /configmaps/package.json
-          subPath: package.json
-        - name: app-js
-          mountPath: /configmaps/app.js
-          subPath: app.js
-        - name: dockerfile
-          mountPath: /configmaps/Dockerfile
-          subPath: Dockerfile
-        - name: gitea-workflow
-          mountPath: /configmaps/.gitea/workflows/ci.yml
-          subPath: ci.yml
-        - name: readme
-          mountPath: /configmaps/README.md
-          subPath: README.md
+        - name: source-files
+          mountPath: /configmaps
+        - name: workflow-files
+          mountPath: /configmaps-workflow
       volumes:
-      - name: package-json
+      - name: source-files
         configMap:
-          name: hello-labinfra-package-json
-      - name: app-js
+          name: hello-labinfra-source
+      - name: workflow-files
         configMap:
-          name: hello-labinfra-app-js
-      - name: dockerfile
-        configMap:
-          name: hello-labinfra-dockerfile
-      - name: gitea-workflow
-        configMap:
-          name: hello-labinfra-gitea-workflow
-      - name: readme
-        configMap:
-          name: hello-labinfra-readme
+          name: hello-labinfra-workflow
