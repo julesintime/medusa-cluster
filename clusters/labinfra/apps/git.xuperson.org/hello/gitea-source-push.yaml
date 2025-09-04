@@ -1,0 +1,291 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hello-labinfra-source
+  namespace: gitea
+  labels:
+    app.kubernetes.io/name: hello-labinfra-source
+    app.kubernetes.io/component: source-code
+    app.kubernetes.io/managed-by: flux
+data:
+  package.json: |
+    {
+      "name": "hello-labinfra",
+      "version": "1.0.0",
+      "description": "Hello LabInfra - Cloud Native GitOps Demo",
+      "main": "index.js",
+      "scripts": {
+        "start": "node index.js",
+        "dev": "node index.js"
+      },
+      "dependencies": {
+        "express": "^4.18.0"
+      },
+      "engines": {
+        "node": ">=18"
+      }
+    }
+  
+  index.js: |
+    const express = require('express');
+    const app = express();
+    const port = process.env.PORT || 3000;
+
+    app.get('/', (req, res) => {
+      res.json({
+        message: "🎉 Hello LabInfra!",
+        description: "Cloud Native GitOps Demo Application",
+        version: process.env.BUILD_REF || "dev",
+        buildDate: process.env.BUILD_DATE || new Date().toISOString(),
+        environment: process.env.NODE_ENV || "development"
+      });
+    });
+
+    app.get('/health', (req, res) => {
+      res.json({ status: 'healthy', timestamp: new Date().toISOString() });
+    });
+
+    app.listen(port, () => {
+      console.log(`🚀 Hello LabInfra server running on port ${port}`);
+    });
+  
+  Dockerfile: |
+    FROM node:18-alpine
+
+    WORKDIR /app
+
+    # Copy package files
+    COPY package*.json ./
+
+    # Install dependencies
+    RUN npm ci --only=production
+
+    # Copy application code
+    COPY . .
+
+    # Create non-root user
+    RUN addgroup -g 1001 -S nodejs && \
+        adduser -S nodejs -u 1001
+
+    # Change ownership
+    RUN chown -R nodejs:nodejs /app
+    USER nodejs
+
+    # Expose port
+    EXPOSE 3000
+
+    # Health check
+    HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+      CMD node -e "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
+
+    # Start application
+    CMD ["npm", "start"]
+  
+  README.md: |
+    # Hello LabInfra
+
+    Cloud Native GitOps Demo Application
+
+    ## Features
+
+    - **Express.js** web server
+    - **Health checks** at `/health`
+    - **Container-ready** with multi-stage Dockerfile
+    - **GitOps deployment** with Flux CD
+    - **Automated CI/CD** with Gitea Actions and BuildKit
+
+    ## Deployment
+
+    This application is automatically deployed using:
+
+    1. **Gitea Actions** - Builds container image with BuildKit
+    2. **Gitea Package Registry** - Stores container images
+    3. **Flux CD** - Monitors registry and updates Kubernetes deployment
+    4. **Kubernetes** - Runs the application with high availability
+
+    ## Development
+
+    ```bash
+    npm install
+    npm start
+    ```
+
+    ## Access
+
+    - **Application**: https://hello.xuperson.org
+    - **Health Check**: https://hello.xuperson.org/health
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: hello-labinfra-source-push
+  namespace: gitea
+  labels:
+    app.kubernetes.io/name: hello-labinfra-source-push
+    app.kubernetes.io/component: initialization
+    app.kubernetes.io/managed-by: flux
+  annotations:
+    # Trigger only after repo-init completes and when source code changes
+    batch.kubernetes.io/job-dependencies: "hello-labinfra-repo-init"
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: hello-labinfra-source-push
+    spec:
+      restartPolicy: OnFailure
+      serviceAccount: gitea-runner-init
+      initContainers:
+      - name: check-repo-exists
+        image: bitnami/kubectl:latest
+        command:
+        - /bin/bash
+        - -c
+        - |
+          echo "🔍 Verifying repository exists before pushing source..."
+          
+          # Get admin token from the secret created by repo-init job
+          if ! kubectl get secret hello-labinfra-admin-token -n gitea >/dev/null 2>&1; then
+            echo "❌ Admin token secret not found. Repository initialization may not be complete."
+            exit 1
+          fi
+          
+          ADMIN_TOKEN=$(kubectl get secret hello-labinfra-admin-token -n gitea -o jsonpath='{.data.token}' | base64 -d)
+          GITEA_ADMIN_USERNAME=$(kubectl get secret gitea-admin-secrets -n gitea -o jsonpath='{.data.username}' | base64 -d)
+          
+          # Verify repository exists
+          REPO_CHECK=$(curl -s -w "%{http_code}" -o /dev/null 
+            -H "Authorization: token $ADMIN_TOKEN" 
+            "http://gitea:3000/api/v1/repos/$GITEA_ADMIN_USERNAME/hello-labinfra")
+          
+          if [ "$REPO_CHECK" != "200" ]; then
+            echo "❌ Repository hello-labinfra not found (HTTP: $REPO_CHECK)"
+            exit 1
+          fi
+          
+          echo "✅ Repository exists and is accessible"
+      containers:
+      - name: git-push
+        image: alpine/git:latest
+        env:
+        - name: GITEA_ADMIN_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: gitea-admin-secrets
+              key: username
+        - name: GITEA_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: gitea-admin-secrets
+              key: password
+        command:
+        - /bin/sh
+        - -c
+        - |
+          set -e
+          echo "🚀 Deploying source code to hello-labinfra repository..."
+          
+          # Configure git
+          git config --global user.name "LabInfra Automation"
+          git config --global user.email "automation@labinfra.local"
+          git config --global init.defaultBranch main
+          
+          # Clone repository
+          echo "📥 Cloning repository..."
+          git clone "http://$GITEA_ADMIN_USERNAME:$GITEA_ADMIN_PASSWORD@gitea:3000/$GITEA_ADMIN_USERNAME/hello-labinfra.git" /workspace
+          cd /workspace
+          
+          # Check if source already deployed (check for package.json)
+          if [ -f "package.json" ]; then
+            echo "📦 Source code already exists, checking for updates..."
+            
+            # Compare current package.json with our version
+            if cmp -s /configmaps/package.json package.json; then
+              echo "📋 Source code is up to date, no changes needed"
+              exit 0
+            else
+              echo "🔄 Source code differs, updating..."
+            fi
+          else
+            echo "🆕 No source code found, deploying fresh..."
+          fi
+          
+          # Copy all source files from ConfigMaps
+          echo "📁 Copying source files..."
+          cp /configmaps/* . 2>/dev/null || true
+          
+          # Ensure we have a .gitignore
+          if [ ! -f ".gitignore" ]; then
+            cat > .gitignore << 'EOF'
+          node_modules/
+          npm-debug.log*
+          .npm
+          .env
+          dist/
+          build/
+          *.log
+          EOF
+          fi
+          
+          # Add all files and commit
+          git add .
+          
+          # Check if there are any changes to commit
+          if git diff --staged --quiet; then
+            echo "📋 No changes to commit"
+            exit 0
+          fi
+          
+          git commit -m "🚀 Deploy Hello LabInfra application source
+
+          - Express.js application with health check endpoints
+          - Gitea Actions workflow for CI/CD
+          - Docker build configuration
+          - Automated deployment via Flux GitOps
+          
+          Generated by: LabInfra Automation
+          Timestamp: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+          
+          # Push changes
+          echo "📤 Pushing changes..."
+          git push origin main
+          
+          echo "✅ Source code deployment completed!"
+          echo "📋 Summary:"
+          echo "   - Repository: git.xuperson.org/$GITEA_ADMIN_USERNAME/hello-labinfra"
+          echo "   - Branch: main"
+          echo "   - Next: Gitea Actions will build and publish container image"
+        volumeMounts:
+        - name: package-json
+          mountPath: /configmaps/package.json
+          subPath: package.json
+        - name: app-js
+          mountPath: /configmaps/app.js
+          subPath: app.js
+        - name: dockerfile
+          mountPath: /configmaps/Dockerfile
+          subPath: Dockerfile
+        - name: gitea-workflow
+          mountPath: /configmaps/.gitea/workflows/ci.yml
+          subPath: ci.yml
+        - name: readme
+          mountPath: /configmaps/README.md
+          subPath: README.md
+      volumes:
+      - name: package-json
+        configMap:
+          name: hello-labinfra-package-json
+      - name: app-js
+        configMap:
+          name: hello-labinfra-app-js
+      - name: dockerfile
+        configMap:
+          name: hello-labinfra-dockerfile
+      - name: gitea-workflow
+        configMap:
+          name: hello-labinfra-gitea-workflow
+      - name: readme
+        configMap:
+          name: hello-labinfra-readme

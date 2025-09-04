@@ -11,6 +11,8 @@ resources:
   - gitea-runner
   # Deploy CI/CD services integrated with gitea (no registry - using Gitea's built-in registry)
   - buildkit
+  # Deploy hello-labinfra automation (repository initialization and source deployment)
+  - hello
 
 labels:
   - includeSelectors: true

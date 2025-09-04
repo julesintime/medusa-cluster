@@ -1,0 +1,139 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: hello-labinfra-repo-init
+  namespace: gitea
+  labels:
+    app.kubernetes.io/name: hello-labinfra-repo-init
+    app.kubernetes.io/component: initialization
+    app.kubernetes.io/managed-by: flux
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: hello-labinfra-repo-init
+    spec:
+      restartPolicy: OnFailure
+      serviceAccount: gitea-runner-init
+      initContainers:
+      - name: wait-for-gitea
+        image: curlimages/curl:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "🔄 Waiting for Gitea to be ready..."
+          until curl -f -s http://gitea:3000/api/v1/version; do
+            echo "   Gitea not ready, waiting 10 seconds..."
+            sleep 10
+          done
+          echo "✅ Gitea is ready!"
+      containers:
+      - name: create-repo-and-token
+        image: bitnami/kubectl:latest
+        env:
+        - name: GITEA_ADMIN_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: gitea-admin-secrets
+              key: username
+        - name: GITEA_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: gitea-admin-secrets
+              key: password
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -e
+          echo "🔍 Checking if hello-labinfra repository and runner token already exist..."
+          
+          # First, get admin token for API operations (create one if doesn't exist)
+          echo "🔑 Getting or creating admin API token..."
+          
+          # Try to get existing admin token from secret (if we stored it before)
+          ADMIN_TOKEN=""
+          if kubectl get secret hello-labinfra-admin-token -n gitea >/dev/null 2>&1; then
+            ADMIN_TOKEN=$(kubectl get secret hello-labinfra-admin-token -n gitea -o jsonpath='{.data.token}' | base64 -d)
+            echo "📋 Using existing admin token"
+          else
+            echo "🔐 Creating new admin API token..."
+            # Create a new token via Gitea API using username/password
+            ADMIN_TOKEN=$(curl -s -X POST \
+              -H "Content-Type: application/json" \
+              -u "$GITEA_ADMIN_USERNAME:$GITEA_ADMIN_PASSWORD" \
+              -d '{"name": "hello-labinfra-automation", "scopes": ["read:repository", "write:repository", "read:organization", "write:organization", "read:user", "write:user"]}' \
+              "http://gitea:3000/api/v1/users/$GITEA_ADMIN_USERNAME/tokens" | grep -o '"sha1":"[^"]*"' | cut -d'"' -f4)
+            
+            if [ -z "$ADMIN_TOKEN" ]; then
+              echo "❌ Failed to create admin token"
+              exit 1
+            fi
+            
+            # Store the token in a secret for reuse
+            kubectl create secret generic hello-labinfra-admin-token -n gitea --from-literal=token="$ADMIN_TOKEN"
+            echo "💾 Stored admin token in secret for reuse"
+          fi
+          
+          # Check if repository already exists
+          REPO_CHECK=$(curl -s -w "%{http_code}" -o /dev/null \
+            -H "Authorization: token $ADMIN_TOKEN" \
+            "http://gitea:3000/api/v1/repos/$GITEA_ADMIN_USERNAME/hello-labinfra")
+          
+          if [ "$REPO_CHECK" = "200" ]; then
+            echo "📦 Repository hello-labinfra already exists, skipping creation"
+            REPO_EXISTS=true
+          else
+            echo "🏗️ Creating hello-labinfra repository..."
+            
+            CREATE_RESPONSE=$(curl -s \
+              -X POST \
+              -H "Authorization: token $ADMIN_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "name": "hello-labinfra",
+                "description": "Hello LabInfra - Cloud Native GitOps Demo Application",
+                "private": false,
+                "auto_init": true,
+                "default_branch": "main"
+              }' \
+              "http://gitea:3000/api/v1/user/repos")
+            
+            if echo "$CREATE_RESPONSE" | grep -q '"name":"hello-labinfra"'; then
+              echo "✅ Repository hello-labinfra created successfully!"
+              REPO_EXISTS=false
+            else
+              echo "❌ Failed to create repository: $CREATE_RESPONSE"
+              exit 1
+            fi
+          fi
+          
+          # Check if runner token already exists
+          if kubectl get secret gitea-runner-token -n gitea >/dev/null 2>&1; then
+            echo "🏃 Runner token already exists, skipping creation"
+          else
+            echo "🔑 Creating Gitea Actions runner token..."
+            
+            # Create runner registration token
+            RUNNER_TOKEN=$(curl -s -X POST \
+              -H "Authorization: token $ADMIN_TOKEN" \
+              -H "Content-Type: application/json" \
+              "http://gitea:3000/api/v1/admin/runners/registration-token" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+            
+            if [ -n "$RUNNER_TOKEN" ]; then
+              kubectl create secret generic gitea-runner-token -n gitea --from-literal=token="$RUNNER_TOKEN"
+              echo "✅ Runner token created and stored in secret"
+            else
+              echo "❌ Failed to create runner token"
+              exit 1
+            fi
+          fi
+          
+          echo "🎉 Hello LabInfra repository and runner initialization completed!"
+          echo "📋 Summary:"
+          echo "   - Repository: git.xuperson.org/$GITEA_ADMIN_USERNAME/hello-labinfra"
+          echo "   - Runner token: Available for Actions registration"
+          echo "   - Next: Source code will be pushed by hello-labinfra-source-push job"

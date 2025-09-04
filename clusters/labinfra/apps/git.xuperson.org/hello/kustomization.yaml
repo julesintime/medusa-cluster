@@ -1,0 +1,46 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: hello-labinfra
+  namespace: flux-system
+
+resources:
+  - gitea-runner-init-rbac.yaml
+  - gitea-repo-init.yaml
+  - gitea-source-push.yaml
+  - gitea-workflow-config.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: hello-labinfra
+  app.kubernetes.io/managed-by: flux
+
+# Ensure jobs run in sequence: repo-init → source-push
+patchesStrategicMerge:
+  - |
+    apiVersion: batch/v1
+    kind: Job
+    metadata:
+      name: hello-labinfra-source-push
+      namespace: gitea
+    spec:
+      template:
+        spec:
+          initContainers:
+          - name: wait-for-repo-init
+            image: bitnami/kubectl:latest
+            command:
+            - /bin/bash
+            - -c
+            - |
+              echo "⏳ Waiting for hello-labinfra-repo-init job to complete..."
+              while true; do
+                STATUS=$(kubectl get job hello-labinfra-repo-init -n gitea -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' 2>/dev/null || echo "")
+                if [ "$STATUS" = "True" ]; then
+                  echo "✅ Repository initialization completed"
+                  break
+                fi
+                echo "   Still waiting... ($(date))"
+                sleep 10
+              done
