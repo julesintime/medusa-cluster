@@ -15,7 +15,7 @@ spec:
         recursive: false
       serviceTokenSecretReference:
         secretName: infisical-service-token
-        secretNamespace: gitea
+        secretNamespace: infisical-operator
   
   managedKubeSecretReferences:
     - secretName: gitea-admin-secret
