@@ -21,5 +21,4 @@ spec:
       name: external-dns
       namespace: cloudflare
   dependsOn:
-    - name: metallb
     - name: infisical-operator

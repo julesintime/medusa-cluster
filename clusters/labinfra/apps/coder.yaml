@@ -23,4 +23,3 @@ spec:
   dependsOn:
     - name: cloudflare-ingress
     - name: longhorn
-    - name: infisical-operator
