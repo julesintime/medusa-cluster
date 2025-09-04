@@ -67,13 +67,13 @@ spec:
         username: "gitea"
         existingSecret: "gitea-admin-secret"
         secretKeys:
-          adminPasswordKey: "postgres-admin-password"
           userPasswordKey: "postgres-password"
+          # adminPasswordKey not needed for single PostgreSQL instance
       primary:
         persistence:
           enabled: true
           storageClass: local-path  # Temporary: Switch back to longhorn-retain when Longhorn is fixed
-      architecture: standalone  # Minimal single instance
+      architecture: standalone  # Single instance configuration
     postgresql-ha:
       enabled: false  # Explicitly disable HA
     persistence:
@@ -102,8 +102,14 @@ spec:
         cpu: 100m
         memory: 128Mi
     
-    # Disable Redis/Valkey for minimal setup
-    redis-cluster:
+    # Simple cache setup - disable cluster for single-pod deployment  
+    valkey-cluster:
       enabled: false
     valkey:
-      enabled: false
+      enabled: true
+      architecture: standalone
+      auth:
+        enabled: false  # Simplify for single instance
+      master:
+        persistence:
+          enabled: false  # Use memory for cache in single-pod setup
