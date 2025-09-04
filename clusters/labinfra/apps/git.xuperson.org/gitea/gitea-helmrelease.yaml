@@ -65,9 +65,11 @@ spec:
     postgresql:
       enabled: true
       auth:
-        postgresPassword: "changeme"
+        existingSecret: "gitea-admin-secret"
+        secretKeys:
+          adminPasswordKey: "postgres-password"
+          userPasswordKey: "postgres-password"
         username: "gitea"
-        password: "gitea"
         database: "gitea"
       primary:
         persistence:
