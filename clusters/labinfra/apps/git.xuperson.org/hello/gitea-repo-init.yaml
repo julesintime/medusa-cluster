@@ -91,6 +91,10 @@ spec:
             echo "💾 Admin token stored in secret"
           fi
           
+          # Get Gitea pod for repository operations
+          GITEA_POD=$(kubectl get pods -n gitea -l app=gitea -o jsonpath='{.items[0].metadata.name}')
+          echo "📦 Found Gitea pod: $GITEA_POD"
+          
           # Check if repository already exists using Gitea CLI
           echo "📦 Checking repository status..."
           REPO_EXISTS=$(kubectl exec -n gitea $GITEA_POD -- gitea admin repo list --user "$GITEA_ADMIN_USERNAME" | grep "hello-labinfra" || echo "")
