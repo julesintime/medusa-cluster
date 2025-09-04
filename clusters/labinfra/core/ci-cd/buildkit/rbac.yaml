@@ -1,0 +1,39 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: buildkit
+  namespace: cicd
+  labels:
+    app.kubernetes.io/name: buildkit
+    app.kubernetes.io/component: build-service
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: buildkit-role
+  namespace: cicd
+  labels:
+    app.kubernetes.io/name: buildkit
+    app.kubernetes.io/component: build-service
+rules:
+- apiGroups: [""]
+  resources: ["pods", "pods/exec"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: buildkit-rolebinding
+  namespace: cicd
+  labels:
+    app.kubernetes.io/name: buildkit
+    app.kubernetes.io/component: build-service
+subjects:
+- kind: ServiceAccount
+  name: buildkit
+  namespace: cicd
+roleRef:
+  kind: Role
+  name: buildkit-role
+  apiGroup: rbac.authorization.k8s.io

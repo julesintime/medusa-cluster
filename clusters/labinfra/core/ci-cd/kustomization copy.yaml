@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml
+  # - deployment.yaml    # Temporarily disabled - image not available
+  # - service.yaml       # Depends on deployment
+  # - ingress.yaml       # Depends on service
+  - flux-image-automation.yaml
+  - buildkit
+  - registry
+
+labels:
+  - includeSelectors: true
+    pairs:
+      app.kubernetes.io/managed-by: flux
+      app.kubernetes.io/part-of: cicd
+
+# CI/CD GitOps Demo - Comprehensive CI/CD Template
+# GitOps deployment manifests with Flux image automation

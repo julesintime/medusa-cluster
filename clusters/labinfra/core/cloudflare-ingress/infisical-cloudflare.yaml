@@ -16,7 +16,6 @@ spec:
       serviceTokenSecretReference:
         secretName: infisical-service-token
         secretNamespace: cloudflare
-        keyName: infisicalToken
   
   managedKubeSecretReferences:
     - secretName: cloudflare-secrets

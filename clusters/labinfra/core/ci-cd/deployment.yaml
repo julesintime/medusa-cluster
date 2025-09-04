@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cicd-gitops-demo
+  namespace: cicd
+  labels:
+    app.kubernetes.io/name: cicd-gitops-demo
+    app.kubernetes.io/part-of: cicd
+    app.kubernetes.io/component: web
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cicd-gitops-demo
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cicd-gitops-demo
+        app.kubernetes.io/part-of: cicd
+        app.kubernetes.io/component: web
+    spec:
+      containers:
+      - name: cicd-gitops-demo
+        image: 192.168.80.104:5000/cicd-gitops-demo:latest # {"$imagepolicy": "flux-system:cicd-gitops-demo"}
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+          name: http
+          protocol: TCP
+        env:
+        - name: PORT
+          value: "3000"
+        - name: NODE_ENV
+          value: "production"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
