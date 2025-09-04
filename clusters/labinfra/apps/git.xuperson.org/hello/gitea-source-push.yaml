@@ -138,34 +138,29 @@ spec:
       restartPolicy: OnFailure
       serviceAccount: gitea-runner-init
       initContainers:
-      - name: check-repo-exists
+      - name: wait-for-repo-init
         image: bitnami/kubectl:latest
         command:
         - /bin/bash
         - -c
         - |
-          echo "🔍 Verifying repository exists before pushing source..."
+          echo "⏳ Waiting for hello-labinfra-repo-init job to complete..."
+          while true; do
+            STATUS=$(kubectl get job hello-labinfra-repo-init -n gitea -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' 2>/dev/null || echo "")
+            if [ "$STATUS" = "True" ]; then
+              echo "✅ Repository initialization completed"
+              break
+            fi
+            echo "   Still waiting... ($(date))"
+            sleep 10
+          done
           
-          # Get admin token from the secret created by repo-init job
+          # Verify secrets exist
           if ! kubectl get secret hello-labinfra-admin-token -n gitea >/dev/null 2>&1; then
-            echo "❌ Admin token secret not found. Repository initialization may not be complete."
+            echo "❌ Admin token secret not found"
             exit 1
           fi
-          
-          ADMIN_TOKEN=$(kubectl get secret hello-labinfra-admin-token -n gitea -o jsonpath='{.data.token}' | base64 -d)
-          GITEA_ADMIN_USERNAME=$(kubectl get secret gitea-admin-secrets -n gitea -o jsonpath='{.data.username}' | base64 -d)
-          
-          # Verify repository exists
-          REPO_CHECK=$(curl -s -w "%{http_code}" -o /dev/null 
-            -H "Authorization: token $ADMIN_TOKEN" 
-            "http://gitea-http:3000/api/v1/repos/$GITEA_ADMIN_USERNAME/hello-labinfra")
-          
-          if [ "$REPO_CHECK" != "200" ]; then
-            echo "❌ Repository hello-labinfra not found (HTTP: $REPO_CHECK)"
-            exit 1
-          fi
-          
-          echo "✅ Repository exists and is accessible"
+          echo "✅ All required secrets found"
       containers:
       - name: git-push
         image: alpine/git:latest
@@ -192,7 +187,7 @@ spec:
           git config --global user.email "automation@labinfra.local"
           git config --global init.defaultBranch main
           
-          # Clone repository
+          # Clone repository using HTTP auth (simpler than API tokens)
           echo "📥 Cloning repository..."
           git clone "http://$GITEA_ADMIN_USERNAME:$GITEA_ADMIN_PASSWORD@gitea-http:3000/$GITEA_ADMIN_USERNAME/hello-labinfra.git" /workspace
           cd /workspace
