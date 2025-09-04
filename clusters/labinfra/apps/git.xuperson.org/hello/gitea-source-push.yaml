@@ -158,7 +158,7 @@ spec:
           # Verify repository exists
           REPO_CHECK=$(curl -s -w "%{http_code}" -o /dev/null 
             -H "Authorization: token $ADMIN_TOKEN" 
-            "http://gitea:3000/api/v1/repos/$GITEA_ADMIN_USERNAME/hello-labinfra")
+            "http://gitea-http:3000/api/v1/repos/$GITEA_ADMIN_USERNAME/hello-labinfra")
           
           if [ "$REPO_CHECK" != "200" ]; then
             echo "❌ Repository hello-labinfra not found (HTTP: $REPO_CHECK)"
@@ -194,7 +194,7 @@ spec:
           
           # Clone repository
           echo "📥 Cloning repository..."
-          git clone "http://$GITEA_ADMIN_USERNAME:$GITEA_ADMIN_PASSWORD@gitea:3000/$GITEA_ADMIN_USERNAME/hello-labinfra.git" /workspace
+          git clone "http://$GITEA_ADMIN_USERNAME:$GITEA_ADMIN_PASSWORD@gitea-http:3000/$GITEA_ADMIN_USERNAME/hello-labinfra.git" /workspace
           cd /workspace
           
           # Check if source already deployed (check for package.json)
