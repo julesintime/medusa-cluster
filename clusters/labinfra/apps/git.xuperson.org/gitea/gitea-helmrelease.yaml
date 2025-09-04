@@ -52,9 +52,6 @@ spec:
       # Configure admin user from Infisical secrets
       admin:
         existingSecret: gitea-admin-secrets
-        username: ""  # Will be read from secret
-        password: ""  # Will be read from secret
-        email: ""     # Will be read from secret
     
     # Simple service configuration
     service:
