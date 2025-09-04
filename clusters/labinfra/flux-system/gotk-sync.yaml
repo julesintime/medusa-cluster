@@ -11,7 +11,7 @@ spec:
     branch: master
   secretRef:
     name: flux-system
-  url: https://github.com/julesintime/labinfra.git
+  url: ssh://git@github.com/julesintime/labinfra
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
