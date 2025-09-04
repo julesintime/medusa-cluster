@@ -13,10 +13,8 @@ This directory contains the GitOps configuration for deploying Gitea Actions (ac
 
 ## Files
 
-- `gitea-actions-helmrepository.yaml` - Helm repository configuration
 - `gitea-runner-rbac.yaml` - RBAC permissions for token generation
-- `gitea-runner-token-job.yaml` - Job to automatically generate runner token
-- `gitea-actions-helmrelease.yaml` - Main Helm release configuration
+- `gitea-runner-deployment.yaml` - Main act-runner deployment configuration
 - `kustomization.yaml` - Kustomize configuration
 
 ## Unattended Deployment
@@ -69,13 +67,13 @@ kubectl logs job/gitea-runner-token-generator -n gitea
 kubectl get secret gitea-runner-token -n gitea
 
 # Check HelmRelease status
-kubectl get helmrelease gitea-actions -n gitea
+kubectl get deployment act-runner -n gitea
 
-# Check runner pods
-kubectl get pods -n gitea -l app.kubernetes.io/name=gitea-actions
+# Check runner pods  
+kubectl get pods -n gitea -l app.kubernetes.io/name=gitea-runner
 
 # View runner logs
-kubectl logs -n gitea -l app.kubernetes.io/name=gitea-actions -f
+kubectl logs -n gitea -l app.kubernetes.io/name=gitea-runner -f
 ```
 
 ## Verify Runner Registration
