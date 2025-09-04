@@ -28,3 +28,4 @@ spec:
           password: "{{ .GITEA_ADMIN_PASSWORD.Value }}"
           gitea-secret-key: "{{ .GITEA_SECRET_KEY.Value }}"
           postgres-password: "{{ .GITEA_POSTGRES_PASSWORD.Value }}"
+          postgres-admin-password: "{{ .GITEA_POSTGRES_ADMIN_PASSWORD.Value }}"

@@ -67,7 +67,7 @@ spec:
         username: "gitea"
         existingSecret: "gitea-admin-secret"
         secretKeys:
-          adminPasswordKey: "postgres-password"
+          adminPasswordKey: "postgres-admin-password"
           userPasswordKey: "postgres-password"
       primary:
         persistence:
