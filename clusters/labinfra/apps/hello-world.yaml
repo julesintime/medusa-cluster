@@ -14,7 +14,12 @@ spec:
   healthChecks:
     - apiVersion: apps/v1
       kind: Deployment
-      name: hello-app
+      name: hello-cicd-demo
       namespace: hello
+    - apiVersion: image.toolkit.fluxcd.io/v1beta2
+      kind: ImageRepository
+      name: hello-cicd-demo
+      namespace: flux-system
   dependsOn:
     - name: cloudflare-ingress
+    - name: gitea

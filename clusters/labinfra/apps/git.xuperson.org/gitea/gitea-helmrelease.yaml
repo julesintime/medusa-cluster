@@ -47,6 +47,10 @@ spec:
           ENABLED: true
           DEFAULT_ACTIONS_URL: https://github.com
         
+        packages:
+          ENABLED: true
+          CHUNKED_UPLOAD_PATH: /tmp/gitea-packages
+          
         server:
           DOMAIN: git.xuperson.org
           ROOT_URL: https://git.xuperson.org

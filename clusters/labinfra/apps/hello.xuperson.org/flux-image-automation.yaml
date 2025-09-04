@@ -5,9 +5,9 @@ metadata:
   name: hello-cicd-demo
   namespace: flux-system
 spec:
-  image: registry.gitea.svc.cluster.local:5000/hello-cicd-demo
+  image: git.xuperson.org/demo/hello-cicd-demo
   interval: 1m0s
-  insecure: true
+  insecure: false
 ---
 apiVersion: image.toolkit.fluxcd.io/v1beta2
 kind: ImagePolicy
