@@ -1,25 +1,25 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: cicd-gitops-demo
-  namespace: cicd
+  name: hello-cicd-demo
+  namespace: hello
   annotations:
-    external-dns.alpha.kubernetes.io/hostname: "cicd.xuperson.org"
+    external-dns.alpha.kubernetes.io/hostname: "hello.xuperson.org"
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/proxy-set-headers: "ingress-nginx/proxy-headers"
   labels:
-    app.kubernetes.io/name: cicd-gitops-demo
-    app.kubernetes.io/part-of: cicd
+    app.kubernetes.io/name: hello-cicd-demo
+    app.kubernetes.io/part-of: hello
 spec:
   ingressClassName: nginx
   rules:
-  - host: cicd.xuperson.org
+  - host: hello.xuperson.org
     http:
       paths:
       - path: /
         pathType: Prefix
         backend:
           service:
-            name: cicd-gitops-demo
+            name: hello-cicd-demo
             port:
               name: http
