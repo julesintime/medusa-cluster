@@ -8,7 +8,7 @@ resources:
   # Deploy gitea first (all gitea components)
   - gitea
   # Then deploy runner (depends on gitea being ready)
-  - runner
+  - gitea-runner
 
 labels:
   - includeSelectors: true
