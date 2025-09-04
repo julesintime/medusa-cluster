@@ -30,7 +30,7 @@ spec:
           valueFrom:
             secretKeyRef:
               name: cloudflare-secrets
-              key: api-token
+              key: CLOUDFLARE_API_TOKEN
         resources:
           limits:
             memory: "128Mi"

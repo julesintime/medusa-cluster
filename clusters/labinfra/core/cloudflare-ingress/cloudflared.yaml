@@ -31,7 +31,7 @@ spec:
           valueFrom:
             secretKeyRef:
               name: cloudflare-secrets
-              key: tunnel-token
+              key: CLOUDFLARE_TUNNEL_TOKEN
         ports:
         - name: metrics
           containerPort: 2000
