@@ -52,6 +52,7 @@ spec:
       # Configure admin user from Infisical secrets
       admin:
         existingSecret: gitea-admin-secrets
+        email: "admin@xuperson.org"  # Explicit email since secret mapping might not work
     
     # Simple service configuration
     service:
