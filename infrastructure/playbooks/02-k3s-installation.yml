@@ -1,0 +1,307 @@
+---
+# Labinfra K3s Installation Playbook
+# Installs K3s with embedded etcd HA configuration and Infisical integration
+
+- name: K3s Installation - Control Plane Setup
+  hosts: k3s_control
+  become: true
+  gather_facts: true
+  serial: 1  # Install control plane nodes one at a time
+  vars_files:
+    - "../config/group_vars.yml"
+
+  pre_tasks:
+    - name: Set static K3s token
+      set_fact:
+        k3s_token: "K3sT0k3n2024Lab1nfr4Str0ng!"
+      run_once: true
+      
+    - name: Verify network connectivity
+      shell: ping -c 2 8.8.8.8
+      register: network_status
+      failed_when: network_status.rc != 0
+
+    - name: Display installation order
+      debug:
+        msg: |
+          Installing K3s control plane node: {{ inventory_hostname }}
+          Role: {{ k3s_role }}
+          {% if k3s_init is defined and k3s_init %}
+          This is the FIRST control plane node (cluster init)
+          {% else %}
+          This node will JOIN the existing cluster
+          {% endif %}
+
+  tasks:
+    # Prepare system for K3s
+    - name: Install required packages for K3s
+      apt:
+        name:
+          - curl
+          - wget
+          - systemd
+          - iptables
+          - apparmor-utils
+          - apache2-utils  # For htpasswd (needed by Longhorn)
+        state: present
+        update_cache: true
+
+    - name: Enable IP forwarding
+      sysctl:
+        name: net.ipv4.ip_forward
+        value: '1'
+        state: present
+        reload: true
+
+    # First control plane node - initialize cluster
+    - name: Install K3s on first control plane node (cluster init)
+      shell: |
+        curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION={{ k3s.version }} sh -s - server \
+          --cluster-init \
+          --token {{ k3s_token }} \
+          --disable {{ k3s.disable_components | join(',') }} \
+          --cluster-domain {{ k3s.cluster_domain }} \
+          --cluster-cidr {{ network.cluster_cidr }} \
+          --service-cidr {{ network.service_cidr }} \
+          --cluster-dns {{ network.cluster_dns }} \
+          {% for san in k3s.tls_sans %}
+          --tls-san {{ san }} \
+          {% endfor %}
+          --write-kubeconfig-mode 644
+      when: k3s_init is defined and k3s_init
+      register: k3s_init_result
+
+    - name: Wait for first control plane to be ready
+      wait_for:
+        port: 6443
+        host: "{{ ansible_host }}"
+        timeout: 300
+      when: k3s_init is defined and k3s_init
+
+    # Additional control plane nodes - join existing cluster
+    - name: Get cluster server URL from first control plane
+      set_fact:
+        k3s_server_url: "https://{{ hostvars[groups['k3s_control'][0]]['ansible_host'] }}:6443"
+      when: k3s_init is not defined or not k3s_init
+
+
+    - name: Install K3s on additional control plane nodes
+      shell: |
+        curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION={{ k3s.version }} sh -s - server \
+          --server {{ k3s_server_url }} \
+          --token {{ k3s_token }} \
+          --disable {{ k3s.disable_components | join(',') }} \
+          --cluster-domain {{ k3s.cluster_domain }} \
+          --cluster-cidr {{ network.cluster_cidr }} \
+          --service-cidr {{ network.service_cidr }} \
+          --cluster-dns {{ network.cluster_dns }} \
+          {% for san in k3s.tls_sans %}
+          --tls-san {{ san }} \
+          {% endfor %}
+          --write-kubeconfig-mode 644
+      when: k3s_init is not defined or not k3s_init
+      register: k3s_join_result
+
+    - name: Wait for control plane node to be ready
+      wait_for:
+        port: 6443
+        host: "{{ ansible_host }}"
+        timeout: 300
+
+    # Verify installation
+    - name: Check K3s service status
+      systemd:
+        name: k3s
+        state: started
+        enabled: true
+      register: k3s_service_status
+
+    - name: Verify etcd cluster member
+      shell: k3s etcd-snapshot ls
+      register: etcd_status
+      ignore_errors: true
+
+    - name: Display control plane installation results
+      debug:
+        msg: |
+          K3s control plane node installed: {{ inventory_hostname }}
+          Service status: {{ k3s_service_status.status.ActiveState }}
+          etcd status: {{ 'OK' if etcd_status.rc == 0 else 'ERROR' }}
+
+# Install worker nodes
+- name: K3s Installation - Worker Nodes
+  hosts: k3s_workers
+  become: true
+  gather_facts: true
+  vars_files:
+    - "../config/group_vars.yml"
+
+  pre_tasks:
+    - name: Verify network connectivity
+      shell: ping -c 2 8.8.8.8
+      register: network_status
+      failed_when: network_status.rc != 0
+
+    - name: Get K3s server URL
+      set_fact:
+        k3s_server_url: "https://{{ hostvars[groups['k3s_control'][0]]['ansible_host'] }}:6443"
+
+    - name: Set K3s token for worker nodes
+      set_fact:
+        k3s_token: "K3sT0k3n2024Lab1nfr4Str0ng!"
+
+  tasks:
+    - name: Install required packages for K3s worker
+      apt:
+        name:
+          - curl
+          - wget
+          - systemd
+          - iptables
+          - ca-certificates
+          - gnupg
+          - lsb-release
+        state: present
+        update_cache: true
+
+    # Docker is not required for K3s - it uses containerd by default
+    # Uncomment the following tasks only if you need Docker for development
+
+    # - name: Start and enable Docker service
+    #   systemd:
+    #     name: docker
+    #     state: started
+    #     enabled: true
+
+    # - name: Add ubuntu user to docker group (for non-root access)
+    #   user:
+    #     name: ubuntu
+    #     groups: docker
+    #     append: yes
+
+    - name: Enable IP forwarding
+      sysctl:
+        name: net.ipv4.ip_forward
+        value: '1'
+        state: present
+        reload: true
+
+    - name: Install K3s worker node
+      shell: |
+        curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION={{ k3s.version }} sh -s - agent \
+          --server {{ k3s_server_url }} \
+          --token {{ k3s_token }}
+      register: k3s_worker_result
+
+    - name: Check K3s agent service status
+      systemd:
+        name: k3s-agent
+        state: started
+        enabled: true
+      register: k3s_agent_status
+
+    - name: Display worker node installation results
+      debug:
+        msg: |
+          K3s worker node installed: {{ inventory_hostname }}
+          Service status: {{ k3s_agent_status.status.ActiveState }}
+
+# Cluster validation and configuration
+- name: K3s - Cluster Validation and Setup
+  hosts: k3s_control[0]  # Run on first control plane only
+  become: true
+  gather_facts: true
+  vars_files:
+    - "../config/group_vars.yml"
+
+  tasks:
+    - name: Wait for all nodes to be ready
+      shell: k3s kubectl get nodes --no-headers | wc -l
+      register: node_count
+      until: node_count.stdout|int == groups['k3s_cluster']|length
+      retries: 30
+      delay: 10
+
+    - name: Get cluster node status
+      shell: k3s kubectl get nodes -o wide
+      register: cluster_nodes
+
+    - name: Check etcd cluster health
+      shell: k3s etcd-snapshot ls
+      register: etcd_health
+      ignore_errors: true
+
+    - name: Backup existing kubeconfig if present
+      stat:
+        path: "../config/kubeconfig.yaml"
+      register: existing_kubeconfig
+      delegate_to: localhost
+      become: false
+
+    - name: Create backup of existing kubeconfig
+      copy:
+        src: "../config/kubeconfig.yaml" 
+        dest: "../config/kubeconfig-backup-{{ ansible_date_time.date }}-{{ ansible_date_time.hour }}{{ ansible_date_time.minute }}.yaml"
+      when: existing_kubeconfig.stat.exists
+      delegate_to: localhost
+      become: false
+
+    - name: Copy kubeconfig for external access
+      fetch:
+        src: /etc/rancher/k3s/k3s.yaml
+        dest: "../config/kubeconfig.yaml"
+        flat: yes
+      register: kubeconfig_copy
+
+    - name: Update kubeconfig with external IP
+      replace:
+        path: "../config/kubeconfig.yaml"
+        regexp: 'https://127\.0\.0\.1:6443'
+        replace: "https://{{ ansible_host }}:6443"
+      delegate_to: localhost
+      become: false
+      
+    - name: Read updated kubeconfig content
+      slurp:
+        src: "../config/kubeconfig.yaml"
+      register: kubeconfig_content
+      delegate_to: localhost
+      become: false
+      
+    - name: Store kubeconfig in Infisical
+      shell: |
+        infisical secrets set KUBE_CONFIG="$(cat ../config/kubeconfig.yaml)" \
+          --env=dev \
+          --path="/infrastructure"
+      delegate_to: localhost
+      become: false
+
+    - name: Verify DNS resolution in cluster
+      shell: |
+        k3s kubectl run test-dns --rm -i --restart=Never --image=busybox -- nslookup kubernetes.default
+      register: dns_test
+      ignore_errors: true
+
+    - name: Clean up DNS test pod
+      shell: k3s kubectl delete pod test-dns --ignore-not-found=true
+      ignore_errors: true
+
+    # Create validation summary
+    - name: K3s Cluster Installation Summary
+      debug:
+        msg: |
+          🎉 K3s Cluster Installation Complete!
+          
+          📊 Cluster Status:
+          {{ cluster_nodes.stdout }}
+          
+          🔧 Control Plane Nodes: {{ groups['k3s_control']|length }}
+          👷 Worker Nodes: {{ groups['k3s_workers']|length }}
+          📦 Total Nodes: {{ groups['k3s_cluster']|length }}
+          
+          ✅ etcd Health: {{ 'OK' if etcd_health.rc == 0 else 'ERROR' }}
+          ✅ DNS Resolution: {{ 'OK' if dns_test.rc == 0 else 'ERROR' }}
+          
+          📁 Kubeconfig: config/kubeconfig.yaml
+          
+          🚀 Ready for MetalLB and storage setup!

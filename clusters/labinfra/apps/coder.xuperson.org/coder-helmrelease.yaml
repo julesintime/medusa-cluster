@@ -1,0 +1,156 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: coder
+  namespace: flux-system
+spec:
+  interval: 10m
+  timeout: 15m
+  chart:
+    spec:
+      chart: coder
+      version: "2.25.0"
+      sourceRef:
+        kind: HelmRepository
+        name: coder-v2
+        namespace: flux-system
+  targetNamespace: coder
+  values:
+    coder:
+      env:
+        # Database connection from SOPS-encrypted secret
+        - name: CODER_PG_CONNECTION_URL
+          valueFrom:
+            secretKeyRef:
+              name: coder-database-secrets
+              key: database-url
+        
+        # Access URLs for dashboard and wildcard subdomains  
+        - name: CODER_ACCESS_URL
+          value: "https://coder.xuperson.org"
+        - name: CODER_WILDCARD_ACCESS_URL
+          value: "*.xuperson.org"
+        
+        # Enable wildcard domain support
+        - name: CODER_WILDCARD_HOSTNAME
+          value: "*.xuperson.org"
+        
+        # Enable Prometheus metrics
+        - name: CODER_PROMETHEUS_ENABLE
+          value: "true"
+        
+        # Security and authentication
+        - name: CODER_SECURE_AUTH_COOKIE
+          value: "true"
+        - name: CODER_TLS_ENABLE
+          value: "false"  # TLS termination handled by Cloudflare
+        
+        # Workspace settings
+        - name: CODER_PROVISIONER_DAEMONS
+          value: "1"
+        - name: CODER_PROVISIONER_DAEMON_POLL_INTERVAL
+          value: "1s"
+        
+        # Telemetry
+        - name: CODER_TELEMETRY_ENABLE
+          value: "false"
+        
+        # Basic DERP configuration - commented out complex settings
+        # - name: CODER_DERP_SERVER_ENABLE
+        #   value: "true"
+        # - name: CODER_DERP_SERVER_REGION_NAME
+        #   value: "Cloudflare Tunnel"
+        # - name: CODER_DERP_SERVER_REGION_CODE
+        #   value: "cftunnel"  
+        # - name: CODER_DERP_SERVER_REGION_ID
+        #   value: "1"
+        # - name: CODER_DERP_SERVER_RELAY_URL
+        #   value: "https://coder.xuperson.org"
+        # - name: CODER_DERP_FORCE_WEBSOCKETS
+        #   value: "true"
+        # - name: CODER_BLOCK_DIRECT
+        #   value: "true"
+        # - name: CODER_DERP_SERVER_STUN_ADDRESSES
+        #   value: "disable"
+        # - name: CODER_DERP_CONFIG_URL
+        #   value: ""
+        # - name: CODER_DISABLE_DIRECT_CONNECTIONS  
+        #   value: "true"
+        
+        # Remove template directory - templates should be pushed via CLI
+      
+      # No workspace configuration needed - templates deployed via CLI
+    
+    # Service account configuration - use existing one from RBAC
+    serviceAccount:
+      create: false
+      name: "coder"
+    
+    # Service configuration
+    service:
+      type: LoadBalancer
+      loadBalancerIP: "192.168.80.105"
+      port: 80
+      
+    # Single instance deployment - no HA needed
+    replicaCount: 1
+    
+    # Resource limits - reduced to more reasonable values
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
+
+    # Pod configuration
+    podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
+      runAsGroup: 1000
+      fsGroup: 1000
+
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop:
+        - ALL
+
+    # Readiness and liveness probes
+    livenessProbe:
+      httpGet:
+        path: /healthz
+        port: http
+        scheme: HTTP
+      initialDelaySeconds: 60
+      periodSeconds: 30
+      timeoutSeconds: 10
+      successThreshold: 1
+      failureThreshold: 5
+
+    readinessProbe:
+      httpGet:
+        path: /healthz
+        port: http
+        scheme: HTTP
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      timeoutSeconds: 5
+      successThreshold: 1
+      failureThreshold: 3
+
+    # Additional volumes for temporary files (since readOnlyRootFilesystem: true)
+    # extraVolumes:
+    #   - name: tmp
+    #     emptyDir: {}
+    #   - name: cache
+    #     emptyDir: {}
+
+    # extraVolumeMounts:
+    #   - name: tmp
+    #     mountPath: /tmp
+    #   - name: cache
+    #     mountPath: /opt/coder/.cache

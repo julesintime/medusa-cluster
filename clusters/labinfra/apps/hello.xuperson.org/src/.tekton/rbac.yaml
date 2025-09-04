@@ -1,0 +1,63 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tektonic-pipeline
+  namespace: tektonic
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: tektonic
+  name: tektonic-pipeline
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services", "endpoints", "persistentvolumeclaims", "events", "configmaps", "secrets"]
+  verbs: ["*"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets"]
+  verbs: ["*"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses"]
+  verbs: ["*"]
+- apiGroups: ["tekton.dev"]
+  resources: ["tasks", "pipelines", "pipelineruns", "taskruns"]
+  verbs: ["*"]
+- apiGroups: ["triggers.tekton.dev"]
+  resources: ["triggers", "triggerbindings", "triggertemplates", "eventlisteners", "interceptors"]
+  verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: tektonic-pipeline-cluster
+rules:
+- apiGroups: ["triggers.tekton.dev"]
+  resources: ["clustertriggerbindings", "clusterinterceptors"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: tektonic-pipeline-cluster
+subjects:
+- kind: ServiceAccount
+  name: tektonic-pipeline
+  namespace: tektonic
+roleRef:
+  kind: ClusterRole
+  name: tektonic-pipeline-cluster
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: tektonic-pipeline
+  namespace: tektonic
+subjects:
+- kind: ServiceAccount
+  name: tektonic-pipeline
+  namespace: tektonic
+roleRef:
+  kind: Role
+  name: tektonic-pipeline
+  apiGroup: rbac.authorization.k8s.io

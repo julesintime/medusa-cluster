@@ -1,0 +1,103 @@
+---
+project_name: labinfra
+cluster_name: labinfra-cluster
+
+proxmox_hosts:
+  pve200:
+    ip: 192.168.8.26
+    mac: "00:e0:4c:98:3a:a3"
+  pve700:
+    ip: 192.168.8.27
+    mac: "74:56:3c:1c:01:56"
+
+vm_configs:
+  pve200:
+    - name: k3s-control-1
+      vmid: 221
+      mac: "52:54:00:08:6d:21"
+      cores: 2
+      memory: 4096
+      disk_size: 50
+      ip: "192.168.8.21"
+      role: "control-plane"
+      k3s_init: true
+      
+    - name: k3s-worker-1
+      vmid: 211
+      mac: "52:54:00:08:6d:11"
+      cores: 8
+      memory: 24576
+      disk_size: 280
+      ip: "192.168.8.11"
+      role: "worker"
+
+  pve700:
+    - name: k3s-control-2
+      vmid: 722
+      mac: "52:54:00:08:6d:22"
+      cores: 2
+      memory: 4096
+      disk_size: 50
+      ip: "192.168.8.22"
+      role: "control-plane"
+      
+    - name: k3s-worker-2
+      vmid: 712
+      mac: "52:54:00:08:6d:12"
+      cores: 10
+      memory: 28672
+      disk_size: 500
+      ip: "192.168.8.12"
+      role: "worker"
+      
+    - name: k3s-worker-3
+      vmid: 713
+      mac: "52:54:00:08:6d:13"
+      cores: 10
+      memory: 28672
+      disk_size: 500
+      ip: "192.168.8.13"
+      role: "worker"
+
+network:
+  gateway: "192.168.8.1"
+  subnet: "192.168.8.0/24"
+  static_start: "192.168.8.11"
+  static_end: "192.168.8.29"
+  dhcp_start: "192.168.8.38"
+  dhcp_end: "192.168.8.243"
+  cluster_cidr: "10.42.0.0/16"
+  service_cidr: "10.43.0.0/16"
+  cluster_dns: "10.43.0.10"
+
+bgp:
+  edgerouter_asn: 65008
+  cluster_asn: 65009
+  router_id: "192.168.8.1"
+  metallb_pool: "192.168.80.0/24"
+  peers:
+    - ip: "192.168.8.21"
+      description: "k3s-control-1-metallb"
+    - ip: "192.168.8.22"
+      description: "k3s-control-2-metallb"
+
+k3s:
+  version: "v1.31.12+k3s1"  # Latest LTS version
+  cluster_domain: "cluster.local"
+  disable_components:
+    - traefik
+    - servicelb
+  tls_sans:
+    - "192.168.8.21"
+    - "192.168.8.22"
+
+metallb:
+  version: "v0.14.8"
+  ip_range: "192.168.80.20-192.168.80.220"
+  edgerouter_ip: "192.168.8.1"
+  cluster_asn: 65009
+  edgerouter_asn: 65008
+
+longhorn:
+  version: "v1.7.2"
+  default_replicas: 2

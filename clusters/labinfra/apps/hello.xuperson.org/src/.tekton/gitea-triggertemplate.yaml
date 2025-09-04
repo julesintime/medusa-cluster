@@ -1,0 +1,38 @@
+apiVersion: triggers.tekton.dev/v1alpha1
+kind: TriggerTemplate
+metadata:
+  name: gitea-template
+  namespace: tektonic
+spec:
+  params:
+    - name: gitrevision
+      description: The git commit SHA
+    - name: gitrepositoryurl
+      description: The git repository clone URL
+    - name: branchname
+      description: The branch name (refs/heads/main)
+    - name: pusher
+      description: The name of the user who pushed
+    - name: imageref
+      description: The container image reference to build
+  resourcetemplates:
+    - apiVersion: tekton.dev/v1
+      kind: PipelineRun
+      metadata:
+        generateName: gitea-pipeline-run-
+        namespace: tektonic
+      spec:
+        pipelineRef:
+          name: build-deploy-pipeline-working
+        taskRunTemplate:
+          serviceAccountName: tektonic-pipeline
+        params:
+          - name: repo-url
+            value: $(tt.params.gitrepositoryurl)
+          - name: image-reference
+            value: $(tt.params.imageref)
+          - name: revision
+            value: $(tt.params.gitrevision)
+        workspaces:
+          - name: source-data
+            emptyDir: {}

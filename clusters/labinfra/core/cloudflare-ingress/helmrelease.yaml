@@ -1,0 +1,46 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: ingress-nginx
+  namespace: flux-system
+spec:
+  interval: 10m
+  timeout: 15m
+  chart:
+    spec:
+      chart: ingress-nginx
+      version: "4.11.3"  # Matches version from cloudflare playbook
+      sourceRef:
+        kind: HelmRepository
+        name: ingress-nginx
+        namespace: flux-system
+  targetNamespace: cloudflare
+  values:
+    controller:
+      service:
+        type: LoadBalancer  # MetalLB L2 now ready for IP assignment
+        loadBalancerIP: 192.168.80.101  # Fixed IP from MetalLB pool
+      config:
+        use-proxy-protocol: "false"
+        # WebSocket upgrade mapping for DERP support
+        # map-hash-bucket-size: "128"
+        # Define connection_upgrade variable for WebSocket upgrades
+        # http-snippet: |
+        #   map $http_upgrade $connection_upgrade {
+        #       default upgrade;
+        #       '' close;
+        #       'derp' upgrade;
+        #   }
+      metrics:
+        enabled: true
+        serviceMonitor:
+          enabled: false  # Enable if you have Prometheus operator
+      ingressClassResource:
+        default: true
+    # Resource limits
+    resources:
+      limits:
+        memory: "1Gi"
+      requests:
+        cpu: "100m"
+        memory: "256Mi"

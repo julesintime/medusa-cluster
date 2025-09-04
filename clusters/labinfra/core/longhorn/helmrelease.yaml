@@ -1,0 +1,49 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: longhorn
+  namespace: flux-system
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: longhorn
+      version: "1.7.2"  # Matches longhorn.version from group_vars.yml
+      sourceRef:
+        kind: HelmRepository
+        name: longhorn
+        namespace: flux-system
+  targetNamespace: longhorn-system
+  values:
+    # Storage configuration - reverted to original working settings
+    defaultSettings:
+      defaultReplicaCount: 2  # Matches longhorn.default_replicas
+      defaultDataPath: "/var/lib/longhorn"
+      defaultDataLocality: "best-effort"
+      replicaAutoBalance: "least-effort"
+      storageOverProvisioningPercentage: 200  # Reverted to original value
+      storageMinimalAvailablePercentage: 25   # Reverted to original value
+      # Enable recurring backup
+      createDefaultDiskLabeledNodes: true     # Keep auto-discovery enabled
+      # Backup configuration - external targets to be configured via UI or future NFS/S3 setup
+      backupstorePollInterval: "300"
+    
+    # Persistence settings
+    persistence:
+      defaultClass: true
+      defaultClassReplicaCount: 2
+    
+    # Priority classes for critical workloads
+    longhornManager:
+      priorityClass: "system-cluster-critical"
+    longhornDriver:
+      priorityClass: "system-cluster-critical"
+    
+    # UI configuration
+    longhornUI:
+      replicas: 1
+    
+    # Monitoring
+    metrics:
+      serviceMonitor:
+        enabled: false  # Enable if you have Prometheus operator

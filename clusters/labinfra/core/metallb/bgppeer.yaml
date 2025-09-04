@@ -1,0 +1,13 @@
+apiVersion: metallb.io/v1beta2
+kind: BGPPeer
+metadata:
+  name: edgerouter-peer
+  namespace: metallb-system
+spec:
+  myASN: 65009
+  peerASN: 65008
+  peerAddress: 192.168.8.1
+  # DO NOT set sourceAddress here in FRR mode — leave it unset so each speaker
+  # will use its own local IP and can form a session independently.
+  holdTime: "90s"
+  # routerID: "192.168.8.21"

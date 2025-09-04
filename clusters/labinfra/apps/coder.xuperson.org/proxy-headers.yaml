@@ -1,0 +1,21 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: proxy-headers
+  namespace: cloudflare
+data:
+  Host: $host
+  X-Real-IP: $remote_addr
+  X-Forwarded-For: $proxy_add_x_forwarded_for
+  X-Forwarded-Proto: $scheme
+  X-Forwarded-Host: $host
+  X-Forwarded-Port: $server_port
+  # Critical for DERP support - allows 'Upgrade: derp' header
+  Upgrade: $http_upgrade
+  Connection: $connection_upgrade
+  X-Forwarded-Proto-Name: $scheme
+  X-Forwarded-Proto-Version: $request_id
+  # Additional headers for DERP health checks
+  X-Forwarded-Uri: $request_uri
+  X-Forwarded-Method: $request_method

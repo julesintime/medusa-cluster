@@ -1,0 +1,53 @@
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageRepository
+metadata:
+  name: cicd-gitops-demo
+  namespace: flux-system
+spec:
+  image: 192.168.80.104:5000/cicd-gitops-demo
+  interval: 1m0s
+  insecure: true
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: cicd-gitops-demo
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: cicd-gitops-demo
+  policy:
+    numerical:
+      order: asc
+  filterTags:
+    pattern: '^[a-f0-9]+-([0-9]+)$'
+    extract: '$1'
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageUpdateAutomation
+metadata:
+  name: cicd-gitops-demo
+  namespace: flux-system
+spec:
+  interval: 30s
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  git:
+    checkout:
+      ref:
+        branch: master
+    commit:
+      author:
+        email: fluxcdbot@users.noreply.github.com
+        name: fluxcdbot
+      messageTemplate: |
+        🤖 Update cicd-gitops-demo image {{range .Updated.Images}}{{println .}}{{end}}
+        
+        Automated update by Flux image automation
+    push:
+      branch: master
+  update:
+    strategy: Setters
+    path: "./clusters/labinfra/apps/cicd.xuperson.org"

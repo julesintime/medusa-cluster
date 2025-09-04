@@ -1,0 +1,155 @@
+---
+- name: Create K3s VMs on Proxmox with Cloud-Init
+  hosts: proxmox_hosts
+  gather_facts: true
+  vars_files:
+    - "../config/group_vars.yml"
+  
+  tasks:
+    - name: Fetch SSH public key from Infisical
+      shell: infisical secrets get VM-SSH-PUBLIC-KEY --env=dev --plain --silent
+      register: ssh_key_result
+      delegate_to: localhost
+      become: false
+      
+    - name: Set SSH public key fact for all hosts
+      set_fact:
+        ssh_public_key: "{{ ssh_key_result.stdout }}"
+      run_once: true
+      delegate_facts: true
+
+    - name: Write SSH public key to temp file on Proxmox hosts
+      copy:
+        content: "{{ ssh_public_key }}"
+        dest: "/tmp/vm_ssh_key.pub"
+        mode: '0644'
+
+    - name: Check if cloud image exists
+      stat:
+        path: "/var/lib/vz/template/iso/jammy-server-cloudimg-amd64.img"
+      register: cloud_image_stat
+
+    - name: Fail if cloud image doesn't exist
+      fail:
+        msg: "Cloud image jammy-server-cloudimg-amd64.img not found. Please download it first."
+      when: not cloud_image_stat.stat.exists
+
+    - name: Check if VMs already exist
+      shell: "qm list | grep -q '^[[:space:]]*{{ item.vmid }}[[:space:]]' || echo 'not_found'"
+      loop: "{{ vm_configs[inventory_hostname] }}"
+      when: vm_configs[inventory_hostname] is defined
+      register: vm_exists_check
+      failed_when: false
+      changed_when: false
+
+    - name: Create VMs with proper cloud-init setup
+      shell: |
+        # Skip if VM already exists
+        if qm list | grep -q "^[[:space:]]*{{ item.vmid }}[[:space:]]"; then
+          echo "VM {{ item.vmid }} ({{ item.name }}) already exists, skipping"
+          exit 0
+        fi
+        
+        echo "Creating VM {{ item.vmid }} ({{ item.name }})..."
+        
+        # 1. Create VM with VirtIO SCSI controller
+        qm create {{ item.vmid }} \
+          --name {{ item.name }} \
+          --memory {{ item.memory }} \
+          --cores {{ item.cores }} \
+          --cpu host \
+          --net0 virtio={{ item.mac }},bridge=vmbr0 \
+          --scsihw virtio-scsi-pci \
+          --ostype l26 \
+          --onboot 1
+        
+        # 2. Import cloud image as SCSI disk
+        qm set {{ item.vmid }} --scsi0 local-lvm:0,import-from=/var/lib/vz/template/iso/jammy-server-cloudimg-amd64.img
+        
+        # 3. Resize the disk
+        qm resize {{ item.vmid }} scsi0 {{ item.disk_size }}G
+        
+        # 4. Add Cloud-Init CD-ROM drive
+        qm set {{ item.vmid }} --ide2 local-lvm:cloudinit
+        
+        # 5. Configure boot order (boot from SCSI disk)
+        qm set {{ item.vmid }} --boot order=scsi0
+        
+        # 6. Configure Cloud-Init settings
+        qm set {{ item.vmid }} --sshkeys /tmp/vm_ssh_key.pub
+        qm set {{ item.vmid }} --ipconfig0 ip=dhcp
+        qm set {{ item.vmid }} --ciuser ubuntu
+        
+        # 7. Configure serial console for better cloud-init compatibility
+        qm set {{ item.vmid }} --serial0 socket --vga serial0
+        
+        echo "VM {{ item.vmid }} ({{ item.name }}) created successfully"
+        
+        # 8. Start VM
+        qm start {{ item.vmid }}
+        echo "VM {{ item.vmid }} ({{ item.name }}) started"
+        
+      loop: "{{ vm_configs[inventory_hostname] }}"
+      when: vm_configs[inventory_hostname] is defined
+      register: vm_creation_results
+
+    - name: Display VM creation results
+      debug:
+        msg: "{{ item.stdout_lines }}"
+      loop: "{{ vm_creation_results.results }}"
+      when: item.stdout_lines is defined
+
+    - name: Wait for VMs to boot and cloud-init to complete
+      pause:
+        seconds: 30
+
+    - name: Verify VMs are running
+      shell: "qm status {{ item.vmid }}"
+      loop: "{{ vm_configs[inventory_hostname] }}"
+      when: vm_configs[inventory_hostname] is defined
+      register: vm_status_results
+
+    - name: Display VM status
+      debug:
+        msg: "VM {{ item.item.vmid }} ({{ item.item.name }}) status: {{ item.stdout }}"
+      loop: "{{ vm_status_results.results }}"
+      when: item.stdout is defined
+
+    - name: Test network connectivity to VMs
+      wait_for:
+        host: "{{ item.ip }}"
+        port: 22
+        delay: 10
+        timeout: 180
+        state: started
+      loop: "{{ vm_configs[inventory_hostname] }}"
+      when: vm_configs[inventory_hostname] is defined
+      delegate_to: localhost
+
+    - name: Test SSH authentication (with retries)
+      shell: |
+        ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@{{ item.ip }} "echo 'SSH connection successful to {{ item.name }} ({{ item.ip }})'; hostname; cloud-init status"
+      loop: "{{ vm_configs[inventory_hostname] }}"
+      when: vm_configs[inventory_hostname] is defined
+      register: ssh_test_results
+      delegate_to: localhost
+      retries: 10
+      delay: 30
+      until: ssh_test_results.rc == 0
+      ignore_errors: true
+
+    - name: Display SSH test results
+      debug:
+        msg: "{{ item.stdout_lines }}"
+      loop: "{{ ssh_test_results.results }}"
+      when: item.stdout_lines is defined
+
+    - name: Final VM summary
+      debug:
+        msg: |
+          === VM Creation Summary for {{ inventory_hostname }} ===
+          {% for vm in vm_configs[inventory_hostname] %}
+          ✓ VM: {{ vm.name }} ({{ vm.vmid }}) - IP: {{ vm.ip }} - MAC: {{ vm.mac }} - Status: Ready for K3s
+          {% endfor %}
+          All VMs are accessible via SSH with ubuntu user and ready for K3s installation!
+      when: vm_configs[inventory_hostname] is defined

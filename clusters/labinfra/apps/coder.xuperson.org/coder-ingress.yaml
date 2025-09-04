@@ -1,0 +1,67 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: coder-dashboard
+  namespace: coder
+  labels:
+    app.kubernetes.io/name: coder
+    app.kubernetes.io/component: ingress
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: coder.xuperson.org
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    # Critical for DERP support - allows websocket upgrades including 'Upgrade: derp'
+    nginx.ingress.kubernetes.io/websocket-services: "coder"
+    nginx.ingress.kubernetes.io/proxy-set-headers: "cloudflare/proxy-headers"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: coder.xuperson.org
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: coder
+            port:
+              number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: coder-workspaces-wildcard
+  namespace: coder
+  labels:
+    app.kubernetes.io/name: coder
+    app.kubernetes.io/component: wildcard-ingress
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: "*.xuperson.org"
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    nginx.ingress.kubernetes.io/upstream-vhost: "$host"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    # Critical for DERP support - allows websocket upgrades including 'Upgrade: derp'
+    # nginx.ingress.kubernetes.io/websocket-services: "coder"
+    # nginx.ingress.kubernetes.io/proxy-set-headers: "cloudflare/proxy-headers"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: "*.xuperson.org"
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: coder
+            port:
+              number: 80

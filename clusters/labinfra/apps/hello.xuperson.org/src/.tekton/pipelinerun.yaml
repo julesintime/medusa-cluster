@@ -1,0 +1,20 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: tektonic-build-deploy-run-
+  namespace: tektonic
+spec:
+  pipelineRef:
+    name: build-deploy-pipeline-working
+  taskRunTemplate:
+    serviceAccountName: tektonic-pipeline
+  params:
+    - name: repo-url
+      value: "https://git.xuperson.org/gitea-admin/sample-ci-app.git"
+    - name: image-reference
+      value: "192.168.80.104:5000/tektonic-app:$(context.pipelineRun.uid)"
+    - name: revision
+      value: "main"
+  workspaces:
+    - name: source-data
+      emptyDir: {}

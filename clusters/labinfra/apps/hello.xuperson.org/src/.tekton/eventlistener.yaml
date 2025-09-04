@@ -1,0 +1,24 @@
+apiVersion: triggers.tekton.dev/v1beta1
+kind: EventListener
+metadata:
+  name: tektonic-listener
+  namespace: tektonic
+spec:
+  serviceAccountName: tektonic-pipeline
+  triggers:
+    - name: gitea-push-trigger
+      interceptors:
+        - name: validate-gitea-payload
+          ref:
+            name: cel
+          params:
+            - name: filter
+              value: "header.match('X-Gitea-Event', 'push')"
+            - name: overlays
+              value:
+                - key: extensions.truncated_sha
+                  expression: body.head_commit.id.truncate(7)
+      bindings:
+        - ref: gitea-binding
+      template:
+        ref: gitea-template

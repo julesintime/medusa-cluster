@@ -1,0 +1,17 @@
+apiVersion: triggers.tekton.dev/v1alpha1
+kind: TriggerBinding
+metadata:
+  name: gitea-binding
+  namespace: tektonic
+spec:
+  params:
+    - name: gitrevision
+      value: $(body.head_commit.id)
+    - name: gitrepositoryurl
+      value: "https://git.xuperson.org/gitea-admin/tektonic.git"
+    - name: branchname
+      value: $(body.ref)
+    - name: pusher
+      value: $(body.pusher.username)
+    - name: imageref
+      value: "192.168.80.104:5000/tektonic-app:$(body.head_commit.id)"

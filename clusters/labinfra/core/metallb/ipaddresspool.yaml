@@ -1,0 +1,10 @@
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: internal-pool
+  namespace: metallb-system
+spec:
+  addresses:
+    - 192.168.80.100-192.168.80.150  # Matches metallb.ip_range from group_vars.yml
+  autoAssign: true
+  avoidBuggyIPs: true

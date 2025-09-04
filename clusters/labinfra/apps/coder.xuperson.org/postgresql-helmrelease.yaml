@@ -1,0 +1,47 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: coder-postgresql
+  namespace: flux-system
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: postgresql
+      version: "15.5.32"
+      sourceRef:
+        kind: HelmRepository
+        name: bitnami
+        namespace: flux-system
+  targetNamespace: coder
+  values:
+    auth:
+      # Use SOPS encrypted passwords from coder-database-secrets
+      existingSecret: "coder-database-secrets"
+      secretKeys:
+        adminPasswordKey: "postgres-admin-password"
+        userPasswordKey: "coder-user-password"
+      username: coder
+      database: coder
+    primary:
+      persistence:
+        enabled: true
+        storageClass: longhorn-retain  # CRITICAL: Use Retain policy for database
+        size: 20Gi
+      service:
+        type: LoadBalancer
+        loadBalancerIP: 192.168.80.103
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
+    metrics:
+      enabled: true
+      serviceMonitor:
+        enabled: false
+    volumePermissions:
+      enabled: true

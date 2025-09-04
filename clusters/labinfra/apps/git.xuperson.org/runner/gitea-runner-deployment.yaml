@@ -1,0 +1,184 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: act-runner-vol
+  namespace: gitea
+  labels:
+    app.kubernetes.io/name: gitea-runner
+    app.kubernetes.io/part-of: gitea
+    app.kubernetes.io/component: ci-cd
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: longhorn
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: act-runner
+    app.kubernetes.io/name: gitea-runner
+    app.kubernetes.io/part-of: gitea
+    app.kubernetes.io/component: ci-cd
+  name: act-runner
+  namespace: gitea
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: act-runner
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: act-runner
+    spec:
+      restartPolicy: Always
+      serviceAccountName: gitea-runner
+      initContainers:
+      - name: wait-for-secret
+        image: bitnami/kubectl:latest
+        command:
+        - /bin/bash
+        - -c
+        - |
+          echo "🔍 Waiting for runner-secret to be created by bootstrap job..."
+          while ! kubectl get secret runner-secret -n gitea >/dev/null 2>&1; do
+            echo "   Secret not found, waiting 10 seconds..."
+            sleep 10
+          done
+          echo "✅ Found runner-secret! Act-runner can now start."
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "50m"
+          limits:
+            memory: "64Mi"
+            cpu: "100m"
+      - name: install-buildctl
+        image: moby/buildkit:master
+        command: 
+        - sh
+        - -c
+        - |
+          cp /usr/bin/buildctl /shared/buildctl
+          chmod +x /shared/buildctl
+        volumeMounts:
+        - name: buildctl-binary
+          mountPath: /shared
+      volumes:
+      - name: runner-data
+        persistentVolumeClaim:
+          claimName: act-runner-vol
+      - name: cache-dir
+        emptyDir: {}
+      - name: buildctl-binary
+        emptyDir: {}
+      - name: buildkit-certs
+        secret:
+          secretName: buildkit-daemon-certs
+      - name: runner-home
+        emptyDir: {}
+      - name: runner-runtime
+        emptyDir: {}
+      - name: runner-tmp
+        emptyDir: {}
+      - name: runner-docker-config
+        emptyDir: {}
+      securityContext:
+        fsGroup: 1000
+      containers:
+      - name: runner
+        image: gitea/act_runner:nightly
+        workingDir: /data
+        command: 
+        - sh
+        - -c
+        - |
+          # Clean any existing config and re-register with fresh token
+          echo "🔧 Cleaning old runner config..."
+          rm -f /data/.runner
+          
+          echo "🔐 Registering runner with fresh token..."
+          act_runner register \
+            --instance "$GITEA_INSTANCE_URL" \
+            --token "$GITEA_RUNNER_REGISTRATION_TOKEN" \
+            --name "$GITEA_RUNNER_NAME" \
+            --labels "$GITEA_RUNNER_LABELS" \
+            --no-interactive
+          
+          echo "🚀 Starting runner daemon..."
+          exec act_runner daemon
+        env:
+        - name: HOME
+          value: "/home/runner"
+        - name: USER
+          value: "runner"
+        - name: XDG_RUNTIME_DIR
+          value: "/run/user/1000"
+        - name: TMPDIR
+          value: "/home/runner/.local/tmp"
+        - name: DOCKER_CONFIG
+          value: "/home/runner/.local/share/docker"
+        - name: BUILDKIT_HOST
+          value: tcp://buildkitd.buildkit.svc.cluster.local:1235
+        - name: GITEA_INSTANCE_URL
+          value: https://git.xuperson.org
+        - name: GITEA_RUNNER_REGISTRATION_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: runner-secret
+              key: token
+        - name: GITEA_RUNNER_NAME
+          value: "labinfra-runner-host"
+        - name: GITEA_RUNNER_LABELS
+          value: "ubuntu-latest,ubuntu-22.04,buildkit"
+        securityContext:
+          runAsUser: 1000
+          runAsGroup: 1000
+        volumeMounts:
+        - name: runner-data
+          mountPath: /data
+        - name: cache-dir
+          mountPath: /.cache
+        - name: buildctl-binary
+          mountPath: /usr/local/bin/buildctl
+          subPath: buildctl
+        - name: buildkit-certs
+          mountPath: /buildkit-certs
+          readOnly: true
+        - name: runner-home
+          mountPath: /home/runner
+        - name: runner-runtime
+          mountPath: /run/user/1000
+        - name: runner-tmp
+          mountPath: /home/runner/.local/tmp
+        - name: runner-docker-config
+          mountPath: /home/runner/.local/share/docker
+        resources:
+          limits:
+            cpu: 1500m
+            memory: 2Gi
+          requests:
+            cpu: 250m
+            memory: 512Mi
+        livenessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - "ps aux | grep -v grep | grep act_runner"
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - "ps aux | grep -v grep | grep act_runner"
+          initialDelaySeconds: 10
+          periodSeconds: 10

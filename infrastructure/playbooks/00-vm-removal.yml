@@ -1,0 +1,56 @@
+---
+# Remove all K3s VMs from Proxmox hosts
+- name: Remove K3s VMs from Proxmox
+  hosts: proxmox_hosts
+  gather_facts: false
+  vars_files:
+    - "../config/group_vars.yml"
+  
+  tasks:
+    - name: Get list of VMs to remove
+      shell: "qm list | grep -E '({{ vm_configs[inventory_hostname] | map(attribute='vmid') | join('|') }})' | awk '{print $1}' || true"
+      register: existing_vms
+      when: vm_configs[inventory_hostname] is defined
+
+    - name: Display VMs found for removal
+      debug:
+        msg: "Found VMs to remove on {{ inventory_hostname }}: {{ existing_vms.stdout_lines | default([]) }}"
+      when: vm_configs[inventory_hostname] is defined
+
+    - name: Stop and destroy VMs
+      shell: |
+        echo "Stopping and destroying VM {{ item }}"
+        qm stop {{ item }} --skiplock || true
+        sleep 3
+        qm destroy {{ item }} --skiplock --purge || true
+        echo "VM {{ item }} removed"
+      loop: "{{ existing_vms.stdout_lines | default([]) }}"
+      when: 
+        - vm_configs[inventory_hostname] is defined
+        - existing_vms.stdout_lines is defined
+        - existing_vms.stdout_lines | length > 0
+      register: vm_removal_results
+
+    - name: Display removal results
+      debug:
+        msg: "{{ item.stdout_lines }}"
+      loop: "{{ vm_removal_results.results }}"
+      when: 
+        - vm_removal_results is defined
+        - item.stdout_lines is defined
+
+    - name: Clean up SSH key temp files
+      file:
+        path: "/tmp/vm_ssh_key.pub"
+        state: absent
+
+    - name: Final VM list verification
+      shell: "qm list"
+      register: final_vm_list
+
+    - name: Display final VM status
+      debug:
+        msg: |
+          === VM Removal Summary for {{ inventory_hostname }} ===
+          Final VM list:
+          {{ final_vm_list.stdout_lines | join('\n') }}
