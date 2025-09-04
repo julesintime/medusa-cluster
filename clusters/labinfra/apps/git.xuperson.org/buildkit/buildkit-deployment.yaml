@@ -31,10 +31,10 @@ spec:
           set -e
           echo "Setting up BuildKit certificates..."
           
-          # Decode base64 certificates and create PEM files
-          echo "$BUILDKIT_CA_PEM_B64" | base64 -d > /certs/ca.pem
-          echo "$BUILDKIT_CERT_PEM_B64" | base64 -d > /certs/cert.pem
-          echo "$BUILDKIT_KEY_PEM_B64" | base64 -d > /certs/key.pem
+          # Copy certificates from secret to proper location
+          cp /tmp/certs/ca.pem /certs/ca.pem
+          cp /tmp/certs/cert.pem /certs/cert.pem
+          cp /tmp/certs/key.pem /certs/key.pem
           
           # Set proper permissions
           chmod 444 /certs/ca.pem /certs/cert.pem
@@ -42,24 +42,26 @@ spec:
           
           echo "Certificates prepared successfully"
         env:
-        - name: BUILDKIT_CA_PEM_B64
+        - name: BUILDKIT_CA_PEM
           valueFrom:
             secretKeyRef:
               name: buildkit-daemon-certs
-              key: BUILDKIT_CA_PEM_B64
-        - name: BUILDKIT_CERT_PEM_B64
+              key: ca.pem
+        - name: BUILDKIT_CERT_PEM
           valueFrom:
             secretKeyRef:
               name: buildkit-daemon-certs
-              key: BUILDKIT_CERT_PEM_B64
-        - name: BUILDKIT_KEY_PEM_B64
+              key: cert.pem
+        - name: BUILDKIT_KEY_PEM
           valueFrom:
             secretKeyRef:
               name: buildkit-daemon-certs
-              key: BUILDKIT_KEY_PEM_B64
+              key: key.pem
         volumeMounts:
         - name: certs
           mountPath: /certs
+        - name: secret-certs
+          mountPath: /tmp/certs
         resources:
           requests:
             memory: "32Mi" 
@@ -149,6 +151,9 @@ spec:
       volumes:
       - name: certs
         emptyDir: {}
+      - name: secret-certs
+        secret:
+          secretName: buildkit-daemon-certs
       - name: buildkit-cache
         emptyDir: {}
       - name: buildkit-runtime
