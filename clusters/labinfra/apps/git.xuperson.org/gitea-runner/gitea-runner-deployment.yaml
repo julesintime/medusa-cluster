@@ -196,7 +196,7 @@ spec:
         - name: GITEA_RUNNER_REGISTRATION_TOKEN
           valueFrom:
             secretKeyRef:
-              name: gitea-runner-token
+              name: runner-secret
               key: token
         - name: GITEA_RUNNER_NAME
           value: "minikube-runner-host"
