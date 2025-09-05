@@ -33,7 +33,7 @@ spec:
           echo "✅ Gitea is ready!"
       containers:
       - name: create-admin-token
-        image: curlimages/curl:latest
+        image: bitnami/kubectl:latest
         env:
         - name: GITEA_ADMIN_USERNAME
           valueFrom:
