@@ -118,24 +118,12 @@ spec:
       restartPolicy: Always
       serviceAccountName: gitea-runner-init
       initContainers:
-      - name: install-kubectl
-        image: bitnami/kubectl:latest
-        command:
-        - sh
-        - -c
-        - cp /opt/bitnami/kubectl/bin/kubectl /shared/kubectl && chmod +x /shared/kubectl
-        volumeMounts:
-        - name: kubectl-binary
-          mountPath: /shared
       - name: setup-runner-token
         image: alpine/curl:latest
         command: ["/scripts/runner-setup.sh"]
         volumeMounts:
         - name: script-volume
           mountPath: /scripts
-        - name: kubectl-binary
-          mountPath: /usr/local/bin/kubectl
-          subPath: kubectl
         resources:
           requests:
             memory: "64Mi"
@@ -143,83 +131,27 @@ spec:
           limits:
             memory: "128Mi"
             cpu: "200m"
-      - name: install-buildctl
-        image: moby/buildkit:master
-        command: 
-        - sh
-        - -c
-        - |
-          cp /usr/bin/buildctl /shared/buildctl
-          chmod +x /shared/buildctl
-        volumeMounts:
-        - name: buildctl-binary
-          mountPath: /shared
       volumes:
       - name: runner-data
         persistentVolumeClaim:
           claimName: act-runner-vol
-      - name: cache-dir
-        emptyDir: {}
-      - name: buildctl-binary
-        emptyDir: {}
-      - name: kubectl-binary
-        emptyDir: {}
       - name: script-volume
         configMap:
           name: runner-setup-script
           defaultMode: 0755
-      - name: buildkit-certs
-        secret:
-          secretName: buildkit-daemon-certs
-      - name: runner-home
-        emptyDir: {}
-      - name: runner-runtime
-        emptyDir: {}
-      - name: runner-tmp
-        emptyDir: {}
-      - name: runner-docker-config
-        emptyDir: {}
       securityContext:
         fsGroup: 1000
       containers:
       - name: runner
-        image: gitea/act_runner:nightly
-        workingDir: /data
-        command: 
-        - sh
-        - -c
-        - |
-          # Install Node.js for GitHub Actions compatibility
-          echo "📦 Installing Node.js..."
-          apk add --no-cache nodejs npm
-          
-          # Clean any existing config and re-register with fresh token
-          echo "🔧 Cleaning old runner config..."
-          rm -f /data/.runner
-          
-          echo "🔐 Registering as the sole runner for this instance..."
-          act_runner register \
-            --instance "$GITEA_INSTANCE_URL" \
-            --token "$GITEA_RUNNER_REGISTRATION_TOKEN" \
-            --name "$GITEA_RUNNER_NAME" \
-            --labels "$GITEA_RUNNER_LABELS" \
-            --no-interactive
-          
-          echo "🚀 Starting runner daemon..."
-          exec act_runner daemon
+        image: gitea/act_runner:nightly-dind-rootless
+        imagePullPolicy: Always
         env:
-        - name: HOME
-          value: "/home/runner"
-        - name: USER
-          value: "runner"
-        - name: XDG_RUNTIME_DIR
-          value: "/run/user/1000"
-        - name: TMPDIR
-          value: "/home/runner/.local/tmp"
-        - name: DOCKER_CONFIG
-          value: "/home/runner/.local/share/docker"
-        - name: BUILDKIT_HOST
-          value: tcp://buildkitd.buildkit.svc.cluster.local:1235
+        - name: DOCKER_HOST
+          value: tcp://localhost:2376
+        - name: DOCKER_CERT_PATH
+          value: /certs/client
+        - name: DOCKER_TLS_VERIFY
+          value: "1"
         - name: GITEA_INSTANCE_URL
           value: https://git.xuperson.org
         - name: GITEA_RUNNER_REGISTRATION_TOKEN
@@ -232,27 +164,10 @@ spec:
         - name: GITEA_RUNNER_LABELS
           value: "ubuntu-latest,ubuntu-22.04,buildkit"
         securityContext:
-          runAsUser: 1000
-          runAsGroup: 1000
+          privileged: true
         volumeMounts:
         - name: runner-data
           mountPath: /data
-        - name: cache-dir
-          mountPath: /.cache
-        - name: buildctl-binary
-          mountPath: /usr/local/bin/buildctl
-          subPath: buildctl
-        - name: buildkit-certs
-          mountPath: /buildkit-certs
-          readOnly: true
-        - name: runner-home
-          mountPath: /home/runner
-        - name: runner-runtime
-          mountPath: /run/user/1000
-        - name: runner-tmp
-          mountPath: /home/runner/.local/tmp
-        - name: runner-docker-config
-          mountPath: /home/runner/.local/share/docker
         resources:
           limits:
             cpu: 1500m
@@ -260,19 +175,3 @@ spec:
           requests:
             cpu: 250m
             memory: 512Mi
-        livenessProbe:
-          exec:
-            command:
-            - sh
-            - -c
-            - "ps aux | grep -v grep | grep act_runner"
-          initialDelaySeconds: 30
-          periodSeconds: 30
-        readinessProbe:
-          exec:
-            command:
-            - sh
-            - -c
-            - "ps aux | grep -v grep | grep act_runner"
-          initialDelaySeconds: 10
-          periodSeconds: 10
