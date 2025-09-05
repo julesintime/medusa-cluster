@@ -270,6 +270,19 @@ kubectl logs -n cloudflare deployment/cloudflared
 kubectl get ingress -A
 ```
 
+## Script Development
+
+**Rule**: Always develop and test scripts locally before Kubernetes deployment.
+
+```bash
+# 1. Write in workspace/scripts/
+# 2. Test with kubectl port-forward 
+# 3. Create ConfigMap only after local testing succeeds
+# 4. Use ConfigMap volumes in deployments
+```
+
+See CLAUDE.md for detailed script development workflow.
+
 This completes your production-ready GitOps Kubernetes platform with secure secrets management and automated external access.
 
 

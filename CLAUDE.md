@@ -238,4 +238,71 @@ flux get kustomizations -A
 flux get helmreleases -A
 ```
 
+## Script Development Process
+
+**CRITICAL**: Always develop and test scripts locally before deploying to Kubernetes.
+
+### Local Script Development Workflow
+
+```bash
+# 1. Write script locally in workspace/scripts/
+mkdir -p workspace/scripts
+vim workspace/scripts/my-script.sh
+
+# 2. Make executable and test locally
+chmod +x workspace/scripts/my-script.sh
+
+# 3. Test against actual services (use port-forward)
+kubectl port-forward -n namespace svc/service-name port:port &
+# Test script with real API calls
+./workspace/scripts/my-script.sh
+
+# 4. Only after LOCAL testing works, create ConfigMap
+kubectl create configmap my-script-config \
+  --from-file=my-script.sh=workspace/scripts/my-script.sh \
+  --namespace=target-namespace
+
+# 5. Use script in deployment via ConfigMap volume
+```
+
+### ConfigMap Script Pattern
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: script-config
+  namespace: app-namespace
+data:
+  script.sh: |
+    #!/bin/sh
+    # Your tested script here
+---
+apiVersion: apps/v1
+kind: Deployment
+spec:
+  template:
+    spec:
+      initContainers:
+      - name: run-script
+        image: alpine/curl:latest
+        command: ["/scripts/script.sh"]
+        volumeMounts:
+        - name: script-volume
+          mountPath: /scripts
+      volumes:
+      - name: script-volume
+        configMap:
+          name: script-config
+          defaultMode: 0755
+```
+
+### Best Practices
+
+- **NEVER** inline complex scripts in YAML
+- **ALWAYS** test locally with port-forward first
+- **USE** proven container images (alpine/curl, bitnami/kubectl)
+- **AVOID** switching images mid-development
+- **TEST** API endpoints before assuming they work
+
 For infrastructure details, troubleshooting, and architecture diagrams, refer to README.md.

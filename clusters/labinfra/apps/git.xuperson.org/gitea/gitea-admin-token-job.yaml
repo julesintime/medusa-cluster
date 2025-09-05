@@ -1,4 +1,92 @@
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: admin-token-script
+  namespace: gitea
+  labels:
+    app.kubernetes.io/name: gitea-admin-token
+    app.kubernetes.io/component: token-management
+    app.kubernetes.io/managed-by: flux
+data:
+  admin-token.sh: |
+    #!/bin/sh
+    set -e
+
+    echo "🔄 Creating Gitea admin API token..."
+
+    # Get admin credentials from Kubernetes secrets
+    ADMIN_USER=$(kubectl get secret gitea-admin-secrets -n gitea -o jsonpath='{.data.username}' | base64 -d)
+    ADMIN_PASS=$(kubectl get secret gitea-admin-secrets -n gitea -o jsonpath='{.data.password}' | base64 -d)
+
+    echo "📡 Testing Gitea API connection..."
+    if ! curl -s -f -u "$ADMIN_USER:$ADMIN_PASS" "http://gitea-http:3000/api/v1/version" >/dev/null; then
+      echo "❌ Cannot connect to Gitea API"
+      exit 1
+    fi
+    echo "✅ Gitea API is accessible"
+
+    # Check for existing admin API token
+    if kubectl get secret gitea-admin-api-token -n gitea >/dev/null 2>&1; then
+      EXISTING_TOKEN=$(kubectl get secret gitea-admin-api-token -n gitea -o jsonpath='{.data.token}' | base64 -d)
+      if [ ! -z "$EXISTING_TOKEN" ] && [ ${#EXISTING_TOKEN} -eq 40 ]; then
+        if curl -s -f -H "Authorization: token $EXISTING_TOKEN" "http://gitea-http:3000/api/v1/user" >/dev/null; then
+          echo "✅ Valid admin token already exists (length: ${#EXISTING_TOKEN})"
+          exit 0
+        fi
+      fi
+      echo "⚠️  Existing token is invalid, will create new one"
+    fi
+
+    # Clean up existing tokens in Gitea
+    echo "🧹 Cleaning up existing API tokens..."
+    TOKENS_RESPONSE=$(curl -s -u "$ADMIN_USER:$ADMIN_PASS" "http://gitea-http:3000/api/v1/users/$ADMIN_USER/tokens")
+    TOKEN_IDS=$(echo "$TOKENS_RESPONSE" | grep -o '"id":[0-9]*' | sed 's/"id"://' || echo "")
+
+    if [ ! -z "$TOKEN_IDS" ]; then
+      echo "   Deleting existing tokens..."
+      for token_id in $TOKEN_IDS; do
+        curl -s -X DELETE "http://gitea-http:3000/api/v1/users/$ADMIN_USER/tokens/$token_id" \
+          -u "$ADMIN_USER:$ADMIN_PASS" >/dev/null
+      done
+    fi
+
+    # Create new admin token
+    echo "🏗️ Creating new admin API token..."
+    RESPONSE=$(curl -s -X POST "http://gitea-http:3000/api/v1/users/$ADMIN_USER/tokens" \
+      -H "Content-Type: application/json" \
+      -u "$ADMIN_USER:$ADMIN_PASS" \
+      -d '{
+        "name": "flux-automation", 
+        "scopes": ["all"]
+      }')
+
+    # Extract token
+    ADMIN_TOKEN=$(echo "$RESPONSE" | grep -o '"sha1":"[a-f0-9]*"' | sed 's/"sha1":"//;s/"//')
+
+    if [ -z "$ADMIN_TOKEN" ] || [ ${#ADMIN_TOKEN} -ne 40 ]; then
+      echo "❌ Failed to create admin token"
+      echo "Response: $RESPONSE"
+      exit 1
+    fi
+
+    echo "✅ Admin token created (length: ${#ADMIN_TOKEN})"
+
+    # Test the token
+    if ! curl -s -f -H "Authorization: token $ADMIN_TOKEN" "http://gitea-http:3000/api/v1/user" >/dev/null; then
+      echo "❌ New token failed validation"
+      exit 1
+    fi
+    echo "✅ Token validation successful"
+
+    # Store in Kubernetes secret
+    kubectl create secret generic gitea-admin-api-token \
+      --from-literal=token="$ADMIN_TOKEN" \
+      --namespace=gitea \
+      --dry-run=client -o yaml | kubectl apply -f -
+
+    echo "💾 Admin token stored in secret 'gitea-admin-api-token'"
+---
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -9,145 +97,26 @@ metadata:
     app.kubernetes.io/component: token-management
     app.kubernetes.io/managed-by: flux
 spec:
-  schedule: "*/5 * * * *"  # Run every 5 minutes
+  schedule: "*/10 * * * *"  # Run every 10 minutes
   successfulJobsHistoryLimit: 1
   failedJobsHistoryLimit: 1
   jobTemplate:
     spec:
       ttlSecondsAfterFinished: 300
-      backoffLimit: 3
       template:
-        metadata:
-          labels:
-            app.kubernetes.io/name: gitea-admin-token-sync
         spec:
           restartPolicy: OnFailure
           serviceAccountName: gitea-runner-init
-          initContainers:
-          - name: wait-for-gitea
-            image: curlimages/curl:latest
-            command:
-            - /bin/bash
-            - -c
-            - |
-              echo "🔄 Waiting for Gitea to be ready..."
-              until curl -f -s http://gitea-http:3000/api/v1/version; do
-                echo "   Gitea not ready, waiting 10 seconds..."
-                sleep 10
-              done
-              echo "✅ Gitea is ready!"
           containers:
-          - name: sync-admin-token
-            image: bitnami/kubectl:latest
-            env:
-            - name: GITEA_ADMIN_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: gitea-admin-secrets
-                  key: username
-            - name: GITEA_ADMIN_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: gitea-admin-secrets
-                  key: password
-            command:
-            - /bin/bash
-            - -c
-            - |
-              # Install curl in bitnami/kubectl image
-              apt-get update && apt-get install -y curl
-              
-              set -e
-              echo "🔄 Syncing Gitea admin token..."
-              
-              # Step 1: Check if we already have a valid token in Kubernetes
-              if kubectl get secret gitea-admin-api-token -n gitea >/dev/null 2>&1; then
-                echo "📦 Found existing Kubernetes secret, testing token validity..."
-                EXISTING_TOKEN=$(kubectl get secret gitea-admin-api-token -n gitea -o jsonpath='{.data.token}' | base64 -d)
-                
-                if [ ! -z "$EXISTING_TOKEN" ] && [ ${#EXISTING_TOKEN} -gt 10 ]; then
-                  # Test if the token works by making an API call
-                  if curl -s -f -H "Authorization: token $EXISTING_TOKEN" "http://gitea-http:3000/api/v1/user" >/dev/null; then
-                    echo "✅ Existing token is valid and working"
-                    exit 0
-                  else
-                    echo "⚠️  Existing token is invalid, will regenerate"
-                  fi
-                else
-                  echo "⚠️  Invalid token in Kubernetes secret, will regenerate"
-                fi
-              else
-                echo "📋 No Kubernetes secret found, will create new token"
-              fi
-              
-              echo "📋 Proceeding to generate new token..."
-              
-              # Step 2: Check existing tokens in Gitea and ensure we only have one
-              echo "📋 Checking Gitea for existing tokens..."
-              TOKENS_RESPONSE=$(curl -s "http://gitea-http:3000/api/v1/users/$GITEA_ADMIN_USERNAME/tokens" \
-                -u "$GITEA_ADMIN_USERNAME:$GITEA_ADMIN_PASSWORD")
-              
-              # Check for curl errors
-              if [ $? -ne 0 ] || [ -z "$TOKENS_RESPONSE" ]; then
-                echo "❌ Failed to fetch tokens from Gitea API"
-                exit 1
-              fi
-
-              # Count existing tokens (without jq)
-              TOKEN_COUNT=$(echo "$TOKENS_RESPONSE" | grep -o '"id":[0-9]*' | wc -l | tr -d ' ')
-              
-              if [ "$TOKEN_COUNT" -gt 0 ]; then
-                echo "🧹 Found $TOKEN_COUNT existing token(s), will clean up to ensure single token..."
-                # Extract all token IDs and delete them
-                TOKEN_IDS=$(echo "$TOKENS_RESPONSE" | grep -o '"id":[0-9]*' | sed 's/"id"://')
-                for token_id in $TOKEN_IDS; do
-                  echo "   Deleting token ID: $token_id"
-                  curl -s -X DELETE "http://gitea-http:3000/api/v1/users/$GITEA_ADMIN_USERNAME/tokens/$token_id" \
-                    -u "$GITEA_ADMIN_USERNAME:$GITEA_ADMIN_PASSWORD"
-                done
-              else
-                echo "📋 No existing tokens found in Gitea"
-              fi
-
-              # Step 3: Create the single admin token
-              echo "🏗️ Creating new admin API token..."
-              RESPONSE=$(curl -s -X POST "http://gitea-http:3000/api/v1/users/$GITEA_ADMIN_USERNAME/tokens" \
-                -H "Content-Type: application/json" \
-                -u "$GITEA_ADMIN_USERNAME:$GITEA_ADMIN_PASSWORD" \
-                -d '{
-                  "name": "flux-automation",
-                  "scopes": ["read:activitypub", "read:issue", "write:misc", "read:notification", "read:organization", "read:package", "read:repository", "read:user", "write:admin", "write:repository", "write:user"]
-                }')
-              
-              echo "API Response: $RESPONSE"
-              
-              # Extract token using grep/sed (no jq dependency)
-              ADMIN_TOKEN=$(echo "$RESPONSE" | grep -o '"sha1":"[a-f0-9]*"' | sed 's/"sha1":"//;s/"//')
-
-              if [ -z "$ADMIN_TOKEN" ] || [ ${#ADMIN_TOKEN} -ne 40 ]; then
-                echo "❌ Failed to create admin token or invalid token received"
-                echo "Response: $RESPONSE"
-                exit 1
-              fi
-
-              echo "✅ Admin token created successfully (length: ${#ADMIN_TOKEN})"
-              
-              # Step 4: Test the new token works
-              if ! curl -s -f -H "Authorization: token $ADMIN_TOKEN" "http://gitea-http:3000/api/v1/user" >/dev/null; then
-                echo "❌ New token failed validation test"
-                exit 1
-              fi
-              
-              echo "✅ Token validation successful"
-
-              # Step 5: Store in Kubernetes secret
-              kubectl create secret generic gitea-admin-api-token \
-                --from-literal=token="$ADMIN_TOKEN" \
-                --namespace=gitea \
-                --dry-run=client -o yaml | kubectl apply -f -
-
-              echo "💾 Admin token stored in secret 'gitea-admin-api-token'"
-
+          - name: admin-token-sync
+            image: alpine/curl:latest
+            command: ["/scripts/admin-token.sh"]
+            volumeMounts:
+            - name: script-volume
+              mountPath: /scripts
+            - name: kubectl-binary
+              mountPath: /usr/local/bin/kubectl
+              subPath: kubectl
             resources:
               requests:
                 memory: "32Mi"
@@ -155,3 +124,20 @@ spec:
               limits:
                 memory: "64Mi"
                 cpu: "100m"
+          initContainers:
+          - name: install-kubectl
+            image: bitnami/kubectl:latest
+            command:
+            - sh
+            - -c
+            - cp /opt/bitnami/kubectl/bin/kubectl /shared/kubectl && chmod +x /shared/kubectl
+            volumeMounts:
+            - name: kubectl-binary
+              mountPath: /shared
+          volumes:
+          - name: script-volume
+            configMap:
+              name: admin-token-script
+              defaultMode: 0755
+          - name: kubectl-binary
+            emptyDir: {}
