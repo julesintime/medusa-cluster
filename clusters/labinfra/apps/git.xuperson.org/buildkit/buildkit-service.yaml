@@ -1,0 +1,19 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: buildkitd
+  namespace: gitea
+  labels:
+    app.kubernetes.io/name: buildkit
+    app.kubernetes.io/component: ci-cd
+    app.kubernetes.io/managed-by: flux
+spec:
+  ports:
+  - name: buildkitd
+    port: 1234
+    protocol: TCP
+    targetPort: 1234
+  selector:
+    app: buildkitd
+  type: ClusterIP

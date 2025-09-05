@@ -9,8 +9,8 @@ metadata:
     app.kubernetes.io/component: cicd-workflow
     app.kubernetes.io/managed-by: flux
 data:
-  docker-buildx-ci.yml: |
-    name: Simple Docker Buildx CI
+  buildkit-ci.yml: |
+    name: Simple BuildKit CI
 
     on:
       push:
@@ -23,27 +23,19 @@ data:
         runs-on: ubuntu-latest
 
         steps:
-        - name: Checkout code
-          uses: actions/checkout@v4
-          
-        - name: Build and push with Docker Buildx
+        - name: Build and push with buildctl
           run: |
             set -e
             
-            # Configure Docker for rootless daemon (no TLS)
-            export DOCKER_HOST=unix:///var/run/docker.sock
-            
-            # Wait for Docker daemon to be ready
-            echo "🔌 Connecting to Docker daemon..."
-            until docker info >/dev/null 2>&1; do
-              echo "⏳ Waiting for Docker daemon..."
-              sleep 2
-            done
-            echo "✅ Docker daemon is ready"
+            # Clone the repository
+            echo "📦 Cloning repository..."
+            git clone ${{ gitea.repository_clone_url }} /tmp/build
+            cd /tmp/build
+            git checkout ${{ gitea.sha }}
             
             # Get commit info for tagging
             COMMIT_SHA=$(git rev-parse --short HEAD)
-            BRANCH_NAME="${{ gitea.ref_name }}"
+            BRANCH_NAME=${{ gitea.ref_name }}
             IMAGE_BASE="registry.k3s.internal/hello-app"
             
             # Build tags
@@ -58,15 +50,18 @@ data:
             echo "📋 Directory contents:"
             ls -la
             
-            # Build and push with Docker Buildx
-            docker buildx build \
-              --platform linux/amd64 \
-              --tag "$IMAGE_BASE:latest" \
-              --tag "$IMAGE_BASE:$BRANCH_NAME-$COMMIT_SHA" \
-              --cache-from type=registry,ref=$IMAGE_BASE:cache \
-              --cache-to type=registry,ref=$IMAGE_BASE:cache,mode=max \
-              --push \
-              .
+            # Test buildctl connectivity
+            echo "🔗 Testing BuildKit connection..."
+            buildctl --addr $BUILDKIT_HOST debug workers
+            
+            # Build and push with buildctl
+            buildctl --addr $BUILDKIT_HOST build \
+              --frontend dockerfile.v0 \
+              --local context=/tmp/build \
+              --local dockerfile=/tmp/build \
+              --output type=image,name="$TAGS",push=true \
+              --export-cache type=registry,ref=$IMAGE_BASE:cache \
+              --import-cache type=registry,ref=$IMAGE_BASE:cache
             
             echo "✅ Build completed successfully!"
             echo "📋 Image tags: $TAGS"
