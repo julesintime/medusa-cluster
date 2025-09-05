@@ -38,7 +38,7 @@ spec:
               echo "✅ Gitea is ready!"
           containers:
           - name: sync-admin-token
-            image: alpine/curl:latest
+            image: bitnami/kubectl:latest
             env:
             - name: GITEA_ADMIN_USERNAME
               valueFrom:
@@ -54,10 +54,8 @@ spec:
             - /bin/sh
             - -c
             - |
-              # Download kubectl (curl is already available)
-              curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-              chmod +x kubectl
-              mv kubectl /usr/local/bin/
+              # Install curl in bitnami/kubectl image
+              apt-get update && apt-get install -y curl
               
               set -e
               echo "🔄 Syncing Gitea admin token..."
