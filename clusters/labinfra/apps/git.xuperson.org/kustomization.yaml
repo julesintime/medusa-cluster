@@ -15,7 +15,7 @@ resources:
   - hello-setup
 
 labels:
-  - includeSelectors: true
+  - includeSelectors: false
     pairs:
       app.kubernetes.io/name: gitea
       app.kubernetes.io/managed-by: flux

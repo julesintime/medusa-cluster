@@ -10,7 +10,7 @@ resources:
   - gitea-runner-deployment.yaml
 
 labels:
-  - includeSelectors: true
+  - includeSelectors: false
     pairs:
-      app.kubernetes.io/name: gitea-runner  
+      app.kubernetes.io/name: gitea
       app.kubernetes.io/managed-by: flux
