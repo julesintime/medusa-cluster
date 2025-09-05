@@ -49,6 +49,9 @@ spec:
         - -c
         - |
           set -e
+          echo "🔧 Installing dependencies..."
+          apt-get update && apt-get install -y curl
+          
           echo "🔍 Checking if hello-labinfra repository and admin token already exist..."
           
           # Check if admin token secret already exists and is valid
@@ -95,20 +98,39 @@ spec:
           GITEA_POD=$(kubectl get pods -n gitea -l app=gitea -o jsonpath='{.items[0].metadata.name}')
           echo "📦 Found Gitea pod: $GITEA_POD"
           
-          # Check if repository already exists using Gitea CLI
-          echo "📦 Checking repository status..."
-          REPO_EXISTS=$(kubectl exec -n gitea $GITEA_POD -- gitea admin repo list --user "$GITEA_ADMIN_USERNAME" | grep "hello-labinfra" || echo "")
+          # Check if repository already exists using Gitea API
+          echo "📦 Checking repository status via API..."
+          HTTP_STATUS=$(curl -s -w "%{http_code}" -o /dev/null \
+            -H "Authorization: token $ADMIN_TOKEN" \
+            "http://gitea-http:3000/api/v1/repos/$GITEA_ADMIN_USERNAME/hello-labinfra")
           
-          if [ -z "$REPO_EXISTS" ]; then
-            echo "🏗️ Creating hello-labinfra repository using Gitea CLI..."
-            kubectl exec -n gitea $GITEA_POD -- gitea admin repo create \
-              --owner "$GITEA_ADMIN_USERNAME" \
-              --name "hello-labinfra" \
-              --description "Hello LabInfra - Cloud Native GitOps Demo Application" \
-              --private=false
-            echo "✅ Repository created successfully!"
-          else
+          if [ "$HTTP_STATUS" = "404" ]; then
+            echo "🏗️ Creating hello-labinfra repository using Gitea API..."
+            
+            # Create repository via API
+            RESPONSE=$(curl -s -X POST \
+              -H "Authorization: token $ADMIN_TOKEN" \
+              -H "Content-Type: application/json" \
+              "http://gitea-http:3000/api/v1/user/repos" \
+              -d '{
+                "name": "hello-labinfra",
+                "description": "Hello LabInfra - Cloud Native GitOps Demo Application",
+                "private": false,
+                "auto_init": true,
+                "default_branch": "main"
+              }')
+            
+            if echo "$RESPONSE" | grep -q '"name":"hello-labinfra"'; then
+              echo "✅ Repository created successfully!"
+            else
+              echo "❌ Failed to create repository. Response: $RESPONSE"
+              exit 1
+            fi
+          elif [ "$HTTP_STATUS" = "200" ]; then
             echo "📦 Repository hello-labinfra already exists"
+          else
+            echo "❌ Unexpected response checking repository: $HTTP_STATUS"
+            exit 1
           fi
           
           # Check if runner token exists (reuse the same pattern as gitea-runner-token-job)
