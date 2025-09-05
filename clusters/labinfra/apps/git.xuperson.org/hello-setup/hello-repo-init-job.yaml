@@ -30,14 +30,28 @@ data:
     # Smart token management: ensure single token consistency between k8s and Gitea
     echo "🔑 Managing admin API token with consistency checks..."
     
+    # Test kubectl access
+    echo "   Testing kubectl access..."
+    if ! /usr/local/bin/kubectl get secrets -n gitea >/dev/null 2>&1; then
+      echo "   ❌ kubectl access failed"
+      exit 1
+    fi
+    echo "   ✅ kubectl access confirmed"
+    
     SECRET_EXISTS=false
     K8S_TOKEN=""
+    echo "   Checking for existing k8s secret..."
     if /usr/local/bin/kubectl get secret gitea-admin-api-token -n gitea >/dev/null 2>&1; then
       SECRET_EXISTS=true
-      K8S_TOKEN=$(/usr/local/bin/kubectl get secret gitea-admin-api-token -n gitea -o jsonpath='{.data.token}' | base64 -d)
-      echo "   Found existing k8s secret with token (length: ${#K8S_TOKEN})"
+      K8S_TOKEN=$(/usr/local/bin/kubectl get secret gitea-admin-api-token -n gitea -o jsonpath='{.data.token}' | base64 -d 2>/dev/null)
+      if [ -n "$K8S_TOKEN" ]; then
+        echo "   ✅ Found existing k8s secret with token (length: ${#K8S_TOKEN})"
+      else
+        echo "   ❌ Secret exists but token is empty"
+        SECRET_EXISTS=false
+      fi
     else
-      echo "   No k8s secret found"
+      echo "   ❌ No k8s secret found"
     fi
     
     # Get existing tokens from Gitea
@@ -172,10 +186,15 @@ data:
       
       # Store in k8s secret
       echo "   Storing token in k8s secret..."
-      /usr/local/bin/kubectl create secret generic gitea-admin-api-token \
+      if /usr/local/bin/kubectl create secret generic gitea-admin-api-token \
         --from-literal=token="$ADMIN_TOKEN" \
         -n gitea \
-        --dry-run=client -o yaml | /usr/local/bin/kubectl apply -f - >/dev/null
+        --dry-run=client -o yaml | /usr/local/bin/kubectl apply -f - >/dev/null 2>&1; then
+        echo "   ✅ Token stored successfully in k8s secret"
+      else
+        echo "   ❌ Failed to store token in k8s secret"
+        exit 1
+      fi
       
       echo "✅ Created and stored new token (length: ${#ADMIN_TOKEN})"
     fi
