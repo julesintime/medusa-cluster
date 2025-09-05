@@ -1,0 +1,65 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-test-external
+  namespace: postgres-test
+  labels:
+    app: postgres-test-external
+    test-type: cloudflare-pull-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-test-external
+  template:
+    metadata:
+      labels:
+        app: postgres-test-external
+        test-type: cloudflare-pull-test
+      annotations:
+        description: "Testing large image pull through Cloudflare (git.xuperson.org)"
+    spec:
+      containers:
+      - name: postgres
+        image: git.xuperson.org/giteaadmin/large-postgres:latest
+        env:
+        - name: POSTGRES_DB
+          value: "testdb"
+        - name: POSTGRES_USER
+          value: "testuser"
+        - name: POSTGRES_PASSWORD
+          value: "testpass"
+        ports:
+        - containerPort: 5432
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - testuser
+            - -d
+            - testdb
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      imagePullSecrets:
+      - name: gitea-external-registry-secret
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-test-service
+  namespace: postgres-test
+spec:
+  ports:
+  - port: 5432
+    targetPort: 5432
+  selector:
+    app: postgres-test-external
