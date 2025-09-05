@@ -119,7 +119,7 @@ spec:
       serviceAccountName: gitea-runner-init
       initContainers:
       - name: install-node
-        image: alpine:latest
+        image: gitea/act_runner:nightly-dind-rootless
         command:
         - sh
         - -c
