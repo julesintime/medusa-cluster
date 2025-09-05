@@ -84,7 +84,7 @@ spec:
                   -H "Content-Type: application/json" \
                   -u "$GITEA_ADMIN_USERNAME:$GITEA_ADMIN_PASSWORD" \
                   -d '{
-                    "name": "flux-automation",
+                    "name": "flux-automation-'$RANDOM'",
                     "scopes": ["read:activitypub", "read:issue", "write:misc", "read:notification", "read:organization", "read:package", "read:repository", "read:user", "write:admin", "write:repository", "write:user"]
                   }')
 
