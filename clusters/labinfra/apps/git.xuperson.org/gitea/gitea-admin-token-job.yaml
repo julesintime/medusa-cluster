@@ -1,114 +1,115 @@
 ---
-apiVersion: batch/v1
-kind: Job
+apiVersion: batch/v1beta1
+kind: CronJob
 metadata:
-  name: gitea-admin-token-init
+  name: gitea-admin-token-sync
   namespace: gitea
   labels:
-    app.kubernetes.io/name: gitea-admin-token-init
+    app.kubernetes.io/name: gitea-admin-token-sync
     app.kubernetes.io/component: token-management
     app.kubernetes.io/managed-by: flux
 spec:
-  ttlSecondsAfterFinished: 300
-  backoffLimit: 3
-  template:
-    metadata:
-      labels:
-        app.kubernetes.io/name: gitea-admin-token-init
+  schedule: "*/5 * * * *"  # Run every 5 minutes
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
     spec:
-      restartPolicy: OnFailure
-      serviceAccountName: gitea-runner-init
-      initContainers:
-      - name: wait-for-gitea
-        image: curlimages/curl:latest
-        command:
-        - /bin/sh
-        - -c
-        - |
-          echo "🔄 Waiting for Gitea to be ready..."
-          until curl -f -s http://gitea-http:3000/api/v1/version; do
-            echo "   Gitea not ready, waiting 10 seconds..."
-            sleep 10
-          done
-          echo "✅ Gitea is ready!"
-      containers:
-      - name: create-admin-token
-        image: bitnami/kubectl:latest
-        env:
-        - name: GITEA_ADMIN_USERNAME
-          valueFrom:
-            secretKeyRef:
-              name: gitea-admin-secrets
-              key: username
-        - name: GITEA_ADMIN_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: gitea-admin-secrets
-              key: password
-        command:
-        - /bin/sh
-        - -c
-        - |
-          set -e
-          echo "Checking if admin token already exists..."
-          
-          # Check if token secret already exists and is valid
-          if curl -s -f http://gitea-admin-token-checker:8080/check >/dev/null 2>&1; then
-            echo "Valid admin API token already exists"
-            exit 0
-          fi
-          
-          echo "Generating new admin token..."
-          
-          # Wait for Gitea to be ready
-          echo "Waiting for Gitea to be ready..."
-          until curl -f -s http://gitea-http:3000/api/v1/version; do
-            echo "Gitea not ready, waiting 10 seconds..."
-            sleep 10
-          done
-          
-          echo "Gitea is ready!"
-          
-          # Create admin API token using Gitea REST API
-          echo "Creating admin API token via REST API..."
-          RESPONSE=$(curl -s -X POST "http://gitea-http:3000/api/v1/users/$GITEA_ADMIN_USERNAME/tokens" \
-            -H "Content-Type: application/json" \
-            -u "$GITEA_ADMIN_USERNAME:$GITEA_ADMIN_PASSWORD" \
-            -d '{
-              "name": "flux-automation",
-              "scopes": ["write:admin", "write:repository", "write:user", "read:admin", "read:repository"]
-            }')
-          
-          echo "API Response: $RESPONSE"
-          
-          ADMIN_TOKEN=$(echo "$RESPONSE" | jq -r '.sha1' 2>/dev/null || echo "")
-          
-          if [ -z "$ADMIN_TOKEN" ] || [ "$ADMIN_TOKEN" = "null" ]; then
-            echo "Failed to generate admin token via API"
-            echo "Response was: $RESPONSE"
-            exit 1
-          fi
-          
-          echo "Admin token generated successfully (length: ${#ADMIN_TOKEN})"
-          
-          # Store the token in a secret using kubectl (since we need cluster access)
-          cat <<EOF | kubectl apply -f -
-          apiVersion: v1
-          kind: Secret
-          metadata:
-            name: gitea-admin-api-token
-            namespace: gitea
-          type: Opaque
-          data:
-            token: $(echo -n "$ADMIN_TOKEN" | base64)
-          EOF
-          
-          echo "Admin token stored in secret 'gitea-admin-api-token'"
+      ttlSecondsAfterFinished: 300
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: gitea-admin-token-sync
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: gitea-runner-init
+          initContainers:
+          - name: wait-for-gitea
+            image: curlimages/curl:latest
+            command:
+            - /bin/sh
+            - -c
+            - |
+              echo "🔄 Waiting for Gitea to be ready..."
+              until curl -f -s http://gitea-http:3000/api/v1/version; do
+                echo "   Gitea not ready, waiting 10 seconds..."
+                sleep 10
+              done
+              echo "✅ Gitea is ready!"
+          containers:
+          - name: sync-admin-token
+            image: curlimages/curl:latest
+            env:
+            - name: GITEA_ADMIN_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: gitea-admin-secrets
+                  key: username
+            - name: GITEA_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: gitea-admin-secrets
+                  key: password
+            command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              echo "🔄 Syncing Gitea admin token..."
 
-        resources:
-          requests:
-            memory: "32Mi"
-            cpu: "50m"
-          limits:
-            memory: "64Mi"
-            cpu: "100m"
+              # List existing tokens
+              echo "📋 Listing existing admin tokens..."
+              TOKENS=$(curl -s "http://gitea-http:3000/api/v1/users/$GITEA_ADMIN_USERNAME/tokens" \
+                -u "$GITEA_ADMIN_USERNAME:$GITEA_ADMIN_PASSWORD")
+
+              echo "Tokens response: $TOKENS"
+
+              # Check if we have any tokens
+              TOKEN_COUNT=$(echo "$TOKENS" | jq '. | length' 2>/dev/null || echo "0")
+
+              if [ "$TOKEN_COUNT" -gt 0 ]; then
+                echo "✅ Found $TOKEN_COUNT existing token(s), using first one..."
+                ADMIN_TOKEN=$(echo "$TOKENS" | jq -r '.[0].sha1' 2>/dev/null || echo "")
+                TOKEN_NAME=$(echo "$TOKENS" | jq -r '.[0].name' 2>/dev/null || echo "existing-token")
+              else
+                echo "🏗️ No tokens found, creating new one..."
+                RESPONSE=$(curl -s -X POST "http://gitea-http:3000/api/v1/users/$GITEA_ADMIN_USERNAME/tokens" \
+                  -H "Content-Type: application/json" \
+                  -u "$GITEA_ADMIN_USERNAME:$GITEA_ADMIN_PASSWORD" \
+                  -d '{
+                    "name": "flux-automation",
+                    "scopes": ["read:activitypub", "read:issue", "write:misc", "read:notification", "read:organization", "read:package", "read:repository", "read:user", "write:admin", "write:repository", "write:user"]
+                  }')
+
+                echo "Create token response: $RESPONSE"
+                ADMIN_TOKEN=$(echo "$RESPONSE" | jq -r '.sha1' 2>/dev/null || echo "")
+                TOKEN_NAME="flux-automation"
+              fi
+
+              if [ -z "$ADMIN_TOKEN" ] || [ "$ADMIN_TOKEN" = "null" ]; then
+                echo "❌ Failed to get admin token"
+                exit 1
+              fi
+
+              echo "✅ Admin token ready: $TOKEN_NAME (length: ${#ADMIN_TOKEN})"
+
+              # Update the Kubernetes secret
+              cat <<EOF | kubectl apply -f -
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: gitea-admin-api-token
+                namespace: gitea
+              type: Opaque
+              data:
+                token: $(echo -n "$ADMIN_TOKEN" | base64)
+              EOF
+
+              echo "💾 Admin token synced to secret 'gitea-admin-api-token'"
+
+            resources:
+              requests:
+                memory: "32Mi"
+                cpu: "50m"
+              limits:
+                memory: "64Mi"
+                cpu: "100m"
