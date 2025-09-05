@@ -104,10 +104,9 @@ spec:
             
             echo "   ✅ Gitea deployment ready!"
             
-            # Generate runner registration token via API
+            # Generate runner registration token via API (GET method, not POST)
             echo "   Creating runner registration token via API..."
-            TOKEN_RESPONSE=$(curl -s -X POST "http://gitea-http:3000/api/v1/admin/runners/registration-token" \
-              -H "Content-Type: application/json" \
+            TOKEN_RESPONSE=$(curl -s "http://gitea-http:3000/api/v1/admin/runners/registration-token" \
               -u "$ADMIN_USER:$ADMIN_PASS")
             
             # Extract token from JSON response

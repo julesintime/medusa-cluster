@@ -47,12 +47,12 @@ spec:
           - /bin/bash
           - -c
           - |
-            echo "🔍 Waiting for gitea-runner-token to be created by bootstrap job..."
-            while ! kubectl get secret gitea-runner-token -n gitea >/dev/null 2>&1; do
+            echo "🔍 Waiting for runner-secret to be created by bootstrap job..."
+            while ! kubectl get secret runner-secret -n gitea >/dev/null 2>&1; do
               echo "   Secret not found, waiting 10 seconds..."
               sleep 10
             done
-            echo "✅ Found gitea-runner-token! Act-runner can now start."
+            echo "✅ Found runner-secret! Act-runner can now start."
         resources:
           requests:
             memory: "32Mi"
@@ -70,9 +70,14 @@ spec:
           - sh
           - -c
           - |
+            # Start Docker daemon in background (rootless mode)
+            echo "🐳 Starting rootless Docker daemon..."
+            dockerd-entrypoint.sh &
+            DOCKER_PID=$!
+            
             # Wait for Docker daemon to be ready
             echo "🔍 Waiting for Docker daemon..."
-            while ! nc -z localhost 2376 </dev/null; do 
+            while ! docker version >/dev/null 2>&1; do 
               echo 'waiting for docker daemon...'
               sleep 5
             done
