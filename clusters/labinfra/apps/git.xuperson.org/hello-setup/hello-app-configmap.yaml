@@ -1,0 +1,106 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hello-app-code
+  namespace: gitea
+  labels:
+    app.kubernetes.io/name: hello-app
+    app.kubernetes.io/component: application-code
+    app.kubernetes.io/managed-by: flux
+data:
+  package.json: |
+    {
+      "name": "hello-cicd-demo",
+      "version": "1.0.0",
+      "description": "Hello World CI/CD Demo with BuildKit",
+      "main": "index.js",
+      "scripts": {
+        "start": "node index.js",
+        "dev": "node index.js"
+      },
+      "keywords": ["hello", "cicd", "buildkit", "gitea"],
+      "author": "GitOps Admin",
+      "license": "MIT"
+    }
+  Dockerfile: |
+    FROM node:18-alpine
+
+    WORKDIR /app
+
+    COPY package*.json ./
+    RUN npm ci --only=production
+
+    COPY index.js ./
+
+    EXPOSE 3000
+
+    USER node
+
+    CMD ["npm", "start"]
+  index.js: |
+    const http = require('http');
+    const port = process.env.PORT || 3000;
+
+    const server = http.createServer((req, res) => {
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'text/plain');
+      
+      const buildInfo = {
+        message: 'Hello from Gitea Actions CI/CD! 🚀',
+        timestamp: new Date().toISOString(),
+        build: process.env.BUILD_REF || 'development',
+        version: process.env.IMAGE_TAG || '1.0.0'
+      };
+      
+      const response = `${buildInfo.message}
+
+    Build Information:
+    - Timestamp: ${buildInfo.timestamp}
+    - Build: ${buildInfo.build}
+    - Version: ${buildInfo.version}
+    - Environment: ${process.env.NODE_ENV || 'development'}
+
+    Powered by Gitea Actions + BuildKit
+    `;
+
+      res.end(response);
+    });
+
+    server.listen(port, () => {
+      console.log(`🚀 Server running on http://localhost:${port}/`);
+      console.log(`📦 Build: ${process.env.BUILD_REF || 'development'}`);
+      console.log(`🏷️  Version: ${process.env.IMAGE_TAG || '1.0.0'}`);
+    });
+  README.md: |
+    # Hello CI/CD Demo
+
+    Simple Node.js application demonstrating Gitea Actions with BuildKit.
+
+    ## Features
+
+    - 🚀 Gitea Actions CI/CD pipeline
+    - 🏗️ BuildKit remote building
+    - 📦 Containerized Node.js application
+    - ⚡ Automatic build triggers
+
+    ## Local Development
+
+    ```bash
+    npm install
+    npm start
+    ```
+
+    ## CI/CD Pipeline
+
+    The pipeline automatically:
+    1. Tests BuildKit connectivity
+    2. Builds Docker image with BuildKit
+    3. Sets build metadata and versioning
+
+    ## Architecture
+
+    - **CI**: Gitea Actions
+    - **Build**: Remote BuildKit service
+    - **Runtime**: Node.js 18 Alpine
+    - **Deployment**: GitOps with Flux</content>

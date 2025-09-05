@@ -193,30 +193,36 @@ data:
     
     echo "🎯 Using admin token ending with: ${ADMIN_TOKEN: -8}"
 
-    # Check if hello repository already exists
+    # Check if hello repository already exists and delete if it does
     echo "📋 Checking if hello repository exists..."
     REPO_CHECK=$(curl -s -H "Authorization: token $ADMIN_TOKEN" "http://gitea-http:3000/api/v1/repos/$ADMIN_USER/hello" 2>/dev/null || echo "")
 
     if echo "$REPO_CHECK" | grep -q '"name":"hello"'; then
-      echo "✅ Repository 'hello' already exists, skipping creation"
-    else
-      # Create hello repository
-      echo "🏗️ Creating hello repository..."
-      curl -s -X POST "http://gitea-http:3000/api/v1/user/repos" \
-        -H "Authorization: token $ADMIN_TOKEN" \
-        -H "Content-Type: application/json" \
-        -d '{
-          "name": "hello",
-          "description": "Hello World CI/CD Demo",
-          "private": false,
-          "auto_init": true,
-          "default_branch": "main"
-        }' > /dev/null
-      
-      # Wait for repository to be created
+      echo "🔄 Repository 'hello' exists, deleting and recreating..."
+      curl -s -X DELETE "http://gitea-http:3000/api/v1/repos/$ADMIN_USER/hello" \
+        -H "Authorization: token $ADMIN_TOKEN" >/dev/null
+      echo "✅ Repository 'hello' deleted successfully"
       sleep 2
-      echo "✅ Repository 'hello' created successfully"
+    else
+      echo "📝 Repository 'hello' does not exist, will create new one"
     fi
+
+    # Always create fresh hello repository
+    echo "🏗️ Creating fresh hello repository..."
+    curl -s -X POST "http://gitea-http:3000/api/v1/user/repos" \
+      -H "Authorization: token $ADMIN_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "name": "hello",
+        "description": "Hello World CI/CD Demo",
+        "private": false,
+        "auto_init": true,
+        "default_branch": "main"
+      }' > /dev/null
+    
+    # Wait for repository to be created
+    sleep 2
+    echo "✅ Repository 'hello' created successfully"
 
     # Create temporary directory for repository operations
     TEMP_DIR="/tmp/hello-repo-setup"
@@ -234,215 +240,40 @@ data:
     git config --global user.name "$ADMIN_USER"
     git config --global user.email "$ADMIN_USER@xuperson.org"
 
-    # Clone the repository
+    # Clone the repository (will be empty since we just created it)
     echo "📥 Cloning repository..."
     git clone "http://$ADMIN_USER:$ADMIN_PASS@gitea-http:3000/$ADMIN_USER/hello.git" .
 
-    # Check if files already exist (avoid overwriting)
-    if [ -f "package.json" ]; then
-      echo "✅ Repository already has content, skipping file creation"
-      cd /
-      rm -rf "$TEMP_DIR"
-      echo "🎉 Hello repository setup completed successfully!"
-      exit 0
-    fi
-
     # Create project structure
     echo "📁 Creating project structure..."
-    mkdir -p src/.gitea/workflows
+    mkdir -p .gitea/workflows
 
-    # Create package.json
-    cat > package.json << 'EOF'
-    {
-      "name": "hello-cicd-demo",
-      "version": "1.0.0",
-      "description": "Hello World CI/CD Demo with BuildKit",
-      "main": "src/index.js",
-      "scripts": {
-        "start": "node src/index.js",
-        "dev": "node src/index.js"
-      },
-      "keywords": ["hello", "cicd", "buildkit", "gitea"],
-      "author": "GitOps Admin",
-      "license": "MIT"
-    }
-    EOF
+    # Copy files from ConfigMaps
+    echo "📋 Copying application files from ConfigMaps..."
+    cp /app-code/package.json .
+    cp /app-code/Dockerfile .
+    cp /app-code/index.js .
+    cp /app-code/README.md .
+    cp /cicd-workflow/buildkit-ci.yml .gitea/workflows/
 
-    # Create Dockerfile
-    cat > Dockerfile << 'EOF'
-    FROM node:18-alpine
 
-    WORKDIR /app
 
-    COPY package*.json ./
-    RUN npm ci --only=production
 
-    COPY src/ ./src/
 
-    EXPOSE 3000
 
-    USER node
-
-    CMD ["npm", "start"]
-    EOF
-
-    # Create source code
-    cat > src/index.js << 'EOF'
-    const http = require('http');
-    const port = process.env.PORT || 3000;
-
-    const server = http.createServer((req, res) => {
-      res.statusCode = 200;
-      res.setHeader('Content-Type', 'text/plain');
-      
-      const buildInfo = {
-        message: 'Hello from Gitea Actions CI/CD! 🚀',
-        timestamp: new Date().toISOString(),
-        build: process.env.BUILD_REF || 'development',
-        version: process.env.IMAGE_TAG || '1.0.0'
-      };
-      
-      const response = `${buildInfo.message}
-
-    Build Information:
-    - Timestamp: ${buildInfo.timestamp}
-    - Build: ${buildInfo.build}
-    - Version: ${buildInfo.version}
-    - Environment: ${process.env.NODE_ENV || 'development'}
-
-    Powered by Gitea Actions + BuildKit
-    `;
-
-      res.end(response);
-    });
-
-    server.listen(port, () => {
-      console.log(`🚀 Server running on http://localhost:${port}/`);
-      console.log(`📦 Build: ${process.env.BUILD_REF || 'development'}`);
-      console.log(`🏷️  Version: ${process.env.IMAGE_TAG || '1.0.0'}`);
-    });
-    EOF
-
-    # Create Gitea Actions workflow
-    cat > src/.gitea/workflows/buildkit-ci.yml << 'EOF'
-    name: BuildKit CI/CD
-
-    on:
-      push:
-        branches: [ main, master ]
-      pull_request:
-        branches: [ main, master ]
-
-    jobs:
-      build:
-        name: Build and Test
-        runs-on: ubuntu-latest
-        steps:
-        - name: Checkout repository
-          run: |
-            echo "🔍 Cloning repository..."
-            git clone ${{ github.server_url }}/${{ github.repository }}.git .
-            ls -la
-            echo "📋 Repository contents:"
-            find . -type f -name "*.js" -o -name "*.json" -o -name "Dockerfile" | head -10
-
-        - name: Test BuildKit connectivity
-          run: |
-            echo "🔧 Testing BuildKit connection..."
-            echo "BuildKit version:"
-            buildctl --version
-            echo "🌐 Testing remote BuildKit service..."
-            BUILDKIT_HOST=tcp://buildkitd.buildkit.svc.cluster.local:1235 buildctl debug workers
-
-        - name: Set build metadata
-          run: |
-            echo "📝 Setting build metadata..."
-            export BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
-            export BUILD_REF=${{ github.sha }}
-            export SHORT_SHA=$(echo $BUILD_REF | cut -c1-7)
-            export IMAGE_TAG="v${SHORT_SHA}-$(date +%s)"
-            
-            echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_ENV
-            echo "BUILD_REF=$BUILD_REF" >> $GITHUB_ENV
-            echo "SHORT_SHA=$SHORT_SHA" >> $GITHUB_ENV
-            echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
-            
-            echo "🏷️  Build metadata:"
-            echo "   Date: $BUILD_DATE"
-            echo "   Commit: $BUILD_REF"
-            echo "   Short SHA: $SHORT_SHA"
-            echo "   Image Tag: $IMAGE_TAG"
-
-        - name: Build with BuildKit
-          run: |
-            echo "🏗️  Building with remote BuildKit..."
-            BUILDKIT_HOST=tcp://buildkitd.buildkit.svc.cluster.local:1235 buildctl build \
-              --frontend dockerfile.v0 \
-              --local context=. \
-              --local dockerfile=. \
-              --opt build-arg:BUILD_DATE="$BUILD_DATE" \
-              --opt build-arg:BUILD_REF="$BUILD_REF" \
-              --opt build-arg:IMAGE_TAG="$IMAGE_TAG" \
-              --progress=plain
-
-        - name: Build summary
-          run: |
-            echo "✅ Build completed successfully!"
-            echo "🎯 Summary:"
-            echo "   Repository: ${{ github.repository }}"
-            echo "   Branch: ${{ github.ref_name }}"
-            echo "   Commit: ${{ github.sha }}"
-            echo "   Build Tag: $IMAGE_TAG"
-            echo ""
-            echo "🚀 Ready for deployment automation!"
-    EOF
-
-    # Create README
-    cat > README.md << 'EOF'
-    # Hello CI/CD Demo
-
-    Simple Node.js application demonstrating Gitea Actions with BuildKit.
-
-    ## Features
-
-    - 🚀 Gitea Actions CI/CD pipeline
-    - 🏗️ BuildKit remote building
-    - 📦 Containerized Node.js application
-    - ⚡ Automatic build triggers
-
-    ## Local Development
-
-    ```bash
-    npm install
-    npm start
-    ```
-
-    ## CI/CD Pipeline
-
-    The pipeline automatically:
-    1. Tests BuildKit connectivity
-    2. Builds Docker image with BuildKit
-    3. Sets build metadata and versioning
-
-    ## Architecture
-
-    - **CI**: Gitea Actions
-    - **Build**: Remote BuildKit service
-    - **Runtime**: Node.js 18 Alpine
-    - **Deployment**: GitOps with Flux
-    EOF
 
     # Add all files and commit
     echo "📝 Committing files..."
     git add .
-    git commit -m "feat: initial hello CI/CD demo with Gitea Actions
+    git commit -m "feat: fresh hello CI/CD demo setup
 
+    - Ensure repository content always aligns with ConfigMaps
     - Add Node.js hello world application
     - Configure BuildKit CI/CD pipeline  
     - Include Dockerfile for containerization
     - Setup project structure and documentation
 
-    🤖 Generated with GitOps automation"
+    🤖 Generated with GitOps automation - ConfigMap aligned"
 
     # Push to repository
     echo "📤 Pushing to repository..."
@@ -493,6 +324,10 @@ spec:
         - name: kubectl-binary
           mountPath: /usr/local/bin/kubectl
           subPath: kubectl
+        - name: app-code
+          mountPath: /app-code
+        - name: cicd-workflow
+          mountPath: /cicd-workflow
         resources:
           requests:
             memory: "64Mi"
@@ -510,3 +345,9 @@ spec:
           defaultMode: 0755
       - name: kubectl-binary
         emptyDir: {}
+      - name: app-code
+        configMap:
+          name: hello-app-code
+      - name: cicd-workflow
+        configMap:
+          name: hello-cicd-workflow
