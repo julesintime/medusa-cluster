@@ -30,10 +30,8 @@ data:
           run: |
             set -e
             
-            # Configure Docker to use DinD daemon with TLS
-            export DOCKER_HOST=tcp://localhost:2376
-            export DOCKER_TLS_VERIFY=1
-            export DOCKER_CERT_PATH=/certs/client
+            # Configure Docker for rootless daemon (no TLS)
+            export DOCKER_HOST=unix:///var/run/docker.sock
             
             # Wait for Docker daemon to be ready
             echo "🔌 Connecting to Docker daemon..."
