@@ -134,25 +134,6 @@ spec:
         volumeMounts:
         - name: buildctl-binary
           mountPath: /shared
-      - name: install-nodejs
-        image: gitea/act_runner:nightly
-        command:
-        - sh
-        - -c
-        - |
-          echo "📦 Installing Node.js as root..."
-          apk add --no-cache nodejs npm
-          echo "✅ Node.js installed: $(node --version)"
-        securityContext:
-          runAsUser: 0
-          runAsGroup: 0
-        resources:
-          requests:
-            memory: "64Mi"
-            cpu: "50m"
-          limits:
-            memory: "128Mi"
-            cpu: "100m"
       volumes:
       - name: runner-data
         persistentVolumeClaim:
@@ -220,7 +201,7 @@ spec:
         - name: GITEA_RUNNER_NAME
           value: "minikube-runner-host"
         - name: GITEA_RUNNER_LABELS
-          value: "ubuntu-latest,ubuntu-22.04,buildkit"
+          value: "ubuntu-latest:docker://node:18-alpine,ubuntu-22.04:docker://node:18-alpine,buildkit:host"
         securityContext:
           runAsUser: 0  # Run as root to install packages
           runAsGroup: 0

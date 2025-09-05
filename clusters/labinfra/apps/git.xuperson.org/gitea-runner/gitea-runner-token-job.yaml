@@ -92,7 +92,7 @@ spec:
           fi
           
           if [ "$CREATE_NEW" = true ]; then
-            echo "🏗️ Generating fresh runner registration token..."
+            echo "🏗️ Generating fresh runner registration token via API..."
             
             # Wait for Gitea to be ready
             echo "   Waiting for Gitea to be ready..."
@@ -102,34 +102,22 @@ spec:
               sleep 10
             done
             
-            # Get Gitea pod
-            GITEA_POD=$(/shared/kubectl get pods -n gitea -l app=gitea -o jsonpath='{.items[0].metadata.name}')
+            echo "   ✅ Gitea deployment ready!"
             
-            if [ -z "$GITEA_POD" ]; then
-              echo "   ❌ No Gitea pod found"
+            # Generate runner registration token via API
+            echo "   Creating runner registration token via API..."
+            TOKEN_RESPONSE=$(curl -s -X POST "http://gitea-http:3000/api/v1/admin/runners/registration-token" \
+              -H "Content-Type: application/json" \
+              -u "$ADMIN_USER:$ADMIN_PASS")
+            
+            # Extract token from JSON response
+            RUNNER_TOKEN=$(echo "$TOKEN_RESPONSE" | grep -o '"token":"[^"]*"' | sed 's/"token":"//;s/"//')
+            
+            if [ -z "$RUNNER_TOKEN" ]; then
+              echo "   ❌ Failed to generate runner token via API"
+              echo "   API Response: $TOKEN_RESPONSE"
               exit 1
             fi
-            
-            echo "   Found Gitea pod: $GITEA_POD"
-            
-            # Wait for Gitea application to be ready (with timeout)
-            echo "   Waiting for Gitea application to be ready..."
-            for i in {1..30}; do
-              if /shared/kubectl exec -n gitea $GITEA_POD -- gitea actions generate-runner-token >/dev/null 2>&1; then
-                echo "   ✅ Gitea is ready!"
-                break
-              fi
-              echo "   Attempt $i/30: Waiting for Gitea application to respond..."
-              sleep 10
-              if [ $i -eq 30 ]; then
-                echo "   ❌ Timeout waiting for Gitea to be ready"
-                exit 1
-              fi
-            done
-            
-            # Generate fresh runner token
-            echo "   Generating runner registration token..."
-            RUNNER_TOKEN=$(/shared/kubectl exec -n gitea $GITEA_POD -- gitea actions generate-runner-token 2>/dev/null | tail -1 | tr -d '\r\n' || echo "")
             
             if [ -z "$RUNNER_TOKEN" ]; then
               echo "   ❌ Failed to generate runner token"
