@@ -10,6 +10,7 @@ resources:
   - gitea-infisical-secrets.yaml
   - gitea-helmrelease.yaml
   - gitea-ingress.yaml
+  - gitea-admin-token-job.yaml
 
 labels:
   - includeSelectors: true

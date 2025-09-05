@@ -28,8 +28,33 @@ infisical secrets set GITEA_ADMIN_EMAIL=admin@xuperson.org --env=prod
 - **HelmRepository**: Official Gitea charts from `https://dl.gitea.com/charts/`
 - **HelmRelease**: Gitea application with minimal configuration
 - **InfisicalSecret**: Admin credentials synchronization
+- **Admin Token Job**: One-time job to create admin API token
 - **Ingress**: External HTTPS access via NGINX
 - **Storage**: PVC for persistent data
+
+## API Token Management
+
+The deployment includes a one-time job (`gitea-admin-token-job`) that:
+
+1. Creates an admin API token with appropriate scopes
+2. Stores it in `gitea-admin-api-token` secret
+3. Is idempotent (safe to run multiple times)
+
+### Token Scopes
+- `write:admin` - Admin operations
+- `write:repository` - Repository management
+- `write:user` - User management  
+- `read:admin` - Admin read access
+- `read:repository` - Repository read access
+
+### Usage
+```bash
+# Check if token exists
+kubectl get secret gitea-admin-api-token -n gitea
+
+# Get token value
+kubectl get secret gitea-admin-api-token -n gitea -o jsonpath='{.data.token}' | base64 -d
+```
 
 ## Access
 
