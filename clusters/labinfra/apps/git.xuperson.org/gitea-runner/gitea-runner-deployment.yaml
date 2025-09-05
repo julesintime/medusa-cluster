@@ -1,81 +1,3 @@
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: runner-setup-script
-  namespace: gitea
-  labels:
-    app.kubernetes.io/name: gitea-runner
-    app.kubernetes.io/component: ci-cd
-    app.kubernetes.io/managed-by: flux
-data:
-  runner-setup.sh: |
-    #!/bin/sh
-    set -e
-
-    echo "🔄 Setting up Gitea runner registration..."
-
-    # Get admin credentials
-    ADMIN_USER=$(/usr/local/bin/kubectl get secret gitea-admin-secrets -n gitea -o jsonpath='{.data.username}' | base64 -d)
-    ADMIN_PASS=$(/usr/local/bin/kubectl get secret gitea-admin-secrets -n gitea -o jsonpath='{.data.password}' | base64 -d)
-
-    # Test Gitea API connection
-    echo "📡 Testing Gitea API connection..."
-    until curl -s -f -u "$ADMIN_USER:$ADMIN_PASS" "http://gitea-http:3000/api/v1/version" >/dev/null; do
-      echo "   Gitea API not ready, waiting 5 seconds..."
-      sleep 5
-    done
-    echo "✅ Gitea API is accessible"
-
-    # Get or create admin API token
-    echo "🔑 Getting admin API token..."
-    TOKENS_RESPONSE=$(curl -s -u "$ADMIN_USER:$ADMIN_PASS" "http://gitea-http:3000/api/v1/users/$ADMIN_USER/tokens")
-    
-    # Extract first token if exists
-    ADMIN_TOKEN=$(echo "$TOKENS_RESPONSE" | grep -o '"sha1":"[a-f0-9]*"' | head -1 | sed 's/"sha1":"//;s/"//')
-
-    # If no token exists, create one
-    if [ -z "$ADMIN_TOKEN" ]; then
-      echo "🏗️ Creating new admin API token..."
-      RESPONSE=$(curl -s -X POST "http://gitea-http:3000/api/v1/users/$ADMIN_USER/tokens" \
-        -H "Content-Type: application/json" \
-        -u "$ADMIN_USER:$ADMIN_PASS" \
-        -d '{"name": "runner-automation", "scopes": ["all"]}')
-      
-      ADMIN_TOKEN=$(echo "$RESPONSE" | grep -o '"sha1":"[a-f0-9]*"' | sed 's/"sha1":"//;s/"//')
-    fi
-
-    if [ -z "$ADMIN_TOKEN" ] || [ ${#ADMIN_TOKEN} -ne 40 ]; then
-      echo "❌ Failed to get admin token"
-      exit 1
-    fi
-    echo "✅ Got admin API token (length: ${#ADMIN_TOKEN})"
-
-    # Get fresh registration token
-    echo "🎫 Getting fresh registration token..."
-    TOKEN_RESPONSE=$(curl -s -H "Authorization: token $ADMIN_TOKEN" "http://gitea-http:3000/api/v1/admin/runners/registration-token")
-
-    REGISTRATION_TOKEN=$(echo "$TOKEN_RESPONSE" | grep -o '"token":"[^"]*"' | sed 's/"token":"//;s/"//')
-
-    if [ -z "$REGISTRATION_TOKEN" ] || [ ${#REGISTRATION_TOKEN} -lt 20 ]; then
-      echo "❌ Failed to get valid registration token"
-      echo "Response: $TOKEN_RESPONSE"
-      exit 1
-    fi
-
-    echo "✅ Got registration token (length: ${#REGISTRATION_TOKEN})"
-
-    # Clean up old runner secret and create new one
-    echo "🧹 Cleaning up old runner registration..."
-    /usr/local/bin/kubectl delete secret runner-secret -n gitea --ignore-not-found=true
-
-    /usr/local/bin/kubectl create secret generic runner-secret \
-      --from-literal=token="$REGISTRATION_TOKEN" \
-      --namespace=gitea
-
-    echo "💾 Fresh runner registration token stored in 'runner-secret'"
-    echo "🎯 Ready for clean runner registration"
----
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -117,51 +39,191 @@ spec:
     spec:
       restartPolicy: Always
       serviceAccountName: gitea-runner-init
-      initContainers: []
-      volumes:
-      - name: runner-data
-        persistentVolumeClaim:
-          claimName: act-runner-vol
-      securityContext:
-        fsGroup: 1000
-      containers:
-      - name: runner
-        image: node:22-alpine
-        imagePullPolicy: Always
+      initContainers:
+      - name: generate-buildkit-certs
+        image: bitnami/kubectl:latest
         command:
         - sh
         - -c
         - |
-          echo "Installing Gitea runner..."
-          apk add --no-cache curl
-          curl -L https://dl.gitea.com/act_runner/0.2.13/act_runner-0.2.13-linux-amd64 -o /usr/local/bin/act_runner
-          chmod +x /usr/local/bin/act_runner
-          echo "Gitea runner installed successfully"
-          echo "Starting Gitea runner..."
-          /usr/local/bin/act_runner daemon
+          # Install openssl
+          apk add --no-cache openssl
+          
+          # Check if secret already exists
+          if kubectl get secret buildkit-daemon-certs -n gitea >/dev/null 2>&1; then
+            echo "Buildkit certificates already exist"
+            exit 0
+          fi
+          
+          echo "Generating buildkit certificates..."
+          
+          # Create temp directory for certs
+          mkdir -p /tmp/certs
+          cd /tmp/certs
+          
+          # Generate CA private key
+          openssl genrsa -out ca-key.pem 4096
+          
+          # Generate CA certificate
+          openssl req -x509 -new -nodes -key ca-key.pem -days 365 -out ca.pem -subj "/CN=buildkit-ca"
+          
+          # Generate server private key
+          openssl genrsa -out cert-key.pem 4096
+          
+          # Generate certificate signing request
+          openssl req -new -key cert-key.pem -out cert.csr -subj "/CN=buildkitd.gitea.svc.cluster.local"
+          
+          # Create ext file for SAN
+          cat > cert.ext << EOF_EXT
+          authorityKeyIdentifier=keyid,issuer
+          basicConstraints=CA:FALSE
+          keyUsage = digitalSignature, nonRepudiation, keyEncipherment, dataEncipherment
+          subjectAltName = @alt_names
+          
+          [alt_names]
+          DNS.1 = buildkitd.gitea.svc.cluster.local
+          DNS.2 = buildkitd
+          IP.1 = 127.0.0.1
+          EOF_EXT
+          
+          # Generate server certificate
+          openssl x509 -req -in cert.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial -out cert.pem -days 365 -extfile cert.ext
+          
+          # Create the secret
+          kubectl create secret generic buildkit-daemon-certs \
+            --from-file=ca.pem \
+            --from-file=cert.pem \
+            --from-file=key.pem=cert-key.pem \
+            -n gitea
+          
+          echo "Buildkit certificates generated and secret created"
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+      - name: wait-for-secret
+        image: bitnami/kubectl:latest
+        command:
+        - /bin/bash
+        - -c
+        - |
+          echo "🔍 Waiting for gitea-runner-token to be created by bootstrap job..."
+          while ! kubectl get secret gitea-runner-token -n gitea >/dev/null 2>&1; do
+            echo "   Secret not found, waiting 10 seconds..."
+            sleep 10
+          done
+          echo "✅ Found gitea-runner-token! Act-runner can now start."
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "50m"
+          limits:
+            memory: "64Mi"
+            cpu: "100m"
+      - name: install-buildctl
+        image: moby/buildkit:master
+        command: 
+        - sh
+        - -c
+        - |
+          cp /usr/bin/buildctl /shared/buildctl
+          chmod +x /shared/buildctl
+        volumeMounts:
+        - name: buildctl-binary
+          mountPath: /shared
+      volumes:
+      - name: runner-data
+        persistentVolumeClaim:
+          claimName: act-runner-vol
+      - name: cache-dir
+        emptyDir: {}
+      - name: buildctl-binary
+        emptyDir: {}
+      - name: buildkit-certs
+        secret:
+          secretName: buildkit-daemon-certs
+          optional: true
+      - name: runner-home
+        emptyDir: {}
+      - name: runner-runtime
+        emptyDir: {}
+      - name: runner-tmp
+        emptyDir: {}
+      - name: runner-docker-config
+        emptyDir: {}
+      securityContext:
+        fsGroup: 1000
+      containers:
+      - name: runner
+        image: gitea/act_runner:nightly
+        workingDir: /data
+        command: 
+        - sh
+        - -c
+        - |
+          # Clean any existing config and re-register with fresh token
+          echo "🔧 Cleaning old runner config..."
+          rm -f /data/.runner
+          
+          echo "🔐 Registering runner with fresh token..."
+          act_runner register \
+            --instance "$GITEA_INSTANCE_URL" \
+            --token "$GITEA_RUNNER_REGISTRATION_TOKEN" \
+            --name "$GITEA_RUNNER_NAME" \
+            --labels "$GITEA_RUNNER_LABELS" \
+            --no-interactive
+          
+          echo "🚀 Starting runner daemon..."
+          exec act_runner daemon
         env:
-        - name: DOCKER_HOST
-          value: tcp://localhost:2376
-        - name: DOCKER_CERT_PATH
-          value: /certs/client
-        - name: DOCKER_TLS_VERIFY
-          value: "1"
+        - name: HOME
+          value: "/home/runner"
+        - name: USER
+          value: "runner"
+        - name: XDG_RUNTIME_DIR
+          value: "/run/user/1000"
+        - name: TMPDIR
+          value: "/home/runner/.local/tmp"
+        - name: DOCKER_CONFIG
+          value: "/home/runner/.local/share/docker"
+        - name: BUILDKIT_HOST
+          value: tcp://buildkitd.gitea.svc.cluster.local:1235
         - name: GITEA_INSTANCE_URL
           value: https://git.xuperson.org
         - name: GITEA_RUNNER_REGISTRATION_TOKEN
           valueFrom:
             secretKeyRef:
-              name: runner-secret
+              name: gitea-runner-token
               key: token
         - name: GITEA_RUNNER_NAME
-          value: "sole-k8s-runner"
+          value: "minikube-runner-host"
         - name: GITEA_RUNNER_LABELS
           value: "ubuntu-latest,ubuntu-22.04,buildkit"
         securityContext:
-          privileged: true
+          runAsUser: 1000
+          runAsGroup: 1000
         volumeMounts:
         - name: runner-data
           mountPath: /data
+        - name: cache-dir
+          mountPath: /.cache
+        - name: buildctl-binary
+          mountPath: /usr/local/bin/buildctl
+          subPath: buildctl
+        - name: buildkit-certs
+          mountPath: /buildkit-certs
+          readOnly: true
+        - name: runner-home
+          mountPath: /home/runner
+        - name: runner-runtime
+          mountPath: /run/user/1000
+        - name: runner-tmp
+          mountPath: /home/runner/.local/tmp
+        - name: runner-docker-config
+          mountPath: /home/runner/.local/share/docker
         resources:
           limits:
             cpu: 1500m
@@ -169,3 +231,19 @@ spec:
           requests:
             cpu: 250m
             memory: 512Mi
+        livenessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - "ps aux | grep -v grep | grep act_runner"
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - "ps aux | grep -v grep | grep act_runner"
+          initialDelaySeconds: 10
+          periodSeconds: 10
