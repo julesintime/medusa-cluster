@@ -154,19 +154,6 @@ spec:
         volumeMounts:
         - name: buildctl-binary
           mountPath: /shared
-      - name: install-nodejs
-        image: node:18-alpine
-        command:
-        - sh
-        - -c
-        - |
-          cp /usr/local/bin/node /shared/node
-          cp /usr/local/bin/npm /shared/npm
-          cp /usr/local/bin/npx /shared/npx
-          chmod +x /shared/node /shared/npm /shared/npx
-        volumeMounts:
-        - name: nodejs-binary
-          mountPath: /shared
       volumes:
       - name: runner-data
         persistentVolumeClaim:
@@ -174,8 +161,6 @@ spec:
       - name: cache-dir
         emptyDir: {}
       - name: buildctl-binary
-        emptyDir: {}
-      - name: nodejs-binary
         emptyDir: {}
       - name: kubectl-binary
         emptyDir: {}
@@ -204,6 +189,10 @@ spec:
         - sh
         - -c
         - |
+          # Install Node.js for GitHub Actions compatibility
+          echo "📦 Installing Node.js..."
+          apk add --no-cache nodejs npm
+          
           # Clean any existing config and re-register with fresh token
           echo "🔧 Cleaning old runner config..."
           rm -f /data/.runner
@@ -253,8 +242,6 @@ spec:
         - name: buildctl-binary
           mountPath: /usr/local/bin/buildctl
           subPath: buildctl
-        - name: nodejs-binary
-          mountPath: /usr/local/bin
         - name: buildkit-certs
           mountPath: /buildkit-certs
           readOnly: true
