@@ -29,7 +29,7 @@ spec:
       storageOverProvisioningPercentage: 200  # Reverted to original value
       storageMinimalAvailablePercentage: 25   # Reverted to original value
       # Enable recurring backup
-      createDefaultDiskLabeledNodes: true     # Keep auto-discovery enabled
+      createDefaultDiskLabeledNodes: false    # Create default disks on ALL nodes automatically
       # Backup configuration - external targets to be configured via UI or future NFS/S3 setup
       backupstorePollInterval: "300"
     
