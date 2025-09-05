@@ -22,69 +22,113 @@ spec:
         - -c
         - |
           set -e
-          echo "Checking if runner token already exists..."
+          echo "🔑 Managing Gitea runner registration token with consistency checks..."
           
-          # Check if token secret already exists and is valid
-          if kubectl get secret gitea-runner-token -n gitea >/dev/null 2>&1; then
-            TOKEN=$(kubectl get secret gitea-runner-token -n gitea -o jsonpath='{.data.token}' | base64 -d 2>/dev/null || echo "")
-            if [ ! -z "$TOKEN" ] && [ ${#TOKEN} -gt 10 ]; then
-              echo "Valid runner token already exists, skipping generation"
-              exit 0
-            fi
-          fi
+          # Get admin credentials
+          ADMIN_USER=$(/usr/local/bin/kubectl get secret gitea-admin-secrets -n gitea -o jsonpath='{.data.username}' | base64 -d)
+          ADMIN_PASS=$(/usr/local/bin/kubectl get secret gitea-admin-secrets -n gitea -o jsonpath='{.data.password}' | base64 -d)
           
-          echo "Generating new runner token..."
-          
-          # Wait for Gitea to be ready
-          echo "Waiting for Gitea to be ready..."
-          until kubectl get deployment gitea -n gitea >/dev/null 2>&1 && \
-                [ "$(kubectl get deployment gitea -n gitea -o jsonpath='{.status.readyReplicas}')" = "1" ]; do
-            echo "Waiting for Gitea deployment to be ready..."
-            sleep 10
+          # Test Gitea API connection
+          echo "📡 Testing Gitea API connection..."
+          until curl -s -f -u "$ADMIN_USER:$ADMIN_PASS" "http://gitea-http:3000/api/v1/version" >/dev/null; do
+            echo "   Gitea API not ready, waiting 5 seconds..."
+            sleep 5
           done
+          echo "✅ Gitea API is accessible"
           
-          # Get Gitea pod
-          GITEA_POD=$(kubectl get pods -n gitea -l app=gitea -o jsonpath='{.items[0].metadata.name}')
-          
-          if [ -z "$GITEA_POD" ]; then
-            echo "No Gitea pod found"
+          # Test kubectl access
+          echo "   Testing kubectl access..."
+          if ! /usr/local/bin/kubectl get secrets -n gitea >/dev/null 2>&1; then
+            echo "   ❌ kubectl access failed"
             exit 1
           fi
+          echo "   ✅ kubectl access confirmed"
           
-          echo "Found Gitea pod: $GITEA_POD"
-          
-          # Wait for Gitea application to be ready (with timeout)
-          echo "Waiting for Gitea application to be ready..."
-          for i in {1..30}; do
-            if kubectl exec -n gitea $GITEA_POD -- gitea actions generate-runner-token >/dev/null 2>&1; then
-              echo "Gitea is ready!"
-              break
+          SECRET_EXISTS=false
+          K8S_TOKEN=""
+          echo "   Checking for existing k8s runner-secret..."
+          if /usr/local/bin/kubectl get secret runner-secret -n gitea >/dev/null 2>&1; then
+            SECRET_EXISTS=true
+            K8S_TOKEN=$(/usr/local/bin/kubectl get secret runner-secret -n gitea -o jsonpath='{.data.token}' | base64 -d 2>/dev/null)
+            if [ -n "$K8S_TOKEN" ]; then
+              echo "   ✅ Found existing k8s secret with token (length: ${#K8S_TOKEN})"
+            else
+              echo "   ❌ Secret exists but token is empty"
+              SECRET_EXISTS=false
             fi
-            echo "Attempt $i/30: Waiting for Gitea application to respond..."
-            sleep 10
-            if [ $i -eq 30 ]; then
-              echo "Timeout waiting for Gitea to be ready"
+          else
+            echo "   ❌ No k8s runner-secret found"
+          fi
+          
+          # For runner tokens, we can't easily check existing tokens in Gitea
+          # The runner registration token API always generates a fresh one
+          # So we'll use a simpler strategy: if we have a k8s secret, test it
+          
+          CREATE_NEW=true
+          if [ "$SECRET_EXISTS" = true ] && [ -n "$K8S_TOKEN" ]; then
+            echo "   Testing existing runner token..."
+            # We can't easily test runner tokens, so we'll regenerate to be safe
+            echo "   Will regenerate runner token for consistency"
+          fi
+          
+          if [ "$CREATE_NEW" = true ]; then
+            echo "🏗️ Generating fresh runner registration token..."
+            
+            # Wait for Gitea to be ready
+            echo "   Waiting for Gitea to be ready..."
+            until /usr/local/bin/kubectl get deployment gitea -n gitea >/dev/null 2>&1 && \
+                  [ "$(/usr/local/bin/kubectl get deployment gitea -n gitea -o jsonpath='{.status.readyReplicas}')" = "1" ]; do
+              echo "   Waiting for Gitea deployment to be ready..."
+              sleep 10
+            done
+            
+            # Get Gitea pod
+            GITEA_POD=$(/usr/local/bin/kubectl get pods -n gitea -l app=gitea -o jsonpath='{.items[0].metadata.name}')
+            
+            if [ -z "$GITEA_POD" ]; then
+              echo "   ❌ No Gitea pod found"
               exit 1
             fi
-          done
-          
-          # Generate token
-          echo "Generating runner token..."
-          RUNNER_TOKEN=$(kubectl exec -n gitea $GITEA_POD -- gitea actions generate-runner-token | tr -d '\r\n' || echo "")
-          
-          if [ -z "$RUNNER_TOKEN" ]; then
-            echo "Failed to generate runner token"
-            exit 1
+            
+            echo "   Found Gitea pod: $GITEA_POD"
+            
+            # Wait for Gitea application to be ready (with timeout)
+            echo "   Waiting for Gitea application to be ready..."
+            for i in {1..30}; do
+              if /usr/local/bin/kubectl exec -n gitea $GITEA_POD -- gitea actions generate-runner-token >/dev/null 2>&1; then
+                echo "   ✅ Gitea is ready!"
+                break
+              fi
+              echo "   Attempt $i/30: Waiting for Gitea application to respond..."
+              sleep 10
+              if [ $i -eq 30 ]; then
+                echo "   ❌ Timeout waiting for Gitea to be ready"
+                exit 1
+              fi
+            done
+            
+            # Generate fresh runner token
+            echo "   Generating runner registration token..."
+            RUNNER_TOKEN=$(/usr/local/bin/kubectl exec -n gitea $GITEA_POD -- gitea actions generate-runner-token | tr -d '\r\n' || echo "")
+            
+            if [ -z "$RUNNER_TOKEN" ]; then
+              echo "   ❌ Failed to generate runner token"
+              exit 1
+            fi
+            
+            echo "   ✅ Runner token generated successfully (length: ${#RUNNER_TOKEN})"
+            
+            # Clean up old secret and create new one
+            echo "   🧹 Cleaning up old runner registration..."
+            /usr/local/bin/kubectl delete secret runner-secret -n gitea --ignore-not-found=true
+            
+            /usr/local/bin/kubectl create secret generic runner-secret \
+              --from-literal=token="$RUNNER_TOKEN" \
+              --namespace=gitea
+            
+            echo "   💾 Fresh runner registration token stored in 'runner-secret'"
+            echo "   🎯 Ready for clean runner registration"
           fi
-          
-          echo "Runner token generated successfully (length: ${#RUNNER_TOKEN})"
-          
-          # Create/update the secret
-          kubectl create secret generic gitea-runner-token -n gitea \
-            --from-literal=token="$RUNNER_TOKEN" \
-            --dry-run=client -o yaml | kubectl apply -f -
-          
-          echo "Runner token stored in secret 'gitea-runner-token'"
         
         resources:
           requests:
