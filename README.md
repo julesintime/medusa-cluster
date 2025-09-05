@@ -281,6 +281,22 @@ kubectl get ingress -A
 # 4. Use ConfigMap volumes in deployments
 ```
 
+### Gitea Runner Success Pattern
+
+**Single Runner Implementation**: Simplified token management without sync jobs.
+
+```yaml
+# Key insight: Reuse first existing admin token, create only if none exists
+runner-setup.sh:
+  - Get admin credentials from Kubernetes secrets
+  - List existing admin API tokens, use first one found
+  - Create admin token only if none exists  
+  - Use admin token to get runner registration token
+  - Clean registration process with proper RBAC permissions
+```
+
+**Critical RBAC**: Service account needs `delete` permission for secret cleanup.
+
 See CLAUDE.md for detailed script development workflow.
 
 This completes your production-ready GitOps Kubernetes platform with secure secrets management and automated external access.

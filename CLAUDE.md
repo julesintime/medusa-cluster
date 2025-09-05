@@ -305,4 +305,44 @@ spec:
 - **AVOID** switching images mid-development
 - **TEST** API endpoints before assuming they work
 
+## Gitea Runner Implementation
+
+### Successfully Implemented Pattern
+
+**Single Runner Strategy**: One runner per Gitea instance with clean registration process.
+
+#### Key Components
+1. **RBAC**: Service account with secrets management permissions (get, create, delete, patch, update, list)
+2. **Init Container Sequence**: Install kubectl → Setup runner token → Install buildctl
+3. **Token Management**: Fetch first admin token or create if none exists (no sync job needed)
+
+#### Working Configuration
+```yaml
+# gitea-runner-deployment.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: runner-setup-script
+data:
+  runner-setup.sh: |
+    # Get admin credentials from k8s secrets
+    # Test Gitea API connection
+    # Get existing admin token or create new one (no sync needed)
+    # Use admin token to get runner registration token
+    # Create runner-secret for main container
+```
+
+#### RBAC Requirements
+```yaml
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "create", "patch", "update", "list", "delete"]  # delete is critical
+```
+
+#### Lessons Learned
+- **Init container order matters**: kubectl must be installed before scripts that use it
+- **RBAC permissions**: Missing 'delete' permission causes failures
+- **API token strategy**: Reuse first existing token, create only if none exists
+- **GitOps compliance**: All changes must be committed to git for Flux reconciliation
+
 For infrastructure details, troubleshooting, and architecture diagrams, refer to README.md.
