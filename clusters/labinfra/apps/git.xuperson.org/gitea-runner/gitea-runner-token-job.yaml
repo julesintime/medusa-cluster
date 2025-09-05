@@ -129,7 +129,7 @@ spec:
             
             # Generate fresh runner token
             echo "   Generating runner registration token..."
-            RUNNER_TOKEN=$(/shared/kubectl exec -n gitea $GITEA_POD -- gitea actions generate-runner-token | tr -d '\r\n' || echo "")
+            RUNNER_TOKEN=$(/shared/kubectl exec -n gitea $GITEA_POD -- gitea actions generate-runner-token 2>/dev/null | tail -1 | tr -d '\r\n' || echo "")
             
             if [ -z "$RUNNER_TOKEN" ]; then
               echo "   ❌ Failed to generate runner token"
