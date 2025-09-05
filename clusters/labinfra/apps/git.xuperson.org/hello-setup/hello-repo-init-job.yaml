@@ -45,17 +45,37 @@ data:
     TOKENS_RESPONSE=$(curl -s -u "$ADMIN_USER:$ADMIN_PASS" "http://gitea-http:3000/api/v1/users/$ADMIN_USER/tokens")
     echo "   Raw API response: $TOKENS_RESPONSE"
     
-    # Parse tokens from JSON response (without jq dependency)
+    # Parse tokens from JSON response - try multiple approaches
     GITEA_TOKENS=""
+    
+    # Method 1: Look for sha1 in JSON
     if echo "$TOKENS_RESPONSE" | grep -q '"sha1"'; then
       GITEA_TOKENS=$(echo "$TOKENS_RESPONSE" | grep -o '"sha1":"[^"]*"' | sed 's/"sha1":"//;s/"//' | tr '\n' ' ')
+      echo "   Method 1 - Found tokens: $GITEA_TOKENS"
+    fi
+    
+    # Method 2: If method 1 failed, try alternative parsing
+    if [ -z "$GITEA_TOKENS" ] && echo "$TOKENS_RESPONSE" | grep -q '"name"'; then
+      echo "   Method 2 - Trying alternative parsing..."
+      # Extract token names and assume we need to delete them
+      TOKEN_NAMES=$(echo "$TOKENS_RESPONSE" | grep -o '"name":"[^"]*"' | sed 's/"name":"//;s/"//' | tr '\n' ' ')
+      echo "   Found token names: $TOKEN_NAMES"
+      if [ -n "$TOKEN_NAMES" ]; then
+        GITEA_TOKENS="force_delete_all"
+      fi
     fi
     
     TOKEN_COUNT=0
     if [ -n "$GITEA_TOKENS" ]; then
-      TOKEN_COUNT=$(echo "$GITEA_TOKENS" | wc -w)
-      echo "   Found $TOKEN_COUNT token(s) in Gitea: $GITEA_TOKENS"
-      GITEA_TOKEN_LAST8=$(echo "$GITEA_TOKENS" | awk '{print $1}' | tail -c 9)
+      if [ "$GITEA_TOKENS" = "force_delete_all" ]; then
+        TOKEN_COUNT=$(echo "$TOKEN_NAMES" | wc -w)
+        echo "   Found $TOKEN_COUNT token(s) in Gitea (names: $TOKEN_NAMES)"
+        GITEA_TOKEN_LAST8="unknown"
+      else
+        TOKEN_COUNT=$(echo "$GITEA_TOKENS" | wc -w)
+        echo "   Found $TOKEN_COUNT token(s) in Gitea: $GITEA_TOKENS"
+        GITEA_TOKEN_LAST8=$(echo "$GITEA_TOKENS" | awk '{print $1}' | tail -c 9)
+      fi
     else
       echo "   No tokens found in Gitea"
       GITEA_TOKEN_LAST8=""
@@ -72,12 +92,29 @@ data:
     elif [ "$SECRET_EXISTS" = false ] && [ -n "$GITEA_TOKENS" ]; then
       echo "   Scenario: No secret, tokens exist → Delete all tokens, create new token"
       # Delete all existing tokens
-      for token_sha1 in $GITEA_TOKENS; do
-        if [ -n "$token_sha1" ]; then
-          echo "   Deleting token: ${token_sha1: -8}"
-          curl -s -X DELETE -u "$ADMIN_USER:$ADMIN_PASS" "http://gitea-http:3000/api/v1/users/$ADMIN_USER/tokens/$token_sha1" >/dev/null
-        fi
-      done
+      if [ "$GITEA_TOKENS" = "force_delete_all" ]; then
+        # Delete by token name
+        for token_name in $TOKEN_NAMES; do
+          if [ -n "$token_name" ]; then
+            echo "   Deleting token by name: $token_name"
+            # Get token SHA1 by name first, then delete
+            TOKEN_INFO=$(curl -s -u "$ADMIN_USER:$ADMIN_PASS" "http://gitea-http:3000/api/v1/users/$ADMIN_USER/tokens")
+            TOKEN_SHA1=$(echo "$TOKEN_INFO" | grep -A5 "\"name\":\"$token_name\"" | grep '"sha1"' | head -1 | grep -o '"sha1":"[^"]*"' | sed 's/"sha1":"//;s/"//')
+            if [ -n "$TOKEN_SHA1" ]; then
+              curl -s -X DELETE -u "$ADMIN_USER:$ADMIN_PASS" "http://gitea-http:3000/api/v1/users/$ADMIN_USER/tokens/$TOKEN_SHA1" >/dev/null
+              echo "   Deleted token: ${TOKEN_SHA1: -8}"
+            fi
+          fi
+        done
+      else
+        # Delete by SHA1
+        for token_sha1 in $GITEA_TOKENS; do
+          if [ -n "$token_sha1" ]; then
+            echo "   Deleting token: ${token_sha1: -8}"
+            curl -s -X DELETE -u "$ADMIN_USER:$ADMIN_PASS" "http://gitea-http:3000/api/v1/users/$ADMIN_USER/tokens/$token_sha1" >/dev/null
+          fi
+        done
+      fi
       CREATE_NEW=true
     else
       # Both exist - compare last 8 digits
@@ -89,12 +126,28 @@ data:
       else
         echo "   Scenario: Token mismatch (k8s: $K8S_TOKEN_LAST8, gitea: $GITEA_TOKEN_LAST8) → Delete and recreate"
         # Delete existing tokens
-        for token_sha1 in $GITEA_TOKENS; do
-          if [ -n "$token_sha1" ]; then
-            echo "   Deleting token: ${token_sha1: -8}"
-            curl -s -X DELETE -u "$ADMIN_USER:$ADMIN_PASS" "http://gitea-http:3000/api/v1/users/$ADMIN_USER/tokens/$token_sha1" >/dev/null
-          fi
-        done
+        if [ "$GITEA_TOKENS" = "force_delete_all" ]; then
+          # Delete by token name
+          for token_name in $TOKEN_NAMES; do
+            if [ -n "$token_name" ]; then
+              echo "   Deleting token by name: $token_name"
+              TOKEN_INFO=$(curl -s -u "$ADMIN_USER:$ADMIN_PASS" "http://gitea-http:3000/api/v1/users/$ADMIN_USER/tokens")
+              TOKEN_SHA1=$(echo "$TOKEN_INFO" | grep -A5 "\"name\":\"$token_name\"" | head -1 | grep -o '"sha1":"[^"]*"' | sed 's/"sha1":"//;s/"//')
+              if [ -n "$TOKEN_SHA1" ]; then
+                curl -s -X DELETE -u "$ADMIN_USER:$ADMIN_PASS" "http://gitea-http:3000/api/v1/users/$ADMIN_USER/tokens/$TOKEN_SHA1" >/dev/null
+                echo "   Deleted token: ${TOKEN_SHA1: -8}"
+              fi
+            fi
+          done
+        else
+          # Delete by SHA1
+          for token_sha1 in $GITEA_TOKENS; do
+            if [ -n "$token_sha1" ]; then
+              echo "   Deleting token: ${token_sha1: -8}"
+              curl -s -X DELETE -u "$ADMIN_USER:$ADMIN_PASS" "http://gitea-http:3000/api/v1/users/$ADMIN_USER/tokens/$token_sha1" >/dev/null
+            fi
+          done
+        fi
         /usr/local/bin/kubectl delete secret gitea-admin-api-token -n gitea >/dev/null 2>&1
         CREATE_NEW=true
       fi
