@@ -154,9 +154,28 @@ spec:
         emptyDir: {}
       - name: runner-docker-config
         emptyDir: {}
+      - name: docker-storage
+        emptyDir: {}
       securityContext:
         fsGroup: 1000
       containers:
+      - name: docker-dind
+        image: docker:27-dind
+        securityContext:
+          privileged: true
+        env:
+        - name: DOCKER_TLS_CERTDIR
+          value: ""
+        volumeMounts:
+        - name: docker-storage
+          mountPath: /var/lib/docker
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: 1000m
+            memory: 1Gi
       - name: runner
         image: gitea/act_runner:nightly
         workingDir: /data
@@ -164,6 +183,14 @@ spec:
         - sh
         - -c
         - |
+          # Wait for Docker daemon to be ready
+          echo "� Waiting for Docker daemon..."
+          until docker version >/dev/null 2>&1; do
+            echo "   Docker not ready, waiting 5 seconds..."
+            sleep 5
+          done
+          echo "✅ Docker daemon is ready!"
+          
           # Clean any existing config and re-register with fresh token
           echo "🔧 Cleaning old runner config..."
           rm -f /data/.runner
@@ -191,6 +218,8 @@ spec:
           value: "/home/runner/.local/share/docker"
         - name: BUILDKIT_HOST
           value: tcp://buildkitd.gitea.svc.cluster.local:1235
+        - name: DOCKER_HOST
+          value: "tcp://localhost:2376"
         - name: GITEA_INSTANCE_URL
           value: https://git.xuperson.org
         - name: GITEA_RUNNER_REGISTRATION_TOKEN
