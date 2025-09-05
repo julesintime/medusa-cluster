@@ -5,6 +5,8 @@ metadata:
   name: hello-setup
 
 resources:
+  - hello-app-configmap.yaml
+  - hello-cicd-configmap.yaml
   - hello-repo-init-job.yaml
 
 labels:
