@@ -87,10 +87,9 @@ spec:
                   "scopes": ["read:activitypub", "read:issue", "write:misc", "read:notification", "read:organization", "read:package", "read:repository", "read:user", "write:admin", "write:repository", "write:user"]
                 }')
 
-                echo "Create token response: $RESPONSE"
-                ADMIN_TOKEN=$(echo "$RESPONSE" | jq -r '.sha1' 2>/dev/null || echo "")
-                TOKEN_NAME="flux-automation"
-              fi
+              echo "Create token response: $RESPONSE"
+              ADMIN_TOKEN=$(echo "$RESPONSE" | jq -r '.sha1' 2>/dev/null || echo "")
+              TOKEN_NAME="flux-automation"
 
               if [ -z "$ADMIN_TOKEN" ] || [ "$ADMIN_TOKEN" = "null" ]; then
                 echo "❌ Failed to get admin token"
@@ -98,6 +97,20 @@ spec:
               fi
 
               echo "✅ Admin token ready: $TOKEN_NAME (length: ${#ADMIN_TOKEN})"
+
+              # Update the Kubernetes secret
+              cat <<EOF | kubectl apply -f -
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: gitea-admin-api-token
+                namespace: gitea
+              type: Opaque
+              data:
+                token: $(echo -n "$ADMIN_TOKEN" | base64)
+              EOF
+
+              echo "💾 Admin token synced to secret 'gitea-admin-api-token'"
 
               # Update the Kubernetes secret
               cat <<EOF | kubectl apply -f -
