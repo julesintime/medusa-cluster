@@ -67,26 +67,28 @@ spec:
               TOKEN_COUNT=$(echo "$TOKENS" | jq '. | length' 2>/dev/null || echo "0")
 
               if [ "$TOKEN_COUNT" -gt 0 ]; then
-                echo "✅ Found $TOKEN_COUNT existing token(s), using first one..."
-                # Try sha1 first, then fall back to token_last_eight or create new
-                ADMIN_TOKEN=$(echo "$TOKENS" | jq -r '.[0].sha1' 2>/dev/null || echo "")
-                if [ -z "$ADMIN_TOKEN" ] || [ "$ADMIN_TOKEN" = "null" ] || [ "$ADMIN_TOKEN" = "" ]; then
-                  echo "⚠️  Token exists but sha1 is empty, will create new token..."
-                  TOKEN_COUNT=0
-                else
-                  TOKEN_NAME=$(echo "$TOKENS" | jq -r '.[0].name' 2>/dev/null || echo "existing-token")
-                fi
+                echo "✅ Found $TOKEN_COUNT existing token(s)"
+                # Since we can't get the token value from the list API, 
+                # we'll recreate the token to ensure we have the value
+                echo "🔄 Recreating admin token to get the token value..."
+                
+                # Delete all existing tokens first
+                for token_id in $(echo "$TOKENS" | jq -r '.[].id' 2>/dev/null); do
+                  echo "Deleting token ID: $token_id"
+                  curl -s -X DELETE "http://gitea-http:3000/api/v1/users/$GITEA_ADMIN_USERNAME/tokens/$token_id" \
+                    -u "$GITEA_ADMIN_USERNAME:$GITEA_ADMIN_PASSWORD" || echo "Delete failed for $token_id"
+                done
               fi
 
-              if [ "$TOKEN_COUNT" = "0" ]; then
-                echo "🏗️ No tokens found, creating new one..."
-                RESPONSE=$(curl -s -X POST "http://gitea-http:3000/api/v1/users/$GITEA_ADMIN_USERNAME/tokens" \
-                  -H "Content-Type: application/json" \
-                  -u "$GITEA_ADMIN_USERNAME:$GITEA_ADMIN_PASSWORD" \
-                  -d '{
-                    "name": "flux-automation-'$RANDOM'",
-                    "scopes": ["read:activitypub", "read:issue", "write:misc", "read:notification", "read:organization", "read:package", "read:repository", "read:user", "write:admin", "write:repository", "write:user"]
-                  }')
+              # Create the single admin token
+              echo "🏗️ Creating admin token..."
+              RESPONSE=$(curl -s -X POST "http://gitea-http:3000/api/v1/users/$GITEA_ADMIN_USERNAME/tokens" \
+                -H "Content-Type: application/json" \
+                -u "$GITEA_ADMIN_USERNAME:$GITEA_ADMIN_PASSWORD" \
+                -d '{
+                  "name": "flux-automation",
+                  "scopes": ["read:activitypub", "read:issue", "write:misc", "read:notification", "read:organization", "read:package", "read:repository", "read:user", "write:admin", "write:repository", "write:user"]
+                }')
 
                 echo "Create token response: $RESPONSE"
                 ADMIN_TOKEN=$(echo "$RESPONSE" | jq -r '.sha1' 2>/dev/null || echo "")
