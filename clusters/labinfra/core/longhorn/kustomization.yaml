@@ -5,7 +5,6 @@ resources:
   - namespace.yaml
   - helmrepository.yaml
   - longhorn.yaml
-  - node-labeler.yaml  # Node labeling job for Longhorn auto-discovery
   - storageclass-fast.yaml
   - storageclass-retention.yaml  # StorageClasses with Retain policy for critical data
 

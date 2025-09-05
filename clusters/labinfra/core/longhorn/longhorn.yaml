@@ -20,16 +20,14 @@ spec:
   upgrade:
     crds: CreateReplace  # Ensure CRDs are updated during upgrades
   values:
-    # Storage configuration - reverted to original working settings
+    # Storage configuration
     defaultSettings:
       defaultReplicaCount: 2  # Matches longhorn.default_replicas
       defaultDataPath: "/var/lib/longhorn"
       defaultDataLocality: "best-effort"
       replicaAutoBalance: "least-effort"
-      storageOverProvisioningPercentage: 200  # Reverted to original value
-      storageMinimalAvailablePercentage: 25   # Reverted to original value
-      # Enable recurring backup
-      createDefaultDiskLabeledNodes: true     # Keep auto-discovery enabled
+      storageOverProvisioningPercentage: 200
+      storageMinimalAvailablePercentage: 25
       # Backup configuration - external targets to be configured via UI or future NFS/S3 setup
       backupstorePollInterval: "300"
     
