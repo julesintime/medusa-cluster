@@ -183,13 +183,17 @@ spec:
         - sh
         - -c
         - |
+          # Install Docker client
+          echo "Installing Docker client..."
+          apk add --no-cache docker-cli
+          
           # Wait for Docker daemon to be ready
-          echo "� Waiting for Docker daemon..."
+          echo "Waiting for Docker daemon..."
           until docker version >/dev/null 2>&1; do
             echo "   Docker not ready, waiting 5 seconds..."
             sleep 5
           done
-          echo "✅ Docker daemon is ready!"
+          echo "Docker daemon is ready!"
           
           # Clean any existing config and re-register with fresh token
           echo "🔧 Cleaning old runner config..."
