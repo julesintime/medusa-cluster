@@ -1,0 +1,103 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: gitea-admin-token-sync
+  namespace: gitea
+spec:
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: gitea-admin-token-sync
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: gitea-runner-init
+      containers:
+      - name: token-sync
+        image: bitnami/kubectl:latest
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -e
+          echo "🔄 Syncing Gitea admin token..."
+
+          # Check if token secret already exists and is valid
+          if kubectl get secret gitea-admin-api-token -n gitea >/dev/null 2>&1; then
+            TOKEN=$(kubectl get secret gitea-admin-api-token -n gitea -o jsonpath='{.data.token}' | base64 -d 2>/dev/null || echo "")
+            if [ ! -z "$TOKEN" ] && [ ${#TOKEN} -eq 40 ]; then
+              echo "✅ Valid admin token already exists, skipping creation"
+              exit 0
+            fi
+          fi
+
+          echo "🏗️ Creating new admin API token..."
+
+          # Wait for Gitea to be ready
+          echo "⏳ Waiting for Gitea to be ready..."
+          until kubectl get deployment gitea -n gitea >/dev/null 2>&1 && \
+                [ "$(kubectl get deployment gitea -n gitea -o jsonpath='{.status.readyReplicas}')" = "1" ]; do
+            echo "   Waiting for Gitea deployment to be ready..."
+            sleep 10
+          done
+
+          # Get Gitea pod
+          GITEA_POD=$(kubectl get pods -n gitea -l app=gitea -o jsonpath='{.items[0].metadata.name}')
+
+          if [ -z "$GITEA_POD" ]; then
+            echo "❌ No Gitea pod found"
+            exit 1
+          fi
+
+          echo "✅ Found Gitea pod: $GITEA_POD"
+
+          # Wait for Gitea application to be ready
+          echo "⏳ Waiting for Gitea application to be ready..."
+          for i in {1..30}; do
+            if kubectl exec -n gitea $GITEA_POD -- gitea admin user list >/dev/null 2>&1; then
+              echo "✅ Gitea is ready!"
+              break
+            fi
+            echo "   Attempt $i/30: Waiting for Gitea application to respond..."
+            sleep 10
+            if [ $i -eq 30 ]; then
+              echo "❌ Timeout waiting for Gitea to be ready"
+              exit 1
+            fi
+          done
+
+          # Get admin credentials
+          ADMIN_USER=$(kubectl get secret gitea-admin-secrets -n gitea -o jsonpath='{.data.username}' | base64 -d)
+          ADMIN_PASS=$(kubectl get secret gitea-admin-secrets -n gitea -o jsonpath='{.data.password}' | base64 -d)
+
+          # Create admin token using Gitea CLI
+          echo "🔑 Creating admin API token..."
+          ADMIN_TOKEN=$(kubectl exec -n gitea $GITEA_POD -- gitea admin user generate-access-token \
+            --username "$ADMIN_USER" \
+            --token-name "admin-api-token" \
+            --scopes "all" | tr -d '\r\n')
+
+          if [ -z "$ADMIN_TOKEN" ] || [ ${#ADMIN_TOKEN} -ne 40 ]; then
+            echo "❌ Failed to create admin token"
+            exit 1
+          fi
+
+          echo "✅ Admin token created successfully (length: ${#ADMIN_TOKEN})"
+
+          # Store token in secret
+          kubectl create secret generic gitea-admin-api-token -n gitea \
+            --from-literal=token="$ADMIN_TOKEN" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          echo "💾 Admin token stored in secret 'gitea-admin-api-token'"
+          echo "🎉 Admin token sync completed successfully!"
+
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "50m"
+          limits:
+            memory: "64Mi"
+            cpu: "100m"
