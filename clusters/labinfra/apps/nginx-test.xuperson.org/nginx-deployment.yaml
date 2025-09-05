@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
       - name: nginx
-        image: 10.42.2.16:3000/giteaadmin/internal-test-nginx:latest
+        image: gitea-http.gitea.svc.cluster.local:3000/giteaadmin/internal-test-nginx:latest
         ports:
         - containerPort: 80
         resources:
