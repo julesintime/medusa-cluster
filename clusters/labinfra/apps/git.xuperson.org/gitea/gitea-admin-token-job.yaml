@@ -50,55 +50,72 @@ spec:
         - -c
         - |
           set -e
-          echo "🔍 Checking if admin API token already exists..."
-
-          # Check if kubectl is available
-          echo "Checking kubectl availability..."
-          which kubectl || echo "kubectl not found in PATH"
-          ls -la /usr/local/bin/kubectl || echo "kubectl not in /usr/local/bin"
-          ls -la /usr/bin/kubectl || echo "kubectl not in /usr/bin"
-
+          echo "Checking if admin token already exists..."
+          
           # Check if token secret already exists and is valid
-          if /usr/local/bin/kubectl get secret gitea-admin-api-token -n gitea >/dev/null 2>&1; then
-            TOKEN=$(/usr/local/bin/kubectl get secret gitea-admin-api-token -n gitea -o jsonpath='{.data.token}' | base64 -d 2>/dev/null || echo "")
+          if kubectl get secret gitea-admin-api-token -n gitea >/dev/null 2>&1; then
+            TOKEN=$(kubectl get secret gitea-admin-api-token -n gitea -o jsonpath='{.data.token}' | base64 -d 2>/dev/null || echo "")
             if [ ! -z "$TOKEN" ] && [ ${#TOKEN} -gt 10 ]; then
-              echo "✅ Valid admin API token already exists"
+              echo "Valid admin API token already exists"
               exit 0
             fi
           fi
-
-          echo "🏗️ Creating new admin API token..."
-
+          
+          echo "Generating new admin token..."
+          
+          # Wait for Gitea to be ready
+          echo "Waiting for Gitea to be ready..."
+          until kubectl get deployment gitea -n gitea >/dev/null 2>&1 && \
+                [ "$(kubectl get deployment gitea -n gitea -o jsonpath='{.status.readyReplicas}')" = "1" ]; do
+            echo "Waiting for Gitea deployment to be ready..."
+            sleep 10
+          done
+          
           # Get Gitea pod
-          GITEA_POD=$(/usr/local/bin/kubectl get pods -n gitea -l app=gitea -o jsonpath='{.items[0].metadata.name}')
+          GITEA_POD=$(kubectl get pods -n gitea -l app=gitea -o jsonpath='{.items[0].metadata.name}')
+          
           if [ -z "$GITEA_POD" ]; then
-            echo "❌ No Gitea pod found"
+            echo "No Gitea pod found"
             exit 1
           fi
-
-          echo "📦 Found Gitea pod: $GITEA_POD"
-
-          # Create admin API token using Gitea CLI
-          # Using the same approach as the runner token job
-          ADMIN_TOKEN=$(/usr/local/bin/kubectl exec -n gitea $GITEA_POD -- gitea admin user generate-access-token \
+          
+          echo "Found Gitea pod: $GITEA_POD"
+          
+          # Wait for Gitea application to be ready (with timeout)
+          echo "Waiting for Gitea application to be ready..."
+          for i in {1..30}; do
+            if kubectl exec -n gitea $GITEA_POD -- gitea admin user generate-access-token --help >/dev/null 2>&1; then
+              echo "Gitea is ready!"
+              break
+            fi
+            echo "Attempt $i/30: Waiting for Gitea application to respond..."
+            sleep 10
+            if [ $i -eq 30 ]; then
+              echo "Timeout waiting for Gitea to be ready"
+              exit 1
+            fi
+          done
+          
+          # Generate token
+          echo "Generating admin token..."
+          ADMIN_TOKEN=$(kubectl exec -n gitea $GITEA_POD -- gitea admin user generate-access-token \
             --username "$GITEA_ADMIN_USERNAME" \
             --token-name "flux-automation" \
             --scopes "write:admin,write:repository,write:user,read:admin,read:repository" | tr -d '\r\n' || echo "")
-
+          
           if [ -z "$ADMIN_TOKEN" ]; then
-            echo "❌ Failed to create admin API token"
+            echo "Failed to generate admin token"
             exit 1
           fi
-
-          echo "✅ Admin API token created successfully"
-
-          # Store the token in a secret
-          /usr/local/bin/kubectl create secret generic gitea-admin-api-token -n gitea \
+          
+          echo "Admin token generated successfully (length: ${#ADMIN_TOKEN})"
+          
+          # Create/update the secret
+          kubectl create secret generic gitea-admin-api-token -n gitea \
             --from-literal=token="$ADMIN_TOKEN" \
-            --dry-run=client -o yaml | /usr/local/bin/kubectl apply -f -
-
-          echo "💾 Admin API token stored in secret 'gitea-admin-api-token'"
-          echo "🎉 Gitea admin token initialization completed!"
+            --dry-run=client -o yaml | kubectl apply -f -
+          
+          echo "Admin token stored in secret 'gitea-admin-api-token'"
 
         resources:
           requests:
