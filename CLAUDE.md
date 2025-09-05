@@ -346,3 +346,7 @@ data:
 - **GitOps compliance**: All changes must be committed to git for Flux reconciliation
 
 For infrastructure details, troubleshooting, and architecture diagrams, refer to README.md.
+
+## Active Development Tasks
+
+**BuildKit CI/CD Implementation**: See `BUILDKIT_TODO.md` for comprehensive step-by-step plan to complete the working BuildKit-based CI/CD pipeline. Continue from this file in each session to maintain progress tracking.
