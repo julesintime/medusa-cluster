@@ -83,7 +83,7 @@ spec:
 
       containers:
       - name: runner
-        image: gitea/act_runner:nightly
+        image: gitea/act_runner:nightly-dind
         command: ["sh", "-c", "while ! docker version >/dev/null 2>&1; do echo 'waiting for docker daemon...'; sleep 5; done; /usr/local/bin/run.sh"]
         env:
         - name: DOCKER_HOST
