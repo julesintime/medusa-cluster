@@ -14,19 +14,39 @@ spec:
     spec:
       restartPolicy: OnFailure
       serviceAccountName: gitea-runner-init
+      volumes:
+      - name: kubectl-binary
+        emptyDir: {}
+      initContainers:
+      - name: install-kubectl
+        image: bitnami/kubectl:latest
+        command:
+        - sh
+        - -c
+        - cp /opt/bitnami/kubectl/bin/kubectl /shared/kubectl && chmod +x /shared/kubectl
+        volumeMounts:
+        - name: kubectl-binary
+          mountPath: /shared
       containers:
       - name: generate-token
-        image: bitnami/kubectl:latest
+        image: alpine:latest
+        volumeMounts:
+        - name: kubectl-binary
+          mountPath: /shared
         command:
         - /bin/bash
         - -c
         - |
           set -e
-          echo "🔑 Managing Gitea runner registration token with consistency checks..."
+          echo "� Installing required packages..."
+          apk add --no-cache curl
+          echo "✅ Packages installed"
+          
+          echo "�🔑 Managing Gitea runner registration token with consistency checks..."
           
           # Get admin credentials
-          ADMIN_USER=$(/usr/local/bin/kubectl get secret gitea-admin-secrets -n gitea -o jsonpath='{.data.username}' | base64 -d)
-          ADMIN_PASS=$(/usr/local/bin/kubectl get secret gitea-admin-secrets -n gitea -o jsonpath='{.data.password}' | base64 -d)
+          ADMIN_USER=$(/shared/kubectl get secret gitea-admin-secrets -n gitea -o jsonpath='{.data.username}' | base64 -d)
+          ADMIN_PASS=$(/shared/kubectl get secret gitea-admin-secrets -n gitea -o jsonpath='{.data.password}' | base64 -d)
           
           # Test Gitea API connection
           echo "📡 Testing Gitea API connection..."
@@ -38,7 +58,7 @@ spec:
           
           # Test kubectl access
           echo "   Testing kubectl access..."
-          if ! /usr/local/bin/kubectl get secrets -n gitea >/dev/null 2>&1; then
+          if ! /shared/kubectl get secrets -n gitea >/dev/null 2>&1; then
             echo "   ❌ kubectl access failed"
             exit 1
           fi
@@ -47,9 +67,9 @@ spec:
           SECRET_EXISTS=false
           K8S_TOKEN=""
           echo "   Checking for existing k8s runner-secret..."
-          if /usr/local/bin/kubectl get secret runner-secret -n gitea >/dev/null 2>&1; then
+          if /shared/kubectl get secret runner-secret -n gitea >/dev/null 2>&1; then
             SECRET_EXISTS=true
-            K8S_TOKEN=$(/usr/local/bin/kubectl get secret runner-secret -n gitea -o jsonpath='{.data.token}' | base64 -d 2>/dev/null)
+            K8S_TOKEN=$(/shared/kubectl get secret runner-secret -n gitea -o jsonpath='{.data.token}' | base64 -d 2>/dev/null)
             if [ -n "$K8S_TOKEN" ]; then
               echo "   ✅ Found existing k8s secret with token (length: ${#K8S_TOKEN})"
             else
@@ -76,14 +96,14 @@ spec:
             
             # Wait for Gitea to be ready
             echo "   Waiting for Gitea to be ready..."
-            until /usr/local/bin/kubectl get deployment gitea -n gitea >/dev/null 2>&1 && \
-                  [ "$(/usr/local/bin/kubectl get deployment gitea -n gitea -o jsonpath='{.status.readyReplicas}')" = "1" ]; do
+            until /shared/kubectl get deployment gitea -n gitea >/dev/null 2>&1 && \
+                  [ "$(/shared/kubectl get deployment gitea -n gitea -o jsonpath='{.status.readyReplicas}')" = "1" ]; do
               echo "   Waiting for Gitea deployment to be ready..."
               sleep 10
             done
             
             # Get Gitea pod
-            GITEA_POD=$(/usr/local/bin/kubectl get pods -n gitea -l app=gitea -o jsonpath='{.items[0].metadata.name}')
+            GITEA_POD=$(/shared/kubectl get pods -n gitea -l app=gitea -o jsonpath='{.items[0].metadata.name}')
             
             if [ -z "$GITEA_POD" ]; then
               echo "   ❌ No Gitea pod found"
@@ -95,7 +115,7 @@ spec:
             # Wait for Gitea application to be ready (with timeout)
             echo "   Waiting for Gitea application to be ready..."
             for i in {1..30}; do
-              if /usr/local/bin/kubectl exec -n gitea $GITEA_POD -- gitea actions generate-runner-token >/dev/null 2>&1; then
+              if /shared/kubectl exec -n gitea $GITEA_POD -- gitea actions generate-runner-token >/dev/null 2>&1; then
                 echo "   ✅ Gitea is ready!"
                 break
               fi
@@ -109,7 +129,7 @@ spec:
             
             # Generate fresh runner token
             echo "   Generating runner registration token..."
-            RUNNER_TOKEN=$(/usr/local/bin/kubectl exec -n gitea $GITEA_POD -- gitea actions generate-runner-token | tr -d '\r\n' || echo "")
+            RUNNER_TOKEN=$(/shared/kubectl exec -n gitea $GITEA_POD -- gitea actions generate-runner-token | tr -d '\r\n' || echo "")
             
             if [ -z "$RUNNER_TOKEN" ]; then
               echo "   ❌ Failed to generate runner token"
@@ -120,9 +140,9 @@ spec:
             
             # Clean up old secret and create new one
             echo "   🧹 Cleaning up old runner registration..."
-            /usr/local/bin/kubectl delete secret runner-secret -n gitea --ignore-not-found=true
+            /shared/kubectl delete secret runner-secret -n gitea --ignore-not-found=true
             
-            /usr/local/bin/kubectl create secret generic runner-secret \
+            /shared/kubectl create secret generic runner-secret \
               --from-literal=token="$RUNNER_TOKEN" \
               --namespace=gitea
             
