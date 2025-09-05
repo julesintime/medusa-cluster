@@ -117,28 +117,11 @@ spec:
     spec:
       restartPolicy: Always
       serviceAccountName: gitea-runner-init
-      initContainers:
-      - name: setup-runner-token
-        image: alpine/curl:latest
-        command: ["/scripts/runner-setup.sh"]
-        volumeMounts:
-        - name: script-volume
-          mountPath: /scripts
-        resources:
-          requests:
-            memory: "64Mi"
-            cpu: "100m"
-          limits:
-            memory: "128Mi"
-            cpu: "200m"
+      initContainers: []
       volumes:
       - name: runner-data
         persistentVolumeClaim:
           claimName: act-runner-vol
-      - name: script-volume
-        configMap:
-          name: runner-setup-script
-          defaultMode: 0755
       securityContext:
         fsGroup: 1000
       containers:
