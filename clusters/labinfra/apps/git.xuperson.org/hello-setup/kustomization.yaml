@@ -8,7 +8,7 @@ resources:
   - hello-repo-init-job.yaml
 
 labels:
-  - includeSelectors: true
+  - includeSelectors: false
     pairs:
       app.kubernetes.io/name: hello-setup
       app.kubernetes.io/managed-by: flux
