@@ -43,8 +43,45 @@
           - iptables
           - apparmor-utils
           - apache2-utils  # For htpasswd (needed by Longhorn)
+          - ca-certificates
+          - gnupg
+          - lsb-release
         state: present
         update_cache: true
+
+    # Install Docker from official Docker repository
+    - name: Add Docker's official GPG key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add Docker repository
+      apt_repository:
+        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+
+    - name: Install Docker CE
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+        update_cache: true
+
+    - name: Start and enable Docker service
+      systemd:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Add ubuntu user to docker group
+      user:
+        name: ubuntu
+        groups: docker
+        append: yes
 
     - name: Enable IP forwarding
       sysctl:
@@ -54,7 +91,7 @@
         reload: true
 
     # First control plane node - initialize cluster
-    - name: Install K3s on first control plane node (cluster init)
+    - name: Install K3s on first control plane node (cluster init) with Docker
       shell: |
         curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION={{ k3s.version }} sh -s - server \
           --cluster-init \
@@ -67,7 +104,8 @@
           {% for san in k3s.tls_sans %}
           --tls-san {{ san }} \
           {% endfor %}
-          --write-kubeconfig-mode 644
+          --write-kubeconfig-mode 644 \
+          --docker
       when: k3s_init is defined and k3s_init
       register: k3s_init_result
 
@@ -85,7 +123,7 @@
       when: k3s_init is not defined or not k3s_init
 
 
-    - name: Install K3s on additional control plane nodes
+    - name: Install K3s on additional control plane nodes with Docker
       shell: |
         curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION={{ k3s.version }} sh -s - server \
           --server {{ k3s_server_url }} \
@@ -98,7 +136,8 @@
           {% for san in k3s.tls_sans %}
           --tls-san {{ san }} \
           {% endfor %}
-          --write-kubeconfig-mode 644
+          --write-kubeconfig-mode 644 \
+          --docker
       when: k3s_init is not defined or not k3s_init
       register: k3s_join_result
 
@@ -164,20 +203,39 @@
         state: present
         update_cache: true
 
-    # Docker is not required for K3s - it uses containerd by default
-    # Uncomment the following tasks only if you need Docker for development
+    # Install Docker from official Docker repository
+    - name: Add Docker's official GPG key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
 
-    # - name: Start and enable Docker service
-    #   systemd:
-    #     name: docker
-    #     state: started
-    #     enabled: true
+    - name: Add Docker repository
+      apt_repository:
+        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
 
-    # - name: Add ubuntu user to docker group (for non-root access)
-    #   user:
-    #     name: ubuntu
-    #     groups: docker
-    #     append: yes
+    - name: Install Docker CE
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+        update_cache: true
+
+    - name: Start and enable Docker service
+      systemd:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Add ubuntu user to docker group (for non-root access)
+      user:
+        name: ubuntu
+        groups: docker
+        append: yes
 
     - name: Enable IP forwarding
       sysctl:
@@ -186,11 +244,12 @@
         state: present
         reload: true
 
-    - name: Install K3s worker node
+    - name: Install K3s worker node with Docker runtime
       shell: |
         curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION={{ k3s.version }} sh -s - agent \
           --server {{ k3s_server_url }} \
-          --token {{ k3s_token }}
+          --token {{ k3s_token }} \
+          --docker
       register: k3s_worker_result
 
     - name: Check K3s agent service status
