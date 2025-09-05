@@ -1,113 +1,134 @@
-# Gitea Actions Runner Deployment
+# Gitea Actions Runner - Rootless Docker Implementation
 
-This directory contains the GitOps configuration for deploying Gitea Actions (act_runner) to provide CI/CD capabilities for the Gitea instance.
+This directory contains a Gitea Actions runner deployment based on the official rootless Docker example from:
+https://gitea.com/gitea/act_runner/src/branch/main/examples/kubernetes/rootless-docker.yaml
+
+## Key Features
+
+### 🐳 Rootless Docker-in-Docker (DinD)
+- Uses `gitea/act_runner:nightly-dind-rootless` image
+- Secure rootless Docker daemon running inside the container
+- Eliminates the need for host Docker socket access
+- Better security isolation compared to privileged host socket mounting
+
+### 🔧 Native K3s Docker Integration
+- Works seamlessly with K3s clusters using Docker runtime
+- Automatic Docker client installation for compatibility
+- Uses local Docker daemon with TLS (localhost:2376)
+
+### 🏗️ Docker Buildx Integration
+- Uses Docker Buildx for modern container building capabilities
+- Multi-platform builds and advanced caching
+- Native integration with rootless Docker daemon
+- Simplified compared to external BuildKit daemon
+
+### 📦 Persistent Storage
+- 5GB persistent volume for runner data and cache
+- Uses Longhorn storage class for reliable persistence
+- Maintains runner registration across pod restarts
 
 ## Architecture
 
-- **Helm Chart**: Official `helm-actions` chart from https://dl.gitea.com/charts/
-- **Image**: `gitea/act_runner:0.2.12` (stable release)
-- **Mode**: Docker-in-Docker (DinD) with privileged security context
-- **Storage**: 5Gi persistent volume for runner data
-- **Replicas**: 1 (minimal setup)
-- **Token Generation**: Fully automated via init container
-
-## Files
-
-- `gitea-runner-rbac.yaml` - RBAC permissions for token generation
-- `gitea-runner-deployment.yaml` - Main act-runner deployment configuration
-- `kustomization.yaml` - Kustomize configuration
-
-## Unattended Deployment
-
-This deployment is **fully automated** and requires **no manual intervention**:
-
-1. **Token Generator Job**: Runs once to generate runner registration token via Gitea CLI
-2. **Token Management**: Creates/updates Kubernetes secret with the token  
-3. **HelmRelease**: Deploys the StatefulSet using the generated token
-4. **Dependency Handling**: Job waits for Gitea to be ready before token generation
-5. **Idempotent**: Only generates new token if existing one is missing/invalid
-
-### Automatic Process
-
-```mermaid
-graph TD
-    A[Flux deploys resources] --> B[Token generator Job starts]
-    B --> C{Token secret exists?}
-    C -->|Yes| D{Token valid?}
-    C -->|No| E[Wait for Gitea ready]
-    D -->|Yes| F[Job completes successfully]
-    D -->|No| E
-    E --> G[Generate token via Gitea CLI]
-    G --> H[Store token in secret]
-    H --> I[HelmRelease uses secret]
-    F --> I
-    I --> J[StatefulSet starts with token]
+```
+┌─────────────────────────────────────────┐
+│ act-runner-rootless Pod                 │
+├─────────────────────────────────────────┤
+│ InitContainers:                         │
+│ └── wait-for-secret                     │
+├─────────────────────────────────────────┤
+│ Main Container:                         │
+│ ├── gitea/act_runner:nightly-dind-      │
+│ │   rootless                            │
+│ ├── Docker daemon (localhost:2376)      │
+│ ├── Docker Buildx (modern builds)       │
+│ └── Gitea Actions runner                │
+└─────────────────────────────────────────┘
 ```
 
-### How It Works
+## Environment Variables
 
-1. **Job Execution**: The `gitea-runner-token-generator` Job runs automatically
-2. **Smart Token Check**: Checks if a valid token already exists before generating new one
-3. **Gitea Integration**: Uses `gitea actions generate-runner-token` CLI command
-4. **Secret Creation**: Stores token in `gitea-runner-token` Kubernetes secret
-5. **Runner Deployment**: HelmRelease references the secret for runner registration
+| Variable | Value | Description |
+|----------|-------|-------------|
+| `DOCKER_HOST` | `tcp://localhost:2376` | Rootless Docker daemon endpoint |
+| `DOCKER_CERT_PATH` | `/certs/client` | Docker TLS certificates path |
+| `DOCKER_TLS_VERIFY` | `"1"` | Enable Docker TLS verification |
+| `GITEA_INSTANCE_URL` | `https://git.xuperson.org` | Gitea instance URL |
+| `GITEA_RUNNER_NAME` | `k3s-rootless-runner` | Runner identifier |
+| `GITEA_RUNNER_LABELS` | `ubuntu-latest:docker://node:18-alpine,...` | Supported job types |
 
-## Deployment
+## Secrets
 
-The runner will be automatically deployed via Flux GitOps. Monitor the deployment:
+### `runner-secret`
+- **Created by**: `gitea-runner-token-job.yaml`
+- **Contains**: Fresh runner registration token from Gitea API
+- **Key**: `token`
+- **Usage**: Automatic runner registration on startup
 
+## Deployment Flow
+
+1. **Init Phase**:
+   - Wait for runner registration token to be available
+
+2. **Runtime Phase**:
+   - Start rootless Docker daemon inside container
+   - Install Docker Buildx for modern container builds
+   - Clean any existing runner configuration
+   - Register with Gitea using fresh API token
+   - Start runner daemon to process jobs
+
+## Advantages Over Previous Implementation
+
+### ✅ Security
+- No privileged host Docker socket access
+- Rootless Docker daemon (runs as user 1000)
+- Container isolation with security contexts
+
+### ✅ Simplicity  
+- Single container (no sidecar complexity)
+- Official upstream image with proven stability
+- Fewer moving parts and failure points
+
+### ✅ Compatibility
+- Works with K3s Docker runtime out of the box
+- Compatible with Docker Buildx for modern builds
+- Supports standard Docker Compose workflows
+
+### ✅ Maintenance
+- Follows official Gitea examples
+- Easier to troubleshoot and debug
+- Better alignment with upstream development
+
+## Migration from DinD Sidecar
+
+The previous implementation used a complex DinD sidecar pattern with:
+- Separate `docker:27-dind` container
+- Host socket mounting for some operations  
+- Complex networking between containers
+
+This new implementation simplifies to:
+- Single container with embedded rootless Docker
+- No sidecar containers or complex networking
+- Better security with rootless operation
+
+## Troubleshooting
+
+### Check Runner Registration
 ```bash
-# Check token generation job
-kubectl get jobs gitea-runner-token-generator -n gitea
-
-# Check job logs
-kubectl logs job/gitea-runner-token-generator -n gitea
-
-# Check if token secret was created
-kubectl get secret gitea-runner-token -n gitea
-
-# Check HelmRelease status
-kubectl get deployment act-runner -n gitea
-
-# Check runner pods  
-kubectl get pods -n gitea -l app.kubernetes.io/name=gitea-runner
-
-# View runner logs
-kubectl logs -n gitea -l app.kubernetes.io/name=gitea-runner -f
+kubectl logs -n gitea deployment/act-runner-rootless -f
 ```
 
-## Verify Runner Registration
+### Check Docker Daemon
+```bash
+kubectl exec -n gitea deployment/act-runner-rootless -- docker version
+```
 
-Once deployed, verify the runner appears in Gitea:
+### Check Docker Buildx
+```bash
+kubectl exec -n gitea deployment/act-runner-rootless -- docker buildx version
+```
 
-1. Go to https://git.xuperson.org
-2. Site Administration → Actions → Runners  
-3. You should see the runner listed as "Online"
-
-## Configuration
-
-### Resource Limits
-- CPU: 100m-2000m
-- Memory: 256Mi-2Gi
-- Storage: 5Gi persistent volume
-
-### Security
-- Runs with privileged security context (required for Docker operations)
-- Docker-in-Docker configuration for job isolation
-- Connects to Gitea via internal service: `gitea-http.gitea.svc.cluster.local:3000`
-
-### Troubleshooting
-
-**Runner not appearing in Gitea:**
-- Check registration token is correct in Infisical
-- Verify Gitea service is accessible from runner pod
-- Check runner pod logs for connection errors
-
-**Build failures:**
-- Ensure privileged security context is enabled
-- Check if cluster supports privileged containers
-- Verify Docker daemon is starting correctly in sidecar
-
-**Resource issues:**
-- Increase resource limits if builds are failing due to memory/CPU
-- Expand persistent volume if running out of storage space
+### Verify Persistent Storage
+```bash
+kubectl get pvc -n gitea
+kubectl exec -n gitea deployment/act-runner-rootless -- ls -la /data
+```

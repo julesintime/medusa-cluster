@@ -9,8 +9,8 @@ metadata:
     app.kubernetes.io/component: cicd-workflow
     app.kubernetes.io/managed-by: flux
 data:
-  buildkit-ci.yml: |
-    name: Simple BuildKit CI
+  docker-buildx-ci.yml: |
+    name: Simple Docker Buildx CI
 
     on:
       push:
@@ -23,7 +23,7 @@ data:
         runs-on: ubuntu-latest
 
         steps:
-        - name: Build and push with buildctl
+        - name: Build and push with Docker Buildx
           run: |
             set -e
             
@@ -47,14 +47,15 @@ data:
             
             echo "🔨 Building image with tags: $TAGS"
             
-            # Build and push with buildctl
-            buildctl build \
-              --frontend dockerfile.v0 \
-              --local context=/tmp/build \
-              --local dockerfile=/tmp/build \
-              --output type=image,name="$TAGS",push=true \
-              --export-cache type=registry,ref=$IMAGE_BASE:cache \
-              --import-cache type=registry,ref=$IMAGE_BASE:cache
+            # Build and push with Docker Buildx
+            docker buildx build \
+              --platform linux/amd64 \
+              --tag "$IMAGE_BASE:latest" \
+              --tag "$IMAGE_BASE:$BRANCH_NAME-$COMMIT_SHA" \
+              --cache-from type=registry,ref=$IMAGE_BASE:cache \
+              --cache-to type=registry,ref=$IMAGE_BASE:cache,mode=max \
+              --push \
+              /tmp/build
             
             echo "✅ Build completed successfully!"
             echo "📋 Image tags: $TAGS"
