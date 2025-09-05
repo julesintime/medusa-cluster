@@ -164,6 +164,11 @@ spec:
         - sh
         - -c
         - |
+          # Install Node.js for CI/CD workflows
+          echo "📦 Installing Node.js..."
+          apk add --no-cache nodejs npm
+          echo "✅ Node.js installed: $(node --version)"
+          
           # Clean any existing config and re-register with fresh token
           echo "🔧 Cleaning old runner config..."
           rm -f /data/.runner
