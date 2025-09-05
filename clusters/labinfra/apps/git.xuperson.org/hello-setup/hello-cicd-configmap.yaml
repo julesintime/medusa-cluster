@@ -30,6 +30,19 @@ data:
           run: |
             set -e
             
+            # Configure Docker to use DinD daemon with TLS
+            export DOCKER_HOST=tcp://localhost:2376
+            export DOCKER_TLS_VERIFY=1
+            export DOCKER_CERT_PATH=/certs/client
+            
+            # Wait for Docker daemon to be ready
+            echo "🔌 Connecting to Docker daemon..."
+            until docker info >/dev/null 2>&1; do
+              echo "⏳ Waiting for Docker daemon..."
+              sleep 2
+            done
+            echo "✅ Docker daemon is ready"
+            
             # Get commit info for tagging
             COMMIT_SHA=$(git rev-parse --short HEAD)
             BRANCH_NAME="${{ gitea.ref_name }}"

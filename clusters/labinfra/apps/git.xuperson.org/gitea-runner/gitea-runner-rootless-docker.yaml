@@ -99,8 +99,18 @@ spec:
               --labels "$GITEA_RUNNER_LABELS" \
               --no-interactive
             
+            # Create runner config file to properly expose Docker
+            echo "🔧 Creating runner configuration..."
+            cat > /data/.runner.yaml << 'EOFCONFIG'
+            container:
+              network: "host"
+              privileged: false
+              docker_host: "tcp://localhost:2376"
+              options: "--add-host=docker.host:host-gateway"
+            EOFCONFIG
+            
             echo "🚀 Starting runner daemon..."
-            exec act_runner daemon
+            exec act_runner daemon --config /data/.runner.yaml
         env:
         # Docker configuration (following official rootless example)
         - name: DOCKER_HOST
