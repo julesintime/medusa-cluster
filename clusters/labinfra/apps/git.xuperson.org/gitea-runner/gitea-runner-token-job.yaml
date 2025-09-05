@@ -44,7 +44,7 @@ spec:
           done
           
           # Get Gitea pod
-          GITEA_POD=$(kubectl get pods -n gitea -l app.kubernetes.io/name=gitea -o jsonpath='{.items[0].metadata.name}')
+          GITEA_POD=$(kubectl get pods -n gitea -l app=gitea -o jsonpath='{.items[0].metadata.name}')
           
           if [ -z "$GITEA_POD" ]; then
             echo "No Gitea pod found"

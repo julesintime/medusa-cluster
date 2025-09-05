@@ -40,6 +40,70 @@ spec:
       restartPolicy: Always
       serviceAccountName: gitea-runner-init
       initContainers:
+      - name: generate-buildkit-certs
+        image: bitnami/kubectl:latest
+        command:
+        - sh
+        - -c
+        - |
+          # Install openssl
+          apk add --no-cache openssl
+          
+          # Check if secret already exists
+          if kubectl get secret buildkit-daemon-certs -n gitea >/dev/null 2>&1; then
+            echo "Buildkit certificates already exist"
+            exit 0
+          fi
+          
+          echo "Generating buildkit certificates..."
+          
+          # Create temp directory for certs
+          mkdir -p /tmp/certs
+          cd /tmp/certs
+          
+          # Generate CA private key
+          openssl genrsa -out ca-key.pem 4096
+          
+          # Generate CA certificate
+          openssl req -x509 -new -nodes -key ca-key.pem -days 365 -out ca.pem -subj "/CN=buildkit-ca"
+          
+          # Generate server private key
+          openssl genrsa -out cert-key.pem 4096
+          
+          # Generate certificate signing request
+          openssl req -new -key cert-key.pem -out cert.csr -subj "/CN=buildkitd.gitea.svc.cluster.local"
+          
+          # Create ext file for SAN
+          cat > cert.ext << EOF_EXT
+          authorityKeyIdentifier=keyid,issuer
+          basicConstraints=CA:FALSE
+          keyUsage = digitalSignature, nonRepudiation, keyEncipherment, dataEncipherment
+          subjectAltName = @alt_names
+          
+          [alt_names]
+          DNS.1 = buildkitd.gitea.svc.cluster.local
+          DNS.2 = buildkitd
+          IP.1 = 127.0.0.1
+          EOF_EXT
+          
+          # Generate server certificate
+          openssl x509 -req -in cert.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial -out cert.pem -days 365 -extfile cert.ext
+          
+          # Create the secret
+          kubectl create secret generic buildkit-daemon-certs \
+            --from-file=ca.pem \
+            --from-file=cert.pem \
+            --from-file=key.pem=cert-key.pem \
+            -n gitea
+          
+          echo "Buildkit certificates generated and secret created"
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
       - name: wait-for-secret
         image: bitnami/kubectl:latest
         command:
@@ -81,6 +145,7 @@ spec:
       - name: buildkit-certs
         secret:
           secretName: buildkit-daemon-certs
+          optional: true
       - name: runner-home
         emptyDir: {}
       - name: runner-runtime
