@@ -13,39 +13,55 @@ data:
     #!/bin/sh
     set -e
 
-    echo "🔄 Creating Gitea admin API token..."
+    echo "🔄 Syncing Gitea admin API token..."
 
     # Get admin credentials from Kubernetes secrets
     ADMIN_USER=$(kubectl get secret gitea-admin-secrets -n gitea -o jsonpath='{.data.username}' | base64 -d)
     ADMIN_PASS=$(kubectl get secret gitea-admin-secrets -n gitea -o jsonpath='{.data.password}' | base64 -d)
 
     echo "📡 Testing Gitea API connection..."
-    if ! curl -s -f -u "$ADMIN_USER:$ADMIN_PASS" "http://gitea-http:3000/api/v1/version" >/dev/null; then
-      echo "❌ Cannot connect to Gitea API"
-      exit 1
-    fi
+    until curl -s -f -u "$ADMIN_USER:$ADMIN_PASS" "http://gitea-http:3000/api/v1/version" >/dev/null; do
+      echo "   Gitea API not ready, waiting 5 seconds..."
+      sleep 5
+    done
     echo "✅ Gitea API is accessible"
 
-    # Check for existing admin API token
+    # SYNC Logic: Check existing K8s secret first
     if kubectl get secret gitea-admin-api-token -n gitea >/dev/null 2>&1; then
-      EXISTING_TOKEN=$(kubectl get secret gitea-admin-api-token -n gitea -o jsonpath='{.data.token}' | base64 -d)
+      EXISTING_TOKEN=$(kubectl get secret gitea-admin-api-token -n gitea -o jsonpath='{.data.token}' | base64 -d 2>/dev/null || echo "")
+      
       if [ ! -z "$EXISTING_TOKEN" ] && [ ${#EXISTING_TOKEN} -eq 40 ]; then
+        # Test if existing token still works
         if curl -s -f -H "Authorization: token $EXISTING_TOKEN" "http://gitea-http:3000/api/v1/user" >/dev/null; then
-          echo "✅ Valid admin token already exists (length: ${#EXISTING_TOKEN})"
+          echo "✅ Existing admin token is valid and working (length: ${#EXISTING_TOKEN})"
+          echo "🔄 SYNC: No update needed"
           exit 0
+        else
+          echo "⚠️  Existing token is invalid, needs update"
         fi
+      else
+        echo "⚠️  Invalid token in K8s secret, needs update"
       fi
-      echo "⚠️  Existing token is invalid, will create new one"
+    else
+      echo "📋 No admin token secret exists, will create"
     fi
 
-    # Clean up existing tokens in Gitea
-    echo "🧹 Cleaning up existing API tokens..."
+    # Get list of existing tokens in Gitea
+    echo "📋 Checking existing tokens in Gitea..."
     TOKENS_RESPONSE=$(curl -s -u "$ADMIN_USER:$ADMIN_PASS" "http://gitea-http:3000/api/v1/users/$ADMIN_USER/tokens")
+
+    if [ $? -ne 0 ] || [ -z "$TOKENS_RESPONSE" ]; then
+      echo "❌ Failed to fetch tokens from Gitea API"
+      exit 1
+    fi
+
+    # Clean up existing tokens to ensure only one exists
     TOKEN_IDS=$(echo "$TOKENS_RESPONSE" | grep -o '"id":[0-9]*' | sed 's/"id"://' || echo "")
 
     if [ ! -z "$TOKEN_IDS" ]; then
-      echo "   Deleting existing tokens..."
+      echo "🧹 Cleaning up existing tokens to ensure single token..."
       for token_id in $TOKEN_IDS; do
+        echo "   Deleting token ID: $token_id"
         curl -s -X DELETE "http://gitea-http:3000/api/v1/users/$ADMIN_USER/tokens/$token_id" \
           -u "$ADMIN_USER:$ADMIN_PASS" >/dev/null
       done
@@ -85,7 +101,7 @@ data:
       --namespace=gitea \
       --dry-run=client -o yaml | kubectl apply -f -
 
-    echo "💾 Admin token stored in secret 'gitea-admin-api-token'"
+    echo "💾 SYNC: Admin token synced to secret 'gitea-admin-api-token'"
 ---
 apiVersion: batch/v1
 kind: CronJob

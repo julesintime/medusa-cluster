@@ -17,17 +17,17 @@ data:
 
     # Wait for admin API token to be available
     echo "📦 Waiting for admin API token..."
-    until kubectl get secret gitea-admin-api-token -n gitea >/dev/null 2>&1; do
+    until /usr/local/bin/kubectl get secret gitea-admin-api-token -n gitea >/dev/null 2>&1; do
       echo "   Admin token not ready, waiting 10 seconds..."
       sleep 10
     done
 
-    ADMIN_TOKEN=$(kubectl get secret gitea-admin-api-token -n gitea -o jsonpath='{.data.token}' | base64 -d)
+    ADMIN_TOKEN=$(/usr/local/bin/kubectl get secret gitea-admin-api-token -n gitea -o jsonpath='{.data.token}' | base64 -d)
     echo "✅ Got admin API token (length: ${#ADMIN_TOKEN})"
 
     # Get admin credentials for registration token API
-    ADMIN_USER=$(kubectl get secret gitea-admin-secrets -n gitea -o jsonpath='{.data.username}' | base64 -d)
-    ADMIN_PASS=$(kubectl get secret gitea-admin-secrets -n gitea -o jsonpath='{.data.password}' | base64 -d)
+    ADMIN_USER=$(/usr/local/bin/kubectl get secret gitea-admin-secrets -n gitea -o jsonpath='{.data.username}' | base64 -d)
+    ADMIN_PASS=$(/usr/local/bin/kubectl get secret gitea-admin-secrets -n gitea -o jsonpath='{.data.password}' | base64 -d)
 
     # Test Gitea API connection
     echo "📡 Testing Gitea API connection..."
@@ -58,9 +58,9 @@ data:
 
     # Clean up old runner secret and create new one
     echo "🧹 Cleaning up old runner registration..."
-    kubectl delete secret runner-secret -n gitea --ignore-not-found=true
+    /usr/local/bin/kubectl delete secret runner-secret -n gitea --ignore-not-found=true
 
-    kubectl create secret generic runner-secret \
+    /usr/local/bin/kubectl create secret generic runner-secret \
       --from-literal=token="$REGISTRATION_TOKEN" \
       --namespace=gitea
 
@@ -109,6 +109,15 @@ spec:
       restartPolicy: Always
       serviceAccountName: gitea-runner-init
       initContainers:
+      - name: install-kubectl
+        image: bitnami/kubectl:latest
+        command:
+        - sh
+        - -c
+        - cp /opt/bitnami/kubectl/bin/kubectl /shared/kubectl && chmod +x /shared/kubectl
+        volumeMounts:
+        - name: kubectl-binary
+          mountPath: /shared
       - name: setup-runner-token
         image: alpine/curl:latest
         command: ["/scripts/runner-setup.sh"]
@@ -125,15 +134,6 @@ spec:
           limits:
             memory: "128Mi"
             cpu: "200m"
-      - name: install-kubectl
-        image: bitnami/kubectl:latest
-        command:
-        - sh
-        - -c
-        - cp /opt/bitnami/kubectl/bin/kubectl /shared/kubectl && chmod +x /shared/kubectl
-        volumeMounts:
-        - name: kubectl-binary
-          mountPath: /shared
       - name: install-buildctl
         image: moby/buildkit:master
         command: 
