@@ -23,19 +23,16 @@ data:
         runs-on: ubuntu-latest
 
         steps:
+        - name: Checkout code
+          uses: actions/checkout@v4
+          
         - name: Build and push with Docker Buildx
           run: |
             set -e
             
-            # Clone the repository
-            echo "📦 Cloning repository..."
-            git clone ${{ gitea.repository_clone_url }} /tmp/build
-            cd /tmp/build
-            git checkout ${{ gitea.sha }}
-            
             # Get commit info for tagging
             COMMIT_SHA=$(git rev-parse --short HEAD)
-            BRANCH_NAME=${{ gitea.ref_name }}
+            BRANCH_NAME="${{ gitea.ref_name }}"
             IMAGE_BASE="registry.k3s.internal/hello-app"
             
             # Build tags
@@ -46,6 +43,9 @@ data:
             fi
             
             echo "🔨 Building image with tags: $TAGS"
+            echo "📁 Working directory: $(pwd)"
+            echo "📋 Directory contents:"
+            ls -la
             
             # Build and push with Docker Buildx
             docker buildx build \
@@ -55,7 +55,7 @@ data:
               --cache-from type=registry,ref=$IMAGE_BASE:cache \
               --cache-to type=registry,ref=$IMAGE_BASE:cache,mode=max \
               --push \
-              /tmp/build
+              .
             
             echo "✅ Build completed successfully!"
             echo "📋 Image tags: $TAGS"
