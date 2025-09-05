@@ -20,5 +20,3 @@ spec:
       kind: Deployment
       name: external-dns
       namespace: cloudflare
-  dependsOn:
-    - name: infisical-operator
