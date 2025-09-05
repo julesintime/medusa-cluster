@@ -2,7 +2,7 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: act-runner-vol
+  name: act-runner-dind-vol
   namespace: gitea
 spec:
   accessModes:
@@ -34,13 +34,11 @@ spec:
       serviceAccountName: gitea-runner-init
       restartPolicy: Always
       volumes:
-      - name: docker-certs
-        emptyDir: {}
-      - name: docker-client
+      - name: docker-sock
         emptyDir: {}
       - name: runner-data
         persistentVolumeClaim:
-          claimName: act-runner-vol
+          claimName: act-runner-dind-vol
       
       initContainers:
       # Wait for runner registration token
@@ -87,7 +85,7 @@ spec:
         command: ["sh", "-c", "while ! docker version >/dev/null 2>&1; do echo 'waiting for docker daemon...'; sleep 5; done; /usr/local/bin/run.sh"]
         env:
         - name: DOCKER_HOST
-          value: tcp://localhost:2375
+          value: unix:///var/run/docker.sock
         - name: GITEA_INSTANCE_URL
           value: https://git.xuperson.org
         - name: GITEA_RUNNER_REGISTRATION_TOKEN
@@ -96,16 +94,13 @@ spec:
               name: runner-secret
               key: token
         - name: GITEA_RUNNER_NAME
-          value: "k3s-dind-runner"
+          value: "k3s-dind-runner-unique"
         - name: GITEA_RUNNER_LABELS
           value: "ubuntu-latest:docker://docker.gitea.com/runner-images:ubuntu-latest,ubuntu-22.04:docker://docker.gitea.com/runner-images:ubuntu-22.04,docker:host"
         
         volumeMounts:
-        - name: docker-certs
-          mountPath: /certs
-        - name: docker-client
-          mountPath: /usr/local/bin/docker
-          subPath: docker
+        - name: docker-sock
+          mountPath: /var/run/docker.sock
         - name: runner-data
           mountPath: /data
         
@@ -146,11 +141,14 @@ spec:
           value: ""
         - name: DOCKER_DRIVER
           value: overlay2
+        args:
+        - --host=tcp://0.0.0.0:2375
+        - --host=unix:///var/run/docker.sock
         securityContext:
           privileged: true
         volumeMounts:
-        - name: docker-certs
-          mountPath: /certs
+        - name: docker-sock
+          mountPath: /var/run/docker.sock
         readinessProbe:
           exec:
             command:
