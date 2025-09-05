@@ -18,7 +18,7 @@
     - name: Fetch GitHub configuration from Infisical
       ansible.builtin.shell: |
         infisical secrets get {{ item.key }} --env=prod --plain --silent
-      register: "{{ item.var }}"
+      register: infisical_secrets_raw
       loop:
         - { key: "GITHUB_OWNER", var: "github_owner_result" }
         - { key: "GITHUB_REPO", var: "github_repo_result" }  
@@ -30,10 +30,10 @@
       
     - name: Set secrets as facts
       ansible.builtin.set_fact:
-        github_owner: "{{ github_owner_result.stdout }}"
-        github_repo: "{{ github_repo_result.stdout }}"
-        github_token: "{{ github_token_result.stdout }}"
-        infisical_service_token: "{{ infisical_token_result.stdout }}"
+        github_owner: "{{ infisical_secrets_raw.results[0].stdout }}"
+        github_repo: "{{ infisical_secrets_raw.results[1].stdout }}"
+        github_token: "{{ infisical_secrets_raw.results[2].stdout }}"
+        infisical_service_token: "{{ infisical_secrets_raw.results[3].stdout }}"
         
     - name: Verify all required secrets are available
       ansible.builtin.debug:
