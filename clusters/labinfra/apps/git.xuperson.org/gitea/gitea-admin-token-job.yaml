@@ -68,9 +68,17 @@ spec:
 
               if [ "$TOKEN_COUNT" -gt 0 ]; then
                 echo "✅ Found $TOKEN_COUNT existing token(s), using first one..."
+                # Try sha1 first, then fall back to token_last_eight or create new
                 ADMIN_TOKEN=$(echo "$TOKENS" | jq -r '.[0].sha1' 2>/dev/null || echo "")
-                TOKEN_NAME=$(echo "$TOKENS" | jq -r '.[0].name' 2>/dev/null || echo "existing-token")
-              else
+                if [ -z "$ADMIN_TOKEN" ] || [ "$ADMIN_TOKEN" = "null" ] || [ "$ADMIN_TOKEN" = "" ]; then
+                  echo "⚠️  Token exists but sha1 is empty, will create new token..."
+                  TOKEN_COUNT=0
+                else
+                  TOKEN_NAME=$(echo "$TOKENS" | jq -r '.[0].name' 2>/dev/null || echo "existing-token")
+                fi
+              fi
+
+              if [ "$TOKEN_COUNT" = "0" ]; then
                 echo "🏗️ No tokens found, creating new one..."
                 RESPONSE=$(curl -s -X POST "http://gitea-http:3000/api/v1/users/$GITEA_ADMIN_USERNAME/tokens" \
                   -H "Content-Type: application/json" \
