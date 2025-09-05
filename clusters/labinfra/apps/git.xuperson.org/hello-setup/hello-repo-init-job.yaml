@@ -63,14 +63,15 @@ data:
     GITEA_TOKENS=""
     
     # Method 1: Look for sha1 in JSON
-    if echo "$TOKENS_RESPONSE" | grep -q '"sha1"'; then
-      GITEA_TOKENS=$(echo "$TOKENS_RESPONSE" | grep -o '"sha1":"[^"]*"' | sed 's/"sha1":"//;s/"//' | tr '\n' ' ')
-      echo "   Method 1 - Found tokens: $GITEA_TOKENS"
+    if echo "$TOKENS_RESPONSE" | grep -q '"sha1":"[^"]*[^"]' | head -1; then
+      # Only proceed if we find non-empty sha1 values
+      GITEA_TOKENS=$(echo "$TOKENS_RESPONSE" | grep -o '"sha1":"[^"]*[^"]' | sed 's/"sha1":"//;s/"//' | tr '\n' ' ')
+      echo "   Method 1 - Found tokens with SHA1: $GITEA_TOKENS"
     fi
     
     # Method 2: If method 1 failed, try alternative parsing
     if [ -z "$GITEA_TOKENS" ] && echo "$TOKENS_RESPONSE" | grep -q '"name"'; then
-      echo "   Method 2 - Trying alternative parsing..."
+      echo "   Method 2 - SHA1 parsing failed, trying name-based parsing..."
       # Extract token names and assume we need to delete them
       TOKEN_NAMES=$(echo "$TOKENS_RESPONSE" | grep -o '"name":"[^"]*"' | sed 's/"name":"//;s/"//' | tr '\n' ' ')
       echo "   Found token names: $TOKEN_NAMES"
