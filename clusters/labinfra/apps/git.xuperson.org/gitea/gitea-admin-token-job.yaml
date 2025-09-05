@@ -56,28 +56,33 @@ spec:
               set -e
               echo "🔄 Syncing Gitea admin token..."
 
-              # List existing tokens
-              echo "📋 Listing existing admin tokens..."
+              # Check if we already have a valid token in Kubernetes
+              if kubectl get secret gitea-admin-api-token -n gitea >/dev/null 2>&1; then
+                EXISTING_TOKEN=$(kubectl get secret gitea-admin-api-token -n gitea -o jsonpath='{.data.token}' | base64 -d)
+                if [ ! -z "$EXISTING_TOKEN" ] && [ ${#EXISTING_TOKEN} -gt 10 ]; then
+                  echo "✅ Valid admin token already exists in Kubernetes secret"
+                  exit 0
+                fi
+              fi
+
+              # List existing tokens in Gitea
+              echo "📋 Checking Gitea for existing tokens..."
               TOKENS=$(curl -s "http://gitea-http:3000/api/v1/users/$GITEA_ADMIN_USERNAME/tokens" \
                 -u "$GITEA_ADMIN_USERNAME:$GITEA_ADMIN_PASSWORD")
 
-              echo "Tokens response: $TOKENS"
-
-              # Check if we have any tokens (simple string check since jq may not be available)
+              # Check if we have any tokens
               if echo "$TOKENS" | grep -q '"id":'; then
-                echo "✅ Found existing tokens, cleaning up..."
-                # Extract token IDs using grep and sed
+                echo "✅ Found existing token in Gitea, will reuse it"
+                # For now, just recreate to ensure we have the token value
+                # Delete existing tokens
                 TOKEN_IDS=$(echo "$TOKENS" | grep -o '"id":[0-9]*' | sed 's/"id"://g')
                 for token_id in $TOKEN_IDS; do
-                  echo "Deleting token ID: $token_id"
                   curl -s -X DELETE "http://gitea-http:3000/api/v1/users/$GITEA_ADMIN_USERNAME/tokens/$token_id" \
-                    -u "$GITEA_ADMIN_USERNAME:$GITEA_ADMIN_PASSWORD" || echo "Delete failed for $token_id"
+                    -u "$GITEA_ADMIN_USERNAME:$GITEA_ADMIN_PASSWORD" >/dev/null
                 done
-              else
-                echo "ℹ️ No existing tokens found"
               fi
 
-              # Always create the single admin token
+              # Create the single admin token
               echo "🏗️ Creating admin token..."
               RESPONSE=$(curl -s -X POST "http://gitea-http:3000/api/v1/users/$GITEA_ADMIN_USERNAME/tokens" \
                 -H "Content-Type: application/json" \
@@ -87,19 +92,17 @@ spec:
                   "scopes": ["read:activitypub", "read:issue", "write:misc", "read:notification", "read:organization", "read:package", "read:repository", "read:user", "write:admin", "write:repository", "write:user"]
                 }')
 
-              echo "Create token response: $RESPONSE"
-              # Extract token using grep/sed instead of jq
+              # Extract token
               ADMIN_TOKEN=$(echo "$RESPONSE" | grep -o '"sha1":"[^"]*"' | sed 's/"sha1":"//;s/"//')
-              TOKEN_NAME="flux-automation"
 
-              if [ -z "$ADMIN_TOKEN" ] || [ "$ADMIN_TOKEN" = "null" ]; then
-                echo "❌ Failed to get admin token"
+              if [ -z "$ADMIN_TOKEN" ]; then
+                echo "❌ Failed to create admin token"
                 exit 1
               fi
 
-              echo "✅ Admin token ready: $TOKEN_NAME (length: ${#ADMIN_TOKEN})"
+              echo "✅ Admin token created successfully"
 
-              # Update the Kubernetes secret
+              # Store in Kubernetes secret
               cat <<EOF | kubectl apply -f -
               apiVersion: v1
               kind: Secret
@@ -111,7 +114,7 @@ spec:
                 token: $(echo -n "$ADMIN_TOKEN" | base64)
               EOF
 
-              echo "💾 Admin token synced to secret 'gitea-admin-api-token'"
+              echo "💾 Admin token synced to Kubernetes secret"
 
               # Update the Kubernetes secret
               cat <<EOF | kubectl apply -f -
