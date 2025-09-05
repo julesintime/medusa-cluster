@@ -30,9 +30,11 @@ data:
     # Get or create admin API token
     echo "🔑 Getting admin API token..."
     TOKENS_RESPONSE=$(curl -s -u "$ADMIN_USER:$ADMIN_PASS" "http://gitea-http:3000/api/v1/users/$ADMIN_USER/tokens")
+    echo "Tokens response: $TOKENS_RESPONSE"
     
     # Extract first token if exists
     ADMIN_TOKEN=$(echo "$TOKENS_RESPONSE" | grep -o '"sha1":"[a-f0-9]*"' | head -1 | sed 's/"sha1":"//;s/"//')
+    echo "Extracted token: $ADMIN_TOKEN"
 
     # If no token exists, create one
     if [ -z "$ADMIN_TOKEN" ]; then
@@ -41,8 +43,10 @@ data:
         -H "Content-Type: application/json" \
         -u "$ADMIN_USER:$ADMIN_PASS" \
         -d '{"name": "repo-automation", "scopes": ["all"]}')
+      echo "Create token response: $RESPONSE"
       
       ADMIN_TOKEN=$(echo "$RESPONSE" | grep -o '"sha1":"[a-f0-9]*"' | sed 's/"sha1":"//;s/"//')
+      echo "Created token: $ADMIN_TOKEN"
     fi
 
     if [ -z "$ADMIN_TOKEN" ] || [ ${#ADMIN_TOKEN} -ne 40 ]; then
