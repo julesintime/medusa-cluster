@@ -36,6 +36,8 @@ spec:
       volumes:
       - name: docker-certs
         emptyDir: {}
+      - name: docker-client
+        emptyDir: {}
       - name: runner-data
         persistentVolumeClaim:
           claimName: act-runner-vol
@@ -54,6 +56,23 @@ spec:
               sleep 10
             done
             echo "✅ Found runner-secret! Act-runner can now start."
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "50m"
+          limits:
+            memory: "64Mi"
+            cpu: "100m"
+      # Install Docker client
+      - name: install-docker
+        image: docker:23.0.6
+        command:
+        - sh
+        - -c
+        - cp /usr/local/bin/docker /shared/docker && chmod +x /shared/docker
+        volumeMounts:
+        - name: docker-client
+          mountPath: /shared
         resources:
           requests:
             memory: "32Mi"
@@ -88,6 +107,9 @@ spec:
         volumeMounts:
         - name: docker-certs
           mountPath: /certs
+        - name: docker-client
+          mountPath: /usr/local/bin/docker
+          subPath: docker
         - name: runner-data
           mountPath: /data
         
