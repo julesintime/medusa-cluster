@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: hello-setup
+
+resources:
+  - hello-repo-init-job.yaml
+
+labels:
+  - includeSelectors: true
+    pairs:
+      app.kubernetes.io/name: hello-setup
+      app.kubernetes.io/managed-by: flux
