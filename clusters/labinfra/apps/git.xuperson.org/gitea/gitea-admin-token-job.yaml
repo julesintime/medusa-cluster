@@ -63,18 +63,18 @@ spec:
 
               echo "Tokens response: $TOKENS"
 
-              # Check if we have any tokens
-              TOKEN_COUNT=$(echo "$TOKENS" | jq '. | length' 2>/dev/null || echo "0")
-              echo "Token count: $TOKEN_COUNT"
-
-              if [ "$TOKEN_COUNT" -gt 0 ]; then
+              # Check if we have any tokens (simple string check since jq may not be available)
+              if echo "$TOKENS" | grep -q '"id":'; then
                 echo "✅ Found existing tokens, cleaning up..."
-                # Delete all existing tokens
-                for token_id in $(echo "$TOKENS" | jq -r '.[].id' 2>/dev/null); do
+                # Extract token IDs using grep and sed
+                TOKEN_IDS=$(echo "$TOKENS" | grep -o '"id":[0-9]*' | sed 's/"id"://g')
+                for token_id in $TOKEN_IDS; do
                   echo "Deleting token ID: $token_id"
                   curl -s -X DELETE "http://gitea-http:3000/api/v1/users/$GITEA_ADMIN_USERNAME/tokens/$token_id" \
                     -u "$GITEA_ADMIN_USERNAME:$GITEA_ADMIN_PASSWORD" || echo "Delete failed for $token_id"
                 done
+              else
+                echo "ℹ️ No existing tokens found"
               fi
 
               # Always create the single admin token
@@ -88,7 +88,8 @@ spec:
                 }')
 
               echo "Create token response: $RESPONSE"
-              ADMIN_TOKEN=$(echo "$RESPONSE" | jq -r '.sha1' 2>/dev/null || echo "")
+              # Extract token using grep/sed instead of jq
+              ADMIN_TOKEN=$(echo "$RESPONSE" | grep -o '"sha1":"[^"]*"' | sed 's/"sha1":"//;s/"//')
               TOKEN_NAME="flux-automation"
 
               if [ -z "$ADMIN_TOKEN" ] || [ "$ADMIN_TOKEN" = "null" ]; then
