@@ -126,17 +126,17 @@ spec:
         fsGroup: 1000
       containers:
       - name: runner
-        image: gitea/act_runner:nightly-dind-rootless
+        image: node:22-alpine
         imagePullPolicy: Always
         command:
         - sh
         - -c
         - |
-          echo "Installing Node.js..."
-          apk add --no-cache nodejs npm
-          echo "Node.js installed successfully"
-          node --version
-          npm --version
+          echo "Installing Gitea runner..."
+          apk add --no-cache curl
+          curl -L https://dl.gitea.com/act_runner/0.2.13/act_runner-0.2.13-linux-amd64 -o /usr/local/bin/act_runner
+          chmod +x /usr/local/bin/act_runner
+          echo "Gitea runner installed successfully"
           echo "Starting Gitea runner..."
           /usr/local/bin/act_runner daemon
         env:
