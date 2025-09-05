@@ -1,0 +1,247 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: act-runner
+  namespace: gitea
+  labels:
+    app: act-runner
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: act-runner
+  template:
+    metadata:
+      labels:
+        app: act-runner
+    spec:
+      serviceAccountName: gitea-runner-init
+      
+      initContainers:
+      # Generate buildkit certificates
+      - name: generate-buildkit-certs
+        image: bitnami/kubectl:latest
+        command:
+          - sh
+          - -c
+          - |
+            # Install openssl
+            apk add --no-cache openssl
+            
+            # Check if secret already exists
+            if kubectl get secret buildkit-daemon-certs -n gitea >/dev/null 2>&1; then
+              echo "Buildkit certificates already exist"
+              exit 0
+            fi
+            
+            echo "Generating buildkit certificates..."
+            
+            # Create temp directory for certs
+            mkdir -p /tmp/certs
+            cd /tmp/certs
+            
+            # Generate CA private key
+            openssl genrsa -out ca-key.pem 4096
+            
+            # Generate CA certificate
+            openssl req -x509 -new -nodes -key ca-key.pem -days 365 -out ca.pem -subj "/CN=buildkit-ca"
+            
+            # Generate server private key
+            openssl genrsa -out cert-key.pem 4096
+            
+            # Generate certificate signing request
+            openssl req -new -key cert-key.pem -out cert.csr -subj "/CN=buildkitd.gitea.svc.cluster.local"
+            
+            # Create ext file for SAN
+            cat > cert.ext << EOF_EXT
+            authorityKeyIdentifier=keyid,issuer
+            basicConstraints=CA:FALSE
+            keyUsage = digitalSignature, nonRepudiation, keyEncipherment, dataEncipherment
+            subjectAltName = @alt_names
+            
+            [alt_names]
+            DNS.1 = buildkitd.gitea.svc.cluster.local
+            DNS.2 = buildkitd
+            IP.1 = 127.0.0.1
+            EOF_EXT
+            
+            # Generate server certificate
+            openssl x509 -req -in cert.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial -out cert.pem -days 365 -extfile cert.ext
+            
+            # Create the secret
+            kubectl create secret generic buildkit-daemon-certs \
+              --from-file=ca.pem \
+              --from-file=cert.pem \
+              --from-file=key.pem=cert-key.pem \
+              -n gitea
+            
+            echo "Buildkit certificates generated and secret created"
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+
+      # Wait for runner registration token
+      - name: wait-for-secret
+        image: bitnami/kubectl:latest
+        command:
+          - /bin/bash
+          - -c
+          - |
+            echo "🔍 Waiting for gitea-runner-token to be created by bootstrap job..."
+            while ! kubectl get secret gitea-runner-token -n gitea >/dev/null 2>&1; do
+              echo "   Secret not found, waiting 10 seconds..."
+              sleep 10
+            done
+            echo "✅ Found gitea-runner-token! Act-runner can now start."
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "50m"
+          limits:
+            memory: "64Mi"
+            cpu: "100m"
+
+      # Install buildctl binary
+      - name: install-buildctl
+        image: moby/buildkit:master
+        command:
+          - sh
+          - -c
+          - |
+            cp /usr/bin/buildctl /shared/buildctl
+            chmod +x /shared/buildctl
+        volumeMounts:
+        - name: buildctl-binary
+          mountPath: /shared
+
+      volumes:
+      - name: runner-data
+        persistentVolumeClaim:
+          claimName: act-runner-vol
+      - name: cache-dir
+        emptyDir: {}
+      - name: buildctl-binary
+        emptyDir: {}
+      - name: buildkit-certs
+        secret:
+          secretName: buildkit-daemon-certs
+          optional: true
+      - name: runner-home
+        emptyDir: {}
+      - name: runner-runtime
+        emptyDir: {}
+      - name: runner-tmp
+        emptyDir: {}
+      - name: runner-docker-config
+        emptyDir: {}
+      - name: docker-sock
+        hostPath:
+          path: /var/run/docker.sock
+          type: Socket
+      
+      securityContext:
+        fsGroup: 1000
+        
+      containers:
+      # Main runner container - simplified without DinD
+      - name: runner
+        image: gitea/act_runner:nightly
+        workingDir: /data
+        command: 
+        - sh
+        - -c
+        - |
+          # Install Docker client (for host Docker socket access)
+          echo "📦 Installing Docker client..."
+          apk add --no-cache docker-cli
+          
+          # Test Docker connection
+          echo "🔍 Testing Docker connection..."
+          docker version
+          
+          # Clean any existing config and re-register with fresh token
+          echo "🔧 Cleaning old runner config..."
+          rm -f /data/.runner
+          
+          echo "🔐 Registering runner with fresh token..."
+          act_runner register \
+            --instance "$GITEA_INSTANCE_URL" \
+            --token "$GITEA_RUNNER_REGISTRATION_TOKEN" \
+            --name "$GITEA_RUNNER_NAME" \
+            --labels "$GITEA_RUNNER_LABELS" \
+            --no-interactive
+          
+          echo "🚀 Starting runner daemon..."
+          exec act_runner daemon
+        env:
+        - name: HOME
+          value: "/home/runner"
+        - name: USER
+          value: "runner"
+        - name: XDG_RUNTIME_DIR
+          value: "/run/user/1000"
+        - name: TMPDIR
+          value: "/home/runner/.local/tmp"
+        - name: DOCKER_CONFIG
+          value: "/home/runner/.local/share/docker"
+        - name: BUILDKIT_HOST
+          value: "tcp://buildkitd.gitea.svc.cluster.local:1235"
+        - name: GITEA_INSTANCE_URL
+          value: "https://git.xuperson.org"
+        - name: GITEA_RUNNER_REGISTRATION_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: runner-secret
+              key: token
+        - name: GITEA_RUNNER_NAME
+          value: "minikube-runner-host"
+        - name: GITEA_RUNNER_LABELS
+          value: "ubuntu-latest:docker://node:18-alpine,ubuntu-22.04:docker://node:18-alpine,buildkit:host"
+        volumeMounts:
+        - name: runner-data
+          mountPath: /data
+        - name: cache-dir
+          mountPath: /.cache
+        - name: buildctl-binary
+          mountPath: /usr/local/bin/buildctl
+          subPath: buildctl
+        - name: buildkit-certs
+          mountPath: /buildkit-certs
+          readOnly: true
+        - name: runner-home
+          mountPath: /home/runner
+        - name: runner-runtime
+          mountPath: /run/user/1000
+        - name: runner-tmp
+          mountPath: /home/runner/.local/tmp
+        - name: runner-docker-config
+          mountPath: /home/runner/.local/share/docker
+        - name: docker-sock
+          mountPath: /var/run/docker.sock
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: 1500m
+            memory: 2Gi
+        livenessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - ps aux | grep -v grep | grep act_runner
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - ps aux | grep -v grep | grep act_runner
+          initialDelaySeconds: 10
+          periodSeconds: 10
