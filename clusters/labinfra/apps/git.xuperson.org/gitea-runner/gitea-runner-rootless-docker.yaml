@@ -121,7 +121,7 @@ spec:
         - name: GITEA_RUNNER_NAME
           value: "k3s-rootless-runner"
         - name: GITEA_RUNNER_LABELS
-          value: "ubuntu-latest:docker://node:18-alpine,ubuntu-22.04:docker://node:18-alpine,docker:host"
+          value: "ubuntu-latest:docker://docker.gitea.com/runner-images:ubuntu-latest,ubuntu-22.04:docker://docker.gitea.com/runner-images:ubuntu-22.04,docker:host"
         
         securityContext:
           # Following official rootless example - privileged for DinD

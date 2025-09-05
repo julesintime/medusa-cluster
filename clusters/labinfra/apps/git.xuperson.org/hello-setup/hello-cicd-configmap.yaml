@@ -21,27 +21,11 @@ data:
     jobs:
       build:
         runs-on: ubuntu-latest
-        container: node:18-alpine
 
         steps:
         - name: Build and push with Docker Buildx
-          shell: sh
           run: |
             set -e
-            
-            # Install required tools for Alpine/minimal containers
-            if command -v apk >/dev/null 2>&1; then
-              echo "🔧 Installing required packages (Alpine)..."
-              apk add --no-cache git
-            elif command -v apt-get >/dev/null 2>&1; then
-              echo "🔧 Installing required packages (Debian/Ubuntu)..."
-              apt-get update && apt-get install -y git
-            elif command -v yum >/dev/null 2>&1; then
-              echo "🔧 Installing required packages (RedHat/CentOS)..."
-              yum install -y git
-            else
-              echo "⚠️ Package manager not found, assuming git is available"
-            fi
             
             # Clone the repository
             echo "📦 Cloning repository..."
