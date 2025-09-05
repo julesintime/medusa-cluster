@@ -96,6 +96,12 @@ data:
     mkdir -p "$TEMP_DIR"
     cd "$TEMP_DIR"
 
+    # Install git if not available
+    if ! command -v git >/dev/null 2>&1; then
+      echo "📦 Installing git..."
+      apk add --no-cache git
+    fi
+
     # Initialize git configuration
     git config --global user.name "$ADMIN_USER"
     git config --global user.email "$ADMIN_USER@xuperson.org"
