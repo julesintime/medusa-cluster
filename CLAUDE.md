@@ -197,7 +197,7 @@ clusters/labinfra/apps/git.xuperson.org/hello/
 - **✅ Flux Image Automation**: Auto-detects new images and updates deployments
 - **✅ Service Domain Usage**: Uses `gitea-http.gitea.svc.cluster.local:3000` (not static IPs)
 - **✅ External Registry Pull**: Flux pulls from `git.xuperson.org` via Cloudflare
-- **✅ Secure Credentials**: Registry authentication via Infisical secrets (no hardcoded credentials)
+- **✅ Demo Credentials**: Registry authentication via static demo password (production apps use Infisical)
 
 ### Using Hello as Boilerplate
 
@@ -223,7 +223,7 @@ cp -r clusters/labinfra/apps/git.xuperson.org/hello clusters/labinfra/apps/git.x
 # - Copy apps/hello.xuperson.org/ structure
 # - Update image references, domain names, namespaces
 # - Configure Flux ImageRepository, ImagePolicy, ImageUpdateAutomation
-# - Add registry credentials to Infisical: MYAPP_REGISTRY_AUTH
+# - For production: Create registry InfisicalSecret (hello uses static demo credentials)
 
 # 6. Add to git.xuperson.org kustomization
 echo "  - myapp" >> clusters/labinfra/apps/git.xuperson.org/kustomization.yaml

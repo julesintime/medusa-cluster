@@ -8,4 +8,4 @@ resources:
   - hello-ingress.yaml
   - hello-imagerepository.yaml
   - hello-imageupdateautomation.yaml
-  - hello-infisical-secrets.yaml
+  - hello-registry-secret.yaml
