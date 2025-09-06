@@ -5,7 +5,9 @@ metadata:
   name: git-xuperson-org
 
 resources:
-  # Deploy gitea first (all gitea components)
+  # Deploy Infisical secrets first (required by gitea)
+  - gitea-admin-infisical-secrets.yaml
+  # Deploy gitea (depends on Infisical secrets)
   - gitea
   # Then deploy runner (depends on gitea being ready)
   - runner

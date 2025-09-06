@@ -370,10 +370,16 @@ on:
 
 #### 3. Image Registry (Gitea Packages)
 
-- **Internal Access**: `gitea-http.gitea.svc.cluster.local:3000` (BuildKit pushes)
-- **External Access**: `git.xuperson.org` (Flux pulls via Cloudflare tunnel)
-- **Authentication**: Admin credentials stored in Kubernetes secrets
+**Access Pattern Architecture**:
+- **Internal Push**: `gitea-http.gitea.svc.cluster.local:3000` (BuildKit → Registry)
+- **External Pull**: `git.xuperson.org` (Flux ← Registry via Cloudflare tunnel)
+- **Authentication**: Infisical-managed Gitea admin credentials
 - **Tags**: Maintains `latest`, `cache`, and commit-specific tags
+
+**Critical: Cloudflare Tunnel Limitations**
+- ✅ **Egress (Pull)**: Works perfectly for Flux pulling images from external domain
+- ❌ **Ingress (Push)**: Has issues with inbound traffic for container pushes
+- **Solution**: BuildKit pushes internally, Flux pulls externally using same credentials
 
 #### 4. Flux CD Image Automation
 
@@ -406,16 +412,22 @@ When Flux detects a new image:
 
 ### Registry Authentication
 
-**Critical**: The registry secret must use actual Gitea admin credentials:
+**Cloud-Native Approach**: All registry authentication uses Infisical-managed secrets:
 
 ```bash
-# Get current admin credentials
-ADMIN_USER=$(kubectl get secret gitea-admin-secrets -n gitea -o jsonpath='{.data.username}' | base64 -d)
-ADMIN_PASS=$(kubectl get secret gitea-admin-secrets -n gitea -o jsonpath='{.data.password}' | base64 -d)
+# Store Gitea admin credentials in Infisical (prod environment, root path)
+infisical secrets set GITEA_ADMIN_USERNAME=helloroot --env=prod
+infisical secrets set GITEA_ADMIN_PASSWORD=your_actual_password --env=prod
 
-# Create registry auth string
-AUTH_STRING=$(echo -n "$ADMIN_USER:$ADMIN_PASS" | base64)
+# InfisicalSecret automatically syncs to gitea-admin-secrets and gitea-registry-secret
+# No manual credential management required
 ```
+
+**Automatic Secret Management**:
+- InfisicalSecret syncs credentials to `gitea-admin-secrets` (for admin operations)
+- InfisicalSecret syncs credentials to `gitea-registry-secret` (for Flux image automation)
+- Both secrets use same Infisical-managed credentials
+- No hardcoded passwords in manifests
 
 ### Troubleshooting Container Image Issues
 
@@ -430,11 +442,20 @@ curl -u "helloroot:$ADMIN_PASS" https://git.xuperson.org/v2/helloroot/hello-app/
 
 **Registry Authentication Failures**:
 ```bash
-# Check registry secret
+# Check Infisical secret synchronization
+kubectl get infisicalsecrets -A
+kubectl describe infisicalsecret gitea-registry-credentials -n hello
+
+# Check synced registry secret
 kubectl get secret gitea-registry-secret -n hello -o yaml
 
-# Test external registry access
-curl -u "helloroot:$ADMIN_PASS" https://git.xuperson.org/v2/_catalog
+# Test external registry access (get credentials from synced secret)
+ADMIN_USER=$(kubectl get secret gitea-admin-secrets -n gitea -o jsonpath='{.data.username}' | base64 -d)
+ADMIN_PASS=$(kubectl get secret gitea-admin-secrets -n gitea -o jsonpath='{.data.password}' | base64 -d)
+curl -u "$ADMIN_USER:$ADMIN_PASS" https://git.xuperson.org/v2/_catalog
+
+# Verify internal registry access
+curl -u "$ADMIN_USER:$ADMIN_PASS" http://gitea-http.gitea.svc.cluster.local:3000/v2/_catalog
 ```
 
 **Flux Image Automation Issues**:

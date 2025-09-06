@@ -197,7 +197,7 @@ clusters/labinfra/apps/git.xuperson.org/hello/
 - **✅ Flux Image Automation**: Auto-detects new images and updates deployments
 - **✅ Service Domain Usage**: Uses `gitea-http.gitea.svc.cluster.local:3000` (not static IPs)
 - **✅ External Registry Pull**: Flux pulls from `git.xuperson.org` via Cloudflare
-- **✅ Demo Credentials**: Registry authentication via static demo password (production apps use Infisical)
+- **✅ Infisical Integration**: Registry authentication via Infisical-managed Gitea admin credentials
 
 ### Using Hello as Boilerplate
 
@@ -223,7 +223,7 @@ cp -r clusters/labinfra/apps/git.xuperson.org/hello clusters/labinfra/apps/git.x
 # - Copy apps/hello.xuperson.org/ structure
 # - Update image references, domain names, namespaces
 # - Configure Flux ImageRepository, ImagePolicy, ImageUpdateAutomation
-# - For production: Create registry InfisicalSecret (hello uses static demo credentials)
+# - Registry authentication automatically managed via Infisical
 
 # 6. Add to git.xuperson.org kustomization
 echo "  - myapp" >> clusters/labinfra/apps/git.xuperson.org/kustomization.yaml
@@ -307,6 +307,7 @@ spec:
 ### Common Issues
 
 **Infisical secrets**: Use `prod` environment and root path `/` - shared service token in `infisical-operator` namespace
+**Registry authentication**: All credentials managed via InfisicalSecret - store GITEA_ADMIN_USERNAME and GITEA_ADMIN_PASSWORD in Infisical
 **Service names**: Helm releases create prefixed service names (e.g., `app-postgresql` becomes `app-app-postgresql`)
 **WebSocket apps**: Add NGINX proxy headers and websocket-services annotation
 **DNS**: Use root domain wildcard (`*.xuperson.org`) not subdomain wildcard
@@ -329,6 +330,11 @@ kubectl get secrets -n [namespace] | grep [app-name]
 
 # Verify shared service token
 kubectl get secret infisical-service-token -n infisical-operator
+
+# Check Infisical secret synchronization  
+kubectl get infisicalsecrets -A
+kubectl describe infisicalsecret gitea-admin-credentials -n gitea
+kubectl describe infisicalsecret gitea-registry-credentials -n hello
 
 # Test external access
 curl -I https://[app-name].xuperson.org
