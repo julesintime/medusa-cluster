@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: hello
-        image: gitea-http.gitea.svc.cluster.local:3000/helloroot/hello-app:main-bc1af83 # {"$imagepolicy": "hello:hello-app"}
+        image: git.xuperson.org/helloroot/hello-app:main-bc1af83 # {"$imagepolicy": "hello:hello-app"}
         ports:
         - containerPort: 3000
         env:
