@@ -51,7 +51,7 @@ spec:
           # Copy Docker client
           cp /usr/local/bin/docker /shared/docker && chmod +x /shared/docker
           # Download and install buildctl
-          wget -O /shared/buildctl https://github.com/moby/buildkit/releases/download/v0.12.5/buildctl-linux-amd64
+          wget -O /shared/buildctl https://github.com/moby/buildkit/releases/download/v0.16.0/buildctl-linux-amd64
           chmod +x /shared/buildctl
           echo "✅ Installed Docker client and buildctl"
           ls -la /shared/
