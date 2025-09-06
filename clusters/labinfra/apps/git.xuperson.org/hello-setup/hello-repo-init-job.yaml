@@ -254,7 +254,7 @@ data:
     cp /app-code/Dockerfile .
     cp /app-code/index.js .
     cp /app-code/README.md .
-    cp /cicd-workflow/docker-buildx-ci.yml .gitea/workflows/
+    cp /cicd-workflow/buildkit-ci.yml .gitea/workflows/
 
 
 
