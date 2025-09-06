@@ -1,4 +1,3 @@
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -18,7 +17,7 @@ spec:
     spec:
       containers:
       - name: hello
-        image: git.xuperson.org/giteaadmin/hello-app:latest # {"$imagepolicy": "hello:hello-app"}
+        image: git.xuperson.org/giteaadmin/hello-app:main-e72d2bc # {"$imagepolicy": "hello:hello-app"}
         ports:
         - containerPort: 3000
         env:
