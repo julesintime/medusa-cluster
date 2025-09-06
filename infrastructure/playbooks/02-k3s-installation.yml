@@ -48,6 +48,11 @@
           - lsb-release
         state: present
         update_cache: true
+        lock_timeout: 120  # Wait up to 2 minutes for apt lock
+      register: apt_install
+      retries: 5
+      delay: 10
+      until: apt_install is succeeded
 
     # Install Docker from official Docker repository
     # - name: Add Docker's official GPG key
@@ -88,6 +93,29 @@
         value: '1'
         state: present
         reload: true
+
+    - name: Check for running apt processes
+      shell: pgrep -f apt
+      register: apt_processes
+      ignore_errors: true
+      changed_when: false
+
+    - name: Wait for apt processes to finish (if any)
+      wait_for:
+        timeout: 30
+      when: apt_processes.stdout != ""
+
+    - name: Remove stale apt locks (if any)
+      shell: |
+        rm -f /var/lib/dpkg/lock-frontend
+        rm -f /var/lib/dpkg/lock
+        dpkg --configure -a
+      when: apt_processes.stdout == ""
+      ignore_errors: true
+
+    - name: Fix any broken packages
+      shell: apt-get --fix-broken install -y
+      ignore_errors: true
 
     # First control plane node - initialize cluster
     - name: Install K3s on first control plane node (cluster init)
@@ -201,6 +229,11 @@
           - lsb-release
         state: present
         update_cache: true
+        lock_timeout: 120  # Wait up to 2 minutes for apt lock
+      register: apt_install_worker
+      retries: 5
+      delay: 10
+      until: apt_install_worker is succeeded
 
     # Install Docker from official Docker repository
     # - name: Add Docker's official GPG key
@@ -241,6 +274,29 @@
         value: '1'
         state: present
         reload: true
+
+    - name: Check for running apt processes on worker
+      shell: pgrep -f apt
+      register: apt_processes_worker
+      ignore_errors: true
+      changed_when: false
+
+    - name: Wait for apt processes to finish on worker (if any)
+      wait_for:
+        timeout: 30
+      when: apt_processes_worker.stdout != ""
+
+    - name: Remove stale apt locks on worker (if any)
+      shell: |
+        rm -f /var/lib/dpkg/lock-frontend
+        rm -f /var/lib/dpkg/lock
+        dpkg --configure -a
+      when: apt_processes_worker.stdout == ""
+      ignore_errors: true
+
+    - name: Fix any broken packages on worker
+      shell: apt-get --fix-broken install -y
+      ignore_errors: true
 
     - name: Install K3s worker node
       shell: |

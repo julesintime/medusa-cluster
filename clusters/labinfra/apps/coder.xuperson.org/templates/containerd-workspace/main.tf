@@ -11,7 +11,42 @@ terraform {
   }
 }
 
+variable "namespace" {
+  type        = string
+  default     = "coder-workspaces"
+  description = "The Kubernetes namespace to create workspaces in"
+}
+
 data "coder_workspace" "me" {}
+data "coder_workspace_owner" "me" {}
+
+data "coder_parameter" "cpu" {
+  name         = "cpu"
+  display_name = "CPU Cores"
+  description  = "Number of CPU cores for the workspace"
+  type         = "number"
+  default      = 2
+  icon         = "/emojis/1f5a5.png"
+  mutable      = true
+  validation {
+    min = 1
+    max = 8
+  }
+}
+
+data "coder_parameter" "memory" {
+  name         = "memory"
+  display_name = "Memory (GB)"
+  description  = "Amount of memory for the workspace"
+  type         = "number"
+  default      = 4
+  icon         = "/icon/memory.svg"
+  mutable      = true
+  validation {
+    min = 1
+    max = 16
+  }
+}
 
 resource "coder_agent" "main" {
   os   = "linux"
@@ -31,7 +66,17 @@ resource "kubernetes_pod" "main" {
   count = data.coder_workspace.me.start_count
   metadata {
     name      = "coder-${data.coder_workspace.me.id}-${data.coder_workspace.me.name}"
-    namespace = "coder-workspaces"
+    namespace = var.namespace
+    labels = {
+      "app.kubernetes.io/name"     = "coder-workspace"
+      "app.kubernetes.io/instance" = "coder-${data.coder_workspace.me.id}"
+      "app.kubernetes.io/part-of"  = "coder"
+      "com.coder.resource"         = "true"
+      "com.coder.workspace.id"     = data.coder_workspace.me.id
+      "com.coder.workspace.name"   = data.coder_workspace.me.name
+      "com.coder.user.id"          = data.coder_workspace_owner.me.id
+      "com.coder.user.username"    = data.coder_workspace_owner.me.name
+    }
   }
 
   spec {
@@ -63,8 +108,8 @@ resource "kubernetes_pod" "main" {
           memory = "1Gi"
         }
         limits = {
-          cpu    = "2"
-          memory = "4Gi"
+          cpu    = "${data.coder_parameter.cpu.value}"
+          memory = "${data.coder_parameter.memory.value}Gi"
         }
       }
 
@@ -93,5 +138,22 @@ resource "kubernetes_pod" "main" {
       name = "home"
       empty_dir {}
     }
+  }
+}
+
+resource "coder_metadata" "workspace_info" {
+  count       = data.coder_workspace.me.start_count
+  resource_id = coder_agent.main.id
+  item {
+    key   = "CPU"
+    value = "${data.coder_parameter.cpu.value} cores"
+  }
+  item {
+    key   = "Memory"
+    value = "${data.coder_parameter.memory.value}GB"
+  }
+  item {
+    key   = "Docker"
+    value = "Available"
   }
 }

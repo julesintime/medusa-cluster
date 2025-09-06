@@ -26,6 +26,12 @@ spec:
     postgresql:
       enabled: true
     
+    redis:
+      enabled: false
+    
+    redis-cluster:
+      enabled: false
+    
     valkey-cluster:
       enabled: false
     

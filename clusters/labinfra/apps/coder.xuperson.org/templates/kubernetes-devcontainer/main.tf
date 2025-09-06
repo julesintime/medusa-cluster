@@ -27,20 +27,20 @@ data "coder_workspace_owner" "me" {}
 variable "use_kubeconfig" {
   type        = bool
   description = <<-EOF
-  Use host kubeconfig? (true/false)
+Use host kubeconfig? (true/false)
 
-  Set this to false if the Coder host is itself running as a Pod on the same
-  Kubernetes cluster as you are deploying workspaces to.
+Set this to false if the Coder host is itself running as a Pod on the same
+Kubernetes cluster as you are deploying workspaces to.
 
-  Set this to true if the Coder host is running outside the Kubernetes cluster
-  for workspaces.  A valid "~/.kube/config" must be present on the Coder host.
-  EOF
+Set this to true if the Coder host is running outside the Kubernetes cluster
+for workspaces.  A valid "~/.kube/config" must be present on the Coder host.
+EOF
   default     = false
 }
 
 variable "namespace" {
   type        = string
-  default     = "default"
+  default     = "coder-workspaces"
   description = "The Kubernetes namespace to create workspaces in (must exist prior to creating workspaces). If the Coder host is itself running as a Pod on the same Kubernetes cluster as you are deploying workspaces to, set this to the same namespace."
 }
 
@@ -66,7 +66,7 @@ data "coder_parameter" "cpu" {
   mutable      = true
   validation {
     min = 1
-    max = 99999
+    max = 8
   }
   order = 1
 }
@@ -76,12 +76,12 @@ data "coder_parameter" "memory" {
   name         = "memory"
   display_name = "Memory"
   description  = "Memory limit (GiB)."
-  default      = "2"
+  default      = "4"
   icon         = "/icon/memory.svg"
   mutable      = true
   validation {
     min = 1
-    max = 99999
+    max = 16
   }
   order = 2
 }
@@ -96,7 +96,7 @@ data "coder_parameter" "workspaces_volume_size" {
   mutable      = false
   validation {
     min = 1
-    max = 99999
+    max = 100
   }
   order = 3
 }
@@ -111,23 +111,13 @@ data "coder_parameter" "repo" {
   default      = ""
 }
 
-data "coder_parameter" "ai_prompt" {
-  type        = "string"
-  name        = "AI Prompt"
-  display_name = "AI Prompt"
-  default     = ""
-  description = "Write a prompt for Claude Code"
-  mutable     = true
-  order       = 5
-}
-
 data "coder_parameter" "fallback_image" {
   default      = "codercom/enterprise-base:ubuntu"
   description  = "This image runs if the devcontainer fails to build."
   display_name = "Fallback Image"
   mutable      = true
   name         = "fallback_image"
-  order        = 6
+  order        = 5
 }
 
 data "coder_parameter" "devcontainer_builder" {
@@ -140,7 +130,7 @@ EOF
   mutable      = true
   name         = "devcontainer_builder"
   default      = "ghcr.io/coder/envbuilder:latest"
-  order        = 7
+  order        = 6
 }
 
 variable "cache_repo_secret_name" {
@@ -269,12 +259,33 @@ resource "kubernetes_deployment" "main" {
       }
       spec {
         security_context {}
+        
+        # Mount Docker socket for container builds
+        volume {
+          name = "docker-socket"
+          host_path {
+            path = "/var/run/docker.sock"
+            type = "Socket"
+          }
+        }
 
         container {
           name              = "dev"
           image             = var.cache_repo == "" ? local.devcontainer_builder_image : envbuilder_cached_image.cached.0.image
           image_pull_policy = "Always"
           security_context {}
+
+          # Add Docker socket mount
+          volume_mount {
+            mount_path = "/var/run/docker.sock"
+            name       = "docker-socket"
+            read_only  = false
+          }
+
+          env {
+            name  = "DOCKER_HOST"
+            value = "unix:///var/run/docker.sock"
+          }
 
           # Set the environment using cached_image.cached.0.env if the cache repo is enabled.
           # Otherwise, use the local.envbuilder_env.
@@ -386,43 +397,6 @@ resource "coder_agent" "main" {
     interval     = 60
     timeout      = 1
   }
-
-  metadata {
-    display_name = "CPU Usage (Host)"
-    key          = "4_cpu_usage_host"
-    script       = "coder stat cpu --host"
-    interval     = 10
-    timeout      = 1
-  }
-
-  metadata {
-    display_name = "Memory Usage (Host)"
-    key          = "5_mem_usage_host"
-    script       = "coder stat mem --host"
-    interval     = 10
-    timeout      = 1
-  }
-
-  metadata {
-    display_name = "Load Average (Host)"
-    key          = "6_load_host"
-    # get load avg scaled by number of cores
-    script   = <<EOT
-      echo "`cat /proc/loadavg | awk '{ print $1 }'` `nproc`" | awk '{ printf "%0.2f", $1/$2 }'
-    EOT
-    interval = 60
-    timeout  = 1
-  }
-
-  metadata {
-    display_name = "Swap Usage (Host)"
-    key          = "7_swap_host"
-    script       = <<EOT
-      free -b | awk '/^Swap/ { printf("%.1f/%.1f", $3/1024.0/1024.0/1024.0, $2/1024.0/1024.0/1024.0) }'
-    EOT
-    interval     = 10
-    timeout      = 1
-  }
 }
 
 # See https://registry.coder.com/modules/coder/code-server
@@ -447,7 +421,7 @@ module "jetbrains_gateway" {
   default        = "IU"
 
   # Default folder to open when starting a JetBrains IDE
-  folder = "/home/coder"
+  folder = "/workspaces"
 
   # This ensures that the latest non-breaking version of the module gets downloaded, you can also pin the module version to prevent breaking changes in production.
   version = "~> 1.0"
@@ -463,6 +437,7 @@ module "coder-login" {
   source   = "registry.coder.com/coder/coder-login/coder"
   version  = "~> 1.1"
   agent_id = coder_agent.main.id
+  order    = 3
 }
 
 # See https://registry.coder.com/modules/coder/claude-code

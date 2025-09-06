@@ -1,0 +1,8 @@
+name: Containerd Workspace
+description: A workspace with Docker access via containerd socket mounting
+icon: /emojis/1f433.png
+tags:
+  - docker
+  - containerd
+  - development
+  - kubernetes

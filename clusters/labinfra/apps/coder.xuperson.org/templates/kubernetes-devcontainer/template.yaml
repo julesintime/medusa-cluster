@@ -1,0 +1,8 @@
+name: Kubernetes DevContainer
+description: A workspace with devcontainer support and Kubernetes access
+icon: /emojis/1f680.png
+tags:
+  - kubernetes
+  - devcontainer
+  - development
+  - docker
