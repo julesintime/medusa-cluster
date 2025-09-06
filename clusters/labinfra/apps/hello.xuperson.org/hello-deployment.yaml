@@ -17,9 +17,9 @@ spec:
     spec:
       containers:
       - name: hello
-        image: nginx:alpine # temporary fix while CI/CD is being resolved
+        image: git.xuperson.org/helloroot/hello-app:main-ea458e4 # {"$imagepolicy": "hello:hello-app"}
         ports:
-        - containerPort: 80
+        - containerPort: 3000
         env:
         - name: NODE_ENV
           value: "production"
@@ -35,12 +35,12 @@ spec:
         livenessProbe:
           httpGet:
             path: /
-            port: 80
+            port: 3000
           initialDelaySeconds: 10
           periodSeconds: 30
         readinessProbe:
           httpGet:
             path: /
-            port: 80
+            port: 3000
           initialDelaySeconds: 5
           periodSeconds: 10
