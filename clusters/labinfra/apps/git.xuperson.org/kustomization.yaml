@@ -8,11 +8,11 @@ resources:
   # Deploy gitea first (all gitea components)
   - gitea
   # Then deploy runner (depends on gitea being ready)
-  - gitea-runner
+  - runner
   # Deploy CI/CD services integrated with gitea (no registry - using Gitea's built-in registry)
   - buildkit
   # Deploy hello repository setup (creates demo repo with CI/CD workflow)
-  - hello-setup
+  - hello
 
 labels:
   - includeSelectors: false

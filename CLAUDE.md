@@ -171,6 +171,105 @@ echo "  - newapp.xuperson.org" >> clusters/labinfra/apps/kustomization.yaml
 git add . && git commit -m "Add newapp application with Infisical secrets" && git push
 ```
 
+## Hello Application CI/CD Boilerplate
+
+Use the **hello** application as a complete CI/CD boilerplate for new projects with Gitea Actions, BuildKit, and Flux CD automation.
+
+### Hello Application Structure
+
+The `apps/git.xuperson.org/hello/` provides a complete CI/CD setup:
+
+```
+clusters/labinfra/apps/git.xuperson.org/hello/
+├── hello-app-configmap.yaml       # Node.js application code + Dockerfile
+├── hello-cicd-configmap.yaml      # Complete CI/CD workflow script
+├── hello-repo-init-job.yaml       # Gitea repository initialization
+└── kustomization.yaml             # Resource orchestration
+```
+
+### Key Features
+
+- **✅ Complete CI/CD Pipeline**: Code → Build → Push → Deploy via Flux
+- **✅ BuildKit Integration**: Containerless builds using BuildKit daemon
+- **✅ Gitea Actions**: Shell-only workflows (no GitHub Actions dependencies)
+- **✅ Flux Image Automation**: Auto-detects new images and updates deployments
+- **✅ Service Domain Usage**: Uses `gitea-http.gitea.svc.cluster.local:3000` (not static IPs)
+- **✅ External Registry Pull**: Flux pulls from `git.xuperson.org` via Cloudflare
+
+### Using Hello as Boilerplate
+
+```bash
+# 1. Copy hello boilerplate for new project
+cp -r clusters/labinfra/apps/git.xuperson.org/hello clusters/labinfra/apps/git.xuperson.org/myapp
+
+# 2. Update application code in hello-app-configmap.yaml
+# - Change app.js content for your application logic
+# - Update Dockerfile if needed (current: Node.js + npm)
+# - Update package.json dependencies
+
+# 3. Update CI/CD workflow in hello-cicd-configmap.yaml
+# - Change IMAGE_BASE from "hello-app" to "myapp"
+# - Update repository name and workflow triggers
+# - Customize build steps if needed
+
+# 4. Update repository setup in hello-repo-init-job.yaml
+# - Change REPO_NAME from "hello-app" to "myapp"
+# - Update repository description and settings
+
+# 5. Create target deployment at apps/myapp.xuperson.org/
+# - Copy apps/hello.xuperson.org/ structure
+# - Update image references, domain names, namespaces
+# - Configure Flux ImageRepository, ImagePolicy, ImageUpdateAutomation
+
+# 6. Add to git.xuperson.org kustomization
+echo "  - myapp" >> clusters/labinfra/apps/git.xuperson.org/kustomization.yaml
+
+# 7. Add target app to main apps kustomization  
+echo "  - myapp.xuperson.org" >> clusters/labinfra/apps/kustomization.yaml
+
+# 8. Commit and push - complete CI/CD pipeline deploys automatically
+git add . && git commit -m "Add myapp with complete CI/CD pipeline from hello boilerplate" && git push
+```
+
+### Hello Workflow Components
+
+**Repository Initialization** (`hello-repo-init-job.yaml`):
+- Creates Git repository in Gitea with admin credentials
+- Sets up repository description and settings
+- Pushes application code and CI/CD workflow
+
+**CI/CD Workflow** (`hello-cicd-configmap.yaml`):
+- Triggers on push to main/master branch
+- Uses BuildKit for container builds (no Docker daemon required)
+- Authenticates with Gitea registry using internal service domain
+- Tags images with `main-<commit-sha>` format for Flux alphabetical ordering
+- Pushes to internal registry, pulls from external domain
+
+**Application Code** (`hello-app-configmap.yaml`):
+- Complete Node.js application with package.json, app.js, and Dockerfile
+- Health check endpoints for Kubernetes probes
+- Production-ready with proper error handling and logging
+
+### Workflow Customization
+
+The hello boilerplate uses **shell-only workflows** compatible with Gitea Actions:
+
+```yaml
+name: Build and Push with BuildKit
+on:
+  push:
+    branches: [main, master]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Main Build and push with buildctl
+      run: |
+        # Complete shell script workflow
+        # No GitHub Actions dependencies
+        # Uses buildctl + BuildKit daemon
+```
+
 ### Complex Applications (Database + App)
 
 For applications requiring databases, see `apps/coder.xuperson.org/` as template:
@@ -305,20 +404,23 @@ spec:
 - **AVOID** switching images mid-development
 - **TEST** API endpoints before assuming they work
 
-## Gitea Runner Implementation
+## Runner Implementation
 
 ### Successfully Implemented Pattern
 
 **Single Runner Strategy**: One runner per Gitea instance with clean registration process.
 
+Location: `clusters/labinfra/apps/git.xuperson.org/runner/`
+
 #### Key Components
 1. **RBAC**: Service account with secrets management permissions (get, create, delete, patch, update, list)
-2. **Init Container Sequence**: Install kubectl → Setup runner token → Install buildctl
+2. **Init Container Sequence**: Install kubectl → Setup runner token → Install Docker + buildctl
 3. **Token Management**: Fetch first admin token or create if none exists (no sync job needed)
+4. **Host Docker Socket**: Uses `/var/run/docker.sock` for container builds
 
 #### Working Configuration
 ```yaml
-# gitea-runner-deployment.yaml
+# runner-deployment.yaml
 apiVersion: v1
 kind: ConfigMap
 metadata:
