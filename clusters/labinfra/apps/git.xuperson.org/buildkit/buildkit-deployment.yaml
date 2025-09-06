@@ -13,11 +13,16 @@ spec:
   selector:
     matchLabels:
       app: buildkitd
+      app.kubernetes.io/name: buildkit
+      app.kubernetes.io/component: ci-cd
+      app.kubernetes.io/managed-by: flux
   template:
     metadata:
       labels:
         app: buildkitd
         app.kubernetes.io/name: buildkit
+        app.kubernetes.io/component: ci-cd
+        app.kubernetes.io/managed-by: flux
     spec:
       serviceAccountName: buildkit
       volumes:
