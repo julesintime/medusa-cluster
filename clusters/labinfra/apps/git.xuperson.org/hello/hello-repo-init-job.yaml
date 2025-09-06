@@ -255,6 +255,45 @@ data:
     cp /app-code/index.js .
     cp /app-code/README.md .
     cp /cicd-workflow/buildkit-ci.yml .gitea/workflows/
+    
+    # Create repository secrets for CI/CD workflow
+    echo "🔑 Creating repository secrets..."
+    
+    # Create ADMIN_USER secret
+    echo "   Creating ADMIN_USER secret..."
+    USER_SECRET_RESPONSE=$(curl -s -X POST "http://gitea-http:3000/api/v1/repos/$ADMIN_USER/hello/actions/secrets/ADMIN_USER" \
+      -H "Authorization: token $ADMIN_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d "{\"data\":\"$ADMIN_USER\"}")
+    
+    if echo "$USER_SECRET_RESPONSE" | grep -q "error\|Error"; then
+      echo "   ⚠️ ADMIN_USER secret may already exist or failed to create"
+    else
+      echo "   ✅ ADMIN_USER secret created"
+    fi
+    
+    # Create ADMIN_PASS secret  
+    echo "   Creating ADMIN_PASS secret..."
+    PASS_SECRET_RESPONSE=$(curl -s -X POST "http://gitea-http:3000/api/v1/repos/$ADMIN_USER/hello/actions/secrets/ADMIN_PASS" \
+      -H "Authorization: token $ADMIN_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d "{\"data\":\"$ADMIN_PASS\"}")
+    
+    if echo "$PASS_SECRET_RESPONSE" | grep -q "error\|Error"; then
+      echo "   ⚠️ ADMIN_PASS secret may already exist or failed to create"
+    else
+      echo "   ✅ ADMIN_PASS secret created"
+    fi
+    
+    # Update workflow file to use secrets and package registry permanent link
+    echo "🔧 Updating workflow file to use secrets..."
+    sed -i "s/ADMIN_USER=\"PLACEHOLDER_ADMIN_USER\"/ADMIN_USER=\"\${{ secrets.ADMIN_USER }}\"/g" .gitea/workflows/buildkit-ci.yml
+    sed -i "s/ADMIN_PASS=\"PLACEHOLDER_ADMIN_PASS\"/ADMIN_PASS=\"\${{ secrets.ADMIN_PASS }}\"/g" .gitea/workflows/buildkit-ci.yml
+    
+    # Use permanent package registry link format: gitea-host/owner/image-name
+    sed -i "s|gitea-http.gitea.svc.cluster.local:3000/helloroot/hello-app|gitea-http.gitea.svc.cluster.local:3000/$ADMIN_USER/hello-app|g" .gitea/workflows/buildkit-ci.yml
+    
+    echo "✅ Workflow file updated with secrets integration"
 
 
 

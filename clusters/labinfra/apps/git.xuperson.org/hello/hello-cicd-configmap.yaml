@@ -75,9 +75,9 @@ data:
             echo "🔐 Setting up BuildKit authentication..."
             echo "Registry: gitea-http.gitea.svc.cluster.local:3000"
             
-            # Use admin credentials for registry access (from gitea-admin-secrets)
-            ADMIN_USER="helloroot"
-            ADMIN_PASS="KZnIBgzglHRXYuFqiQe3rCKxPwenfbfuyxrc+Si2O0E="
+            # Use admin credentials for registry access (will be replaced with secrets)
+            ADMIN_USER="PLACEHOLDER_ADMIN_USER"
+            ADMIN_PASS="PLACEHOLDER_ADMIN_PASS"
             
             echo "Configuring BuildKit authentication for user: $ADMIN_USER"
             # Create Docker auth config for BuildKit to use
