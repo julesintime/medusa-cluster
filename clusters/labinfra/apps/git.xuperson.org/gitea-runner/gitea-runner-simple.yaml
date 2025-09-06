@@ -41,8 +41,30 @@ spec:
             memory: "64Mi"
             cpu: "100m"
       
-      # Install buildctl and Docker client
-      - name: install-tools
+      # Install buildctl from BuildKit container
+      - name: install-buildctl
+        image: moby/buildkit:latest
+        command:
+        - sh
+        - -c
+        - |
+          # Copy buildctl from BuildKit container
+          cp /usr/bin/buildctl /shared/buildctl && chmod +x /shared/buildctl
+          echo "✅ Installed buildctl from BuildKit container"
+          ls -la /shared/
+        volumeMounts:
+        - name: shared-binaries
+          mountPath: /shared
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "50m"
+          limits:
+            memory: "64Mi"
+            cpu: "100m"
+
+      # Install Docker client
+      - name: install-docker
         image: docker:24.0.7
         command:
         - sh
@@ -50,10 +72,7 @@ spec:
         - |
           # Copy Docker client
           cp /usr/local/bin/docker /shared/docker && chmod +x /shared/docker
-          # Download and install buildctl
-          wget -O /shared/buildctl https://github.com/moby/buildkit/releases/download/v0.16.0/buildctl-linux-amd64
-          chmod +x /shared/buildctl
-          echo "✅ Installed Docker client and buildctl"
+          echo "✅ Installed Docker client"
           ls -la /shared/
         volumeMounts:
         - name: shared-binaries
