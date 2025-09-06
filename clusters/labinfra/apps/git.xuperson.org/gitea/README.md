@@ -5,8 +5,8 @@ Minimal single-pod Gitea deployment for git.xuperson.org.
 ## Architecture
 
 - **Type**: Single-pod, non-HA deployment
-- **Database**: SQLite (built-in, no external dependencies)
-- **Cache/Session**: Memory-based (no external Redis/Valkey)
+- **Database**: PostgreSQL (single instance)
+- **Cache/Session**: Single Valkey (Redis-compatible)
 - **Storage**: 10Gi PVC for Git repositories and data
 - **Domain**: git.xuperson.org
 - **Admin**: Managed via Infisical secrets
@@ -64,11 +64,15 @@ kubectl get secret gitea-admin-api-token -n gitea -o jsonpath='{.data.token}' | 
 
 ## Scaling
 
-This is a minimal single-pod setup. For production HA deployment:
+This is a single-pod setup with PostgreSQL and single Valkey cache. For production HA deployment:
 - Enable PostgreSQL HA (`postgresql-ha.enabled: true`)
 - Enable Valkey cluster (`valkey-cluster.enabled: true`) 
 - Increase `replicaCount`
 - Configure external database connection
+
+For minimal setup (SQLite + memory cache):
+- Set `postgresql.enabled: false` and `valkey.enabled: false`
+- Configure `cache.ADAPTER: memory`, `session.PROVIDER: memory`
 
 ## Monitoring
 

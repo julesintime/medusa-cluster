@@ -20,7 +20,6 @@ spec:
     # Single replica for minimal setup
     replicaCount: 1
     
-    # Single-pod configuration as per official docs
     postgresql-ha:
       enabled: false
     
@@ -33,7 +32,6 @@ spec:
     valkey:
       enabled: true
     
-    # Use PostgreSQL database with proper indexer config
     gitea:
       config:
         database:
