@@ -19,7 +19,7 @@ spec:
       - name: hello
         image: gitea-http.gitea.svc.cluster.local:3000/helloroot/hello-app:main-bc1af83 # {"$imagepolicy": "hello:hello-app"}
         ports:
-        - containerPort: 80
+        - containerPort: 3000
         env:
         - name: NODE_ENV
           value: "production"
@@ -35,12 +35,12 @@ spec:
         livenessProbe:
           httpGet:
             path: /
-            port: 80
+            port: 3000
           initialDelaySeconds: 10
           periodSeconds: 30
         readinessProbe:
           httpGet:
             path: /
-            port: 80
+            port: 3000
           initialDelaySeconds: 5
           periodSeconds: 10

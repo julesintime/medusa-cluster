@@ -5,8 +5,9 @@ metadata:
   name: hello-app
   namespace: hello
 spec:
-  image: git.xuperson.org/helloroot/hello-app
+  image: gitea-http.gitea.svc.cluster.local:3000/helloroot/hello-app
   interval: 2m
+  insecure: true
   secretRef:
     name: gitea-registry-secret
 ---
