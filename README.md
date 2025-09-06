@@ -302,6 +302,159 @@ runner-setup.sh:
 
 See CLAUDE.md for detailed script development workflow.
 
-This completes your production-ready GitOps Kubernetes platform with secure secrets management and automated external access.
+## Complete Container Image CI/CD Lifecycle
+
+The platform provides a fully automated container image lifecycle using Gitea Actions, BuildKit, and Flux CD image automation.
+
+### Architecture Overview
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│  ConfigMap Code │───▶│ Gitea Repository│───▶│ BuildKit CI/CD  │───▶│ Container Image │
+│  git.x.org/hello│    │   hello repo    │    │ Gitea Actions   │    │   Registry      │
+└─────────────────┘    └─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                       │                       │                       │
+   App Source Code        Repository Init        Automated Build         Image Storage
+         │                       │                       │                       │
+    ┌────▼────┐             ┌────▼────┐            ┌────▼────┐            ┌────▼────┐
+    │Node.js  │             │Gitea API│            │buildctl │            │git.x.org│
+    │Dockerfile│             │Secrets  │            │BuildKit │            │/v2/...  │
+    └─────────┘             └─────────┘            └─────────┘            └─────────┘
+```
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│ Container Image │───▶│ Flux Automation │───▶│ GitOps Update   │───▶│ Pod Deployment  │
+│   Registry      │    │  Image Scanning │    │ Deployment YAML │    │ hello.x.org     │
+└─────────────────┘    └─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                       │                       │                       │
+      Registry Scan        New Image Detection      Git Commit           Pod Restart
+         │                       │                       │                       │
+    ┌────▼────┐             ┌────▼────┐            ┌────▼────┐            ┌────▼────┐
+    │Registry │             │ImageRepo│            │Image    │            │External │
+    │Auth     │             │Policy   │            │Policy   │            │Access   │
+    └─────────┘             └─────────┘            └─────────┘            └─────────┘
+```
+
+**Complete Flow**: ConfigMap → Repository → CI/CD → Registry → Flux → GitOps → Deployment
+
+### Implementation Details
+
+#### 1. Repository Bootstrap (`git.xuperson.org/hello/`)
+
+The `hello-repo-setup` job creates a complete Node.js application in Gitea:
+
+- **Source**: ConfigMaps contain app code, Dockerfile, and CI/CD workflow
+- **Repository**: Auto-created in Gitea with proper structure and secrets
+- **Authentication**: Admin token management with k8s secret synchronization
+
+#### 2. CI/CD Pipeline (Gitea Actions + BuildKit)
+
+When code is pushed to the repository:
+
+```yaml
+# Triggered on push to main/master branches
+on:
+  push:
+    branches: [ main, master ]
+
+# BuildKit workflow steps:
+# 1. Clone repository with full context
+# 2. Build container image using BuildKit daemon  
+# 3. Tag with format: main-<commit-sha>
+# 4. Push to Gitea package registry
+# 5. Use insecure registry settings for internal access
+```
+
+**Registry Format**: `git.xuperson.org/helloroot/hello-app:main-<sha>`
+
+#### 3. Image Registry (Gitea Packages)
+
+- **Internal Access**: `gitea-http.gitea.svc.cluster.local:3000` (BuildKit pushes)
+- **External Access**: `git.xuperson.org` (Flux pulls via Cloudflare tunnel)
+- **Authentication**: Admin credentials stored in Kubernetes secrets
+- **Tags**: Maintains `latest`, `cache`, and commit-specific tags
+
+#### 4. Flux CD Image Automation
+
+```yaml
+# ImageRepository: Scans registry for new images
+spec:
+  image: git.xuperson.org/helloroot/hello-app
+  interval: 2m
+  secretRef:
+    name: gitea-registry-secret
+
+# ImagePolicy: Selects images based on pattern
+spec:
+  policy:
+    alphabetical:
+      order: asc
+  filterTags:
+    pattern: '^main-[a-f0-9]+$'
+```
+
+#### 5. GitOps Deployment Update
+
+When Flux detects a new image:
+
+1. **Image Detection**: ImageRepository scans registry every 2 minutes
+2. **Policy Selection**: ImagePolicy filters tags matching `main-<commit-sha>` pattern
+3. **Deployment Update**: ImageUpdateAutomation updates the deployment YAML
+4. **Git Commit**: Flux commits the change back to the repository
+5. **Pod Rollout**: Kubernetes performs rolling update with new image
+
+### Registry Authentication
+
+**Critical**: The registry secret must use actual Gitea admin credentials:
+
+```bash
+# Get current admin credentials
+ADMIN_USER=$(kubectl get secret gitea-admin-secrets -n gitea -o jsonpath='{.data.username}' | base64 -d)
+ADMIN_PASS=$(kubectl get secret gitea-admin-secrets -n gitea -o jsonpath='{.data.password}' | base64 -d)
+
+# Create registry auth string
+AUTH_STRING=$(echo -n "$ADMIN_USER:$ADMIN_PASS" | base64)
+```
+
+### Troubleshooting Container Image Issues
+
+**Image Pull Errors**:
+```bash
+# Check if image exists in registry
+curl -u "helloroot:$ADMIN_PASS" https://git.xuperson.org/v2/_catalog
+
+# Verify image tags
+curl -u "helloroot:$ADMIN_PASS" https://git.xuperson.org/v2/helloroot/hello-app/tags/list
+```
+
+**Registry Authentication Failures**:
+```bash
+# Check registry secret
+kubectl get secret gitea-registry-secret -n hello -o yaml
+
+# Test external registry access
+curl -u "helloroot:$ADMIN_PASS" https://git.xuperson.org/v2/_catalog
+```
+
+**Flux Image Automation Issues**:
+```bash
+# Check ImageRepository status
+kubectl describe imagerepository hello-app -n hello
+
+# Force image repository rescan
+kubectl annotate imagerepository hello-app -n hello fluxcd.io/reconcileAt="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+```
+
+**CI/CD Pipeline Failures**:
+```bash
+# Check runner logs
+kubectl logs -n gitea deployment/act-runner-buildkit -c runner
+
+# Check BuildKit daemon
+kubectl logs -n gitea deployment/buildkitd
+```
+
+This completes your production-ready GitOps Kubernetes platform with secure secrets management, automated external access, and fully automated container image CI/CD lifecycle.
 
 
