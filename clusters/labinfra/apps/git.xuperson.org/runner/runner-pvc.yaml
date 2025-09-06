@@ -1,0 +1,15 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: act-runner-vol
+  namespace: gitea
+  labels:
+    app: act-runner-simple
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: ""  # Use default storage class (Longhorn)

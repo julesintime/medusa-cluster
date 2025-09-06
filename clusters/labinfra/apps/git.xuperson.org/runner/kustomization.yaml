@@ -6,6 +6,7 @@ metadata:
 
 resources:
   - runner-rbac.yaml
+  - runner-pvc.yaml
   - runner-token-job.yaml
   - runner-deployment.yaml
 
