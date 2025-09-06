@@ -213,11 +213,14 @@ apps/
 └── coder.xuperson.org/              # Complex app with database
     ├── README.md                    # App-specific documentation
     ├── kustomization.yaml          # Resource orchestration
-    ├── namespace.yaml              # Dedicated namespace
-    ├── *-helmrelease.yaml          # Main deployment
-    ├── *-ingress.yaml             # External access
-    └── rbac.yaml                   # Security
+    ├── {app-name}-namespace.yaml   # Dedicated namespace
+    ├── {app-name}-helmrelease.yaml # Main deployment
+    ├── {app-name}-ingress.yaml     # External access
+    ├── {app-name}-infisical-secrets.yaml # Secure secrets management
+    └── {app-name}-rbac.yaml        # Security
 ```
+
+**File Naming**: All files follow `{app-name}-{resource-type}.yaml` convention.
 
 ### Adding New Applications
 

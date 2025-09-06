@@ -5,7 +5,7 @@ metadata:
   name: gitea
 
 resources:
-  - namespace.yaml
+  - gitea-namespace.yaml
   - gitea-helmrepository.yaml
   - gitea-infisical-secrets.yaml
   - gitea-helmrelease.yaml

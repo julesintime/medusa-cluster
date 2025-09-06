@@ -20,14 +20,16 @@ All applications follow the `apps/[domain.name]/` pattern for consistent GitOps 
 ### Standard Directory Structure
 ```
 clusters/labinfra/apps/[app.domain.org]/
-├── kustomization.yaml          # Resource orchestration
-├── namespace.yaml              # Dedicated namespace
-├── *-helmrelease.yaml          # Application deployment (if using Helm)
-├── *-ingress.yaml              # External access + ExternalDNS
-├── *-infisical-secrets.yaml    # Infisical secret synchronization
-├── rbac.yaml                   # Service account + permissions
-└── README.md                   # Application-specific docs
+├── kustomization.yaml           # Resource orchestration
+├── {app-name}-namespace.yaml    # Dedicated namespace
+├── {app-name}-helmrelease.yaml  # Application deployment (if using Helm)
+├── {app-name}-ingress.yaml      # External access + ExternalDNS
+├── {app-name}-infisical-secrets.yaml # Infisical secret synchronization
+├── {app-name}-rbac.yaml         # Service account + permissions
+└── README.md                    # Application-specific docs
 ```
+
+**CRITICAL**: All files follow `{app-name}-{resource-type}.yaml` naming convention.
 
 ### Secrets Management
 
@@ -195,6 +197,7 @@ clusters/labinfra/apps/git.xuperson.org/hello/
 - **✅ Flux Image Automation**: Auto-detects new images and updates deployments
 - **✅ Service Domain Usage**: Uses `gitea-http.gitea.svc.cluster.local:3000` (not static IPs)
 - **✅ External Registry Pull**: Flux pulls from `git.xuperson.org` via Cloudflare
+- **✅ Secure Credentials**: Registry authentication via Infisical secrets (no hardcoded credentials)
 
 ### Using Hello as Boilerplate
 
@@ -220,6 +223,7 @@ cp -r clusters/labinfra/apps/git.xuperson.org/hello clusters/labinfra/apps/git.x
 # - Copy apps/hello.xuperson.org/ structure
 # - Update image references, domain names, namespaces
 # - Configure Flux ImageRepository, ImagePolicy, ImageUpdateAutomation
+# - Add registry credentials to Infisical: MYAPP_REGISTRY_AUTH
 
 # 6. Add to git.xuperson.org kustomization
 echo "  - myapp" >> clusters/labinfra/apps/git.xuperson.org/kustomization.yaml

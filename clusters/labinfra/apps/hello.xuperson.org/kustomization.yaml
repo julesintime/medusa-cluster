@@ -2,10 +2,10 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - namespace.yaml
+  - hello-namespace.yaml
   - hello-deployment.yaml
   - hello-service.yaml
   - hello-ingress.yaml
   - hello-imagerepository.yaml
   - hello-imageupdateautomation.yaml
-  - hello-registry-secret.yaml
+  - hello-infisical-secrets.yaml
