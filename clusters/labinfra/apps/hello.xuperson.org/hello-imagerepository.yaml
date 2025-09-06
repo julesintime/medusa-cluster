@@ -1,0 +1,26 @@
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageRepository
+metadata:
+  name: hello-app
+  namespace: hello
+spec:
+  image: git.xuperson.org/giteaadmin/hello-app
+  interval: 2m
+  secretRef:
+    name: gitea-registry-secret
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: hello-app
+  namespace: hello
+spec:
+  imageRepositoryRef:
+    name: hello-app
+  policy:
+    semver:
+      range: '>=0.0.0'
+  filterTags:
+    pattern: '^main-[a-f0-9]+'
+    extract: '$0'
