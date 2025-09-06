@@ -20,6 +20,10 @@ spec:
         app.kubernetes.io/name: buildkit
     spec:
       serviceAccountName: buildkit
+      volumes:
+      - name: registry-config
+        secret:
+          secretName: buildkit-registry-config
       containers:
       - name: buildkitd
         image: moby/buildkit:latest
@@ -56,3 +60,7 @@ spec:
           value: "50000000"
         - name: BUILDKIT_STEP_LOG_MAX_SPEED
           value: "100000"
+        volumeMounts:
+        - name: registry-config
+          mountPath: /root/.docker
+          readOnly: true
