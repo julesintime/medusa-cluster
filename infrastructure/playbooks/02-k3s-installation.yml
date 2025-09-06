@@ -50,37 +50,37 @@
         update_cache: true
 
     # Install Docker from official Docker repository
-    - name: Add Docker's official GPG key
-      apt_key:
-        url: https://download.docker.com/linux/ubuntu/gpg
-        state: present
+    # - name: Add Docker's official GPG key
+    #   apt_key:
+    #     url: https://download.docker.com/linux/ubuntu/gpg
+    #     state: present
 
-    - name: Add Docker repository
-      apt_repository:
-        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
-        state: present
+    # - name: Add Docker repository
+    #   apt_repository:
+    #     repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+    #     state: present
 
-    - name: Install Docker CE
-      apt:
-        name:
-          - docker-ce
-          - docker-ce-cli
-          - docker-buildx-plugin
-          - docker-compose-plugin
-        state: present
-        update_cache: true
+    # - name: Install Docker CE
+    #   apt:
+    #     name:
+    #       - docker-ce
+    #       - docker-ce-cli
+    #       - docker-buildx-plugin
+    #       - docker-compose-plugin
+    #     state: present
+    #     update_cache: true
 
-    - name: Start and enable Docker service
-      systemd:
-        name: docker
-        state: started
-        enabled: true
+    # - name: Start and enable Docker service
+    #   systemd:
+    #     name: docker
+    #     state: started
+    #     enabled: true
 
-    - name: Add ubuntu user to docker group
-      user:
-        name: ubuntu
-        groups: docker
-        append: yes
+    # - name: Add ubuntu user to docker group
+    #   user:
+    #     name: ubuntu
+    #     groups: docker
+    #     append: yes
 
     - name: Enable IP forwarding
       sysctl:
@@ -90,7 +90,7 @@
         reload: true
 
     # First control plane node - initialize cluster
-    - name: Install K3s on first control plane node (cluster init) with Docker
+    - name: Install K3s on first control plane node (cluster init)
       shell: |
         curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION={{ k3s.version }} sh -s - server \
           --cluster-init \
@@ -104,7 +104,7 @@
           --tls-san {{ san }} \
           {% endfor %}
           --write-kubeconfig-mode 644 \
-          --docker
+          # --docker
       when: k3s_init is defined and k3s_init
       register: k3s_init_result
 
@@ -122,7 +122,7 @@
       when: k3s_init is not defined or not k3s_init
 
 
-    - name: Install K3s on additional control plane nodes with Docker
+    - name: Install K3s on additional control plane nodes
       shell: |
         curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION={{ k3s.version }} sh -s - server \
           --server {{ k3s_server_url }} \
@@ -136,7 +136,7 @@
           --tls-san {{ san }} \
           {% endfor %}
           --write-kubeconfig-mode 644 \
-          --docker
+          # --docker
       when: k3s_init is not defined or not k3s_init
       register: k3s_join_result
 
@@ -203,37 +203,37 @@
         update_cache: true
 
     # Install Docker from official Docker repository
-    - name: Add Docker's official GPG key
-      apt_key:
-        url: https://download.docker.com/linux/ubuntu/gpg
-        state: present
+    # - name: Add Docker's official GPG key
+    #   apt_key:
+    #     url: https://download.docker.com/linux/ubuntu/gpg
+    #     state: present
 
-    - name: Add Docker repository
-      apt_repository:
-        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
-        state: present
+    # - name: Add Docker repository
+    #   apt_repository:
+    #     repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+    #     state: present
 
-    - name: Install Docker CE
-      apt:
-        name:
-          - docker-ce
-          - docker-ce-cli
-          - docker-buildx-plugin
-          - docker-compose-plugin
-        state: present
-        update_cache: true
+    # - name: Install Docker CE
+    #   apt:
+    #     name:
+    #       - docker-ce
+    #       - docker-ce-cli
+    #       - docker-buildx-plugin
+    #       - docker-compose-plugin
+    #     state: present
+    #     update_cache: true
 
-    - name: Start and enable Docker service
-      systemd:
-        name: docker
-        state: started
-        enabled: true
+    # - name: Start and enable Docker service
+    #   systemd:
+    #     name: docker
+    #     state: started
+    #     enabled: true
 
-    - name: Add ubuntu user to docker group (for non-root access)
-      user:
-        name: ubuntu
-        groups: docker
-        append: yes
+    # - name: Add ubuntu user to docker group (for non-root access)
+    #   user:
+    #     name: ubuntu
+    #     groups: docker
+    #     append: yes
 
     - name: Enable IP forwarding
       sysctl:
@@ -242,12 +242,12 @@
         state: present
         reload: true
 
-    - name: Install K3s worker node with Docker runtime
+    - name: Install K3s worker node
       shell: |
         curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION={{ k3s.version }} sh -s - agent \
           --server {{ k3s_server_url }} \
           --token {{ k3s_token }} \
-          --docker
+          # --docker
       register: k3s_worker_result
 
     - name: Check K3s agent service status
