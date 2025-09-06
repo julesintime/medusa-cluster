@@ -27,11 +27,10 @@ data:
           run: |
             set -e
             
-            # Clone the repository
-            echo "📦 Cloning repository..."
-            git clone ${{ gitea.repository_clone_url }} /tmp/build
-            cd /tmp/build
-            git checkout ${{ gitea.sha }}
+            echo "📦 Using current working directory..."
+            echo "📁 Working directory: $(pwd)"
+            echo "📋 Directory contents:"
+            ls -la
             
             # Get commit info for tagging
             COMMIT_SHA=$(git rev-parse --short HEAD)
@@ -46,19 +45,25 @@ data:
             fi
             
             echo "🔨 Building image with tags: $TAGS"
-            echo "📁 Working directory: $(pwd)"
-            echo "📋 Directory contents:"
-            ls -la
+            echo "🔍 Checking for Dockerfile..."
+            if [ -f "Dockerfile" ]; then
+              echo "✅ Found Dockerfile"
+              cat Dockerfile
+            else
+              echo "❌ No Dockerfile found"
+              exit 1
+            fi
             
             # Test buildctl connectivity
             echo "🔗 Testing BuildKit connection..."
             buildctl --addr $BUILDKIT_HOST debug workers
             
             # Build and push with buildctl (insecure registry)
+            echo "🏗️ Starting BuildKit build..."
             buildctl --addr $BUILDKIT_HOST build \
               --frontend dockerfile.v0 \
-              --local context=/tmp/build \
-              --local dockerfile=/tmp/build \
+              --local context=. \
+              --local dockerfile=. \
               --output type=image,name="$TAGS",push=true,registry.insecure=true \
               --export-cache type=registry,ref=$IMAGE_BASE:cache,registry.insecure=true \
               --import-cache type=registry,ref=$IMAGE_BASE:cache,registry.insecure=true
