@@ -5,7 +5,7 @@ metadata:
   name: act-runner-vol
   namespace: gitea
   labels:
-    app: act-runner-simple
+    app: act-runner-buildkit
 spec:
   accessModes:
     - ReadWriteOnce

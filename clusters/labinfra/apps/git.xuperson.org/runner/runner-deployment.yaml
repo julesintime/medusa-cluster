@@ -2,19 +2,19 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: act-runner-simple
+  name: act-runner-buildkit
   namespace: gitea
   labels:
-    app: act-runner-simple
+    app: act-runner-buildkit
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: act-runner-simple
+      app: act-runner-buildkit
   template:
     metadata:
       labels:
-        app: act-runner-simple
+        app: act-runner-buildkit
     spec:
       serviceAccountName: gitea-runner-init
       restartPolicy: Always
