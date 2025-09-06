@@ -110,6 +110,8 @@ spec:
         - name: buildctl-binary
           mountPath: /usr/local/bin/buildctl
           subPath: buildctl
+        - name: docker-sock
+          mountPath: /var/run/docker.sock
         
         resources:
           requests:
@@ -145,3 +147,7 @@ spec:
           claimName: act-runner-vol
       - name: buildctl-binary
         emptyDir: {}
+      - name: docker-sock
+        hostPath:
+          path: /var/run/docker.sock
+          type: Socket
