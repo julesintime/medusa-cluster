@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: hello
-        image: nginx:alpine # {"$imagepolicy": "hello:hello-app"}
+        image: gitea-http.gitea.svc.cluster.local:3000/helloroot/hello-app:main-bc1af83 # {"$imagepolicy": "hello:hello-app"}
         ports:
         - containerPort: 80
         env:
