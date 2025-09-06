@@ -48,7 +48,7 @@ data:
             # Get commit info for tagging
             COMMIT_SHA=$(git rev-parse --short HEAD)
             BRANCH_NAME=${{ gitea.ref_name }}
-            IMAGE_BASE="gitea-http.gitea.svc.cluster.local:3000/giteaadmin/hello-app"
+            IMAGE_BASE="gitea-http.gitea.svc.cluster.local:3000/helloroot/hello-app"
             
             # Build tags
             if [ "$BRANCH_NAME" = "main" ] || [ "$BRANCH_NAME" = "master" ]; then
@@ -76,7 +76,7 @@ data:
             echo "Registry: gitea-http.gitea.svc.cluster.local:3000"
             
             # Use admin credentials for registry access (from gitea-admin-secrets)
-            ADMIN_USER="giteaadmin"
+            ADMIN_USER="helloroot"
             ADMIN_PASS="KZnIBgzglHRXYuFqiQe3rCKxPwenfbfuyxrc+Si2O0E="
             
             echo "Configuring BuildKit authentication for user: $ADMIN_USER"

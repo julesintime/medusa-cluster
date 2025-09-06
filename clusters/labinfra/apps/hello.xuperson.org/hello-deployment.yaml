@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: hello
-        image: git.xuperson.org/giteaadmin/hello-app:main-efc6878 # {"$imagepolicy": "hello:hello-app"}
+        image: git.xuperson.org/helloroot/hello-app:main-efc6878 # {"$imagepolicy": "hello:hello-app"}
         ports:
         - containerPort: 3000
         env:
