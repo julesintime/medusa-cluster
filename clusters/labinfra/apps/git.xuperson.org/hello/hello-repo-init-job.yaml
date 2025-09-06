@@ -261,7 +261,7 @@ data:
     
     # Create ADMIN_USER secret
     echo "   Creating ADMIN_USER secret..."
-    USER_SECRET_RESPONSE=$(curl -s -X POST "http://gitea-http:3000/api/v1/repos/$ADMIN_USER/hello/actions/secrets/ADMIN_USER" \
+    USER_SECRET_RESPONSE=$(curl -s -X PUT "http://gitea-http:3000/api/v1/repos/$ADMIN_USER/hello/actions/secrets/ADMIN_USER" \
       -H "Authorization: token $ADMIN_TOKEN" \
       -H "Content-Type: application/json" \
       -d "{\"data\":\"$ADMIN_USER\"}")
@@ -274,7 +274,7 @@ data:
     
     # Create ADMIN_PASS secret  
     echo "   Creating ADMIN_PASS secret..."
-    PASS_SECRET_RESPONSE=$(curl -s -X POST "http://gitea-http:3000/api/v1/repos/$ADMIN_USER/hello/actions/secrets/ADMIN_PASS" \
+    PASS_SECRET_RESPONSE=$(curl -s -X PUT "http://gitea-http:3000/api/v1/repos/$ADMIN_USER/hello/actions/secrets/ADMIN_PASS" \
       -H "Authorization: token $ADMIN_TOKEN" \
       -H "Content-Type: application/json" \
       -d "{\"data\":\"$ADMIN_PASS\"}")
