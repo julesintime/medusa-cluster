@@ -19,8 +19,8 @@ spec:
   imageRepositoryRef:
     name: hello-app
   policy:
-    semver:
-      range: '>=0.0.0'
+    alphabetical:
+      order: asc
   filterTags:
-    pattern: '^main-[a-f0-9]+'
+    pattern: '^main-[a-f0-9]+$'
     extract: '$0'
