@@ -26,16 +26,27 @@ spec:
     postgresql:
       enabled: true
     
-    valkey-cluster:
+    redis-cluster:
       enabled: false
     
-    valkey:
+    redis:
       enabled: true
+      architecture: standalone
+      auth:
+        enabled: false
+      master:
+        persistence:
+          enabled: true
+          size: 2Gi
     
     gitea:
       config:
         database:
           DB_TYPE: postgres
+        
+        cache:
+          ADAPTER: redis
+          HOST: redis://gitea-redis-master:6379/0?pool_size=100&idle_timeout=180s
         
         indexer:
           ISSUE_INDEXER_TYPE: bleve
