@@ -18,10 +18,6 @@ spec:
     spec:
       serviceAccountName: gitea-runner-init
       restartPolicy: Always
-      volumes:
-      - name: runner-data
-        persistentVolumeClaim:
-          claimName: act-runner-vol
       
       initContainers:
       # Wait for runner registration token
