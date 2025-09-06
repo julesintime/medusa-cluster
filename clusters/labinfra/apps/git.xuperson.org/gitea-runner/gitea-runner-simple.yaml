@@ -45,15 +45,22 @@ spec:
             memory: "64Mi"
             cpu: "100m"
       
-      # Install buildctl 
-      - name: install-buildctl
-        image: moby/buildkit:latest
+      # Install buildctl and Docker client
+      - name: install-tools
+        image: docker:24.0.7
         command:
         - sh
         - -c
-        - cp /usr/bin/buildctl /shared/buildctl && chmod +x /shared/buildctl
+        - |
+          # Copy Docker client
+          cp /usr/local/bin/docker /shared/docker && chmod +x /shared/docker
+          # Download and install buildctl
+          wget -O /shared/buildctl https://github.com/moby/buildkit/releases/download/v0.12.3/buildctl-linux-amd64
+          chmod +x /shared/buildctl
+          echo "✅ Installed Docker client and buildctl"
+          ls -la /shared/
         volumeMounts:
-        - name: buildctl-binary
+        - name: shared-binaries
           mountPath: /shared
         resources:
           requests:
@@ -96,7 +103,7 @@ spec:
         - name: GITEA_RUNNER_NAME
           value: "k3s-simple-runner"
         - name: GITEA_RUNNER_LABELS
-          value: "ubuntu-latest:docker://docker.gitea.com/runner-images:ubuntu-latest,ubuntu-22.04:docker://docker.gitea.com/runner-images:ubuntu-22.04"
+          value: "ubuntu-latest"
         - name: BUILDKIT_HOST
           value: "tcp://buildkitd:1234"
         - name: DOCKER_HOST
@@ -107,9 +114,12 @@ spec:
         volumeMounts:
         - name: runner-data
           mountPath: /data
-        - name: buildctl-binary
+        - name: shared-binaries
           mountPath: /usr/local/bin/buildctl
           subPath: buildctl
+        - name: shared-binaries
+          mountPath: /usr/local/bin/docker
+          subPath: docker
         - name: docker-sock
           mountPath: /var/run/docker.sock
         
@@ -145,7 +155,7 @@ spec:
       - name: runner-data
         persistentVolumeClaim:
           claimName: act-runner-vol
-      - name: buildctl-binary
+      - name: shared-binaries
         emptyDir: {}
       - name: docker-sock
         hostPath:
