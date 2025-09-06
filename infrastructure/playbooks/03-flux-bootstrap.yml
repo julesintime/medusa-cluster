@@ -108,7 +108,8 @@
           --branch=master \
           --path=./clusters/labinfra \
           --personal \
-          --token-auth
+          --token-auth \
+          --components-extra=image-reflector-controller,image-automation-controller
       environment: 
         GITHUB_TOKEN: "{{ github_token }}"
         KUBECONFIG: "{{ kubeconfig_path }}"
@@ -130,6 +131,26 @@
       when: flux_apply_result is defined and flux_apply_result.changed
       delegate_to: localhost
       become: false
+
+    - name: Check if image automation controllers are installed
+      ansible.builtin.shell: kubectl get deployment image-reflector-controller -n flux-system
+      environment: "{{ kubeconfig_env }}"
+      register: image_automation_check
+      failed_when: false
+      changed_when: false
+      delegate_to: localhost
+      become: false
+
+    - name: Install image automation controllers if missing
+      ansible.builtin.shell: |
+        flux install --components-extra=image-reflector-controller,image-automation-controller --export | kubectl apply -f -
+      environment: "{{ kubeconfig_env }}"
+      when: 
+        - flux_namespace_check.rc == 0  # Flux is already installed
+        - image_automation_check.rc != 0  # But image automation is missing
+      delegate_to: localhost
+      become: false
+      register: image_automation_install_result
 
     # ========================================
     # Phase 4: Autonomous Infisical Service Token Setup
@@ -269,6 +290,7 @@
           
           📊 Infrastructure Status:
           ✅ Flux CD: {{ 'Bootstrapped' if flux_bootstrap_result is defined else 'Restored from existing manifests' }}
+          ✅ Image Automation: {{ 'Installed' if image_automation_install_result is defined else 'Available' }}
           ✅ GitHub Repository: {{ github_owner }}/{{ github_repo }} connected
           ✅ GitOps Path: ./clusters/labinfra monitored
           ✅ Infisical Service Token: Deployed to {{ infisical_operator_namespace }} & {{ cloudflare_namespace }}
