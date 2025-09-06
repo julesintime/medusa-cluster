@@ -48,7 +48,7 @@ data:
             # Get commit info for tagging
             COMMIT_SHA=$(git rev-parse --short HEAD)
             BRANCH_NAME=${{ gitea.ref_name }}
-            IMAGE_BASE="10.42.2.16:3000/giteaadmin/hello-app"
+            IMAGE_BASE="gitea-http.gitea.svc.cluster.local:3000/giteaadmin/hello-app"
             
             # Build tags
             if [ "$BRANCH_NAME" = "main" ] || [ "$BRANCH_NAME" = "master" ]; then
@@ -73,7 +73,7 @@ data:
             
             # Setup BuildKit authentication - using known working credentials
             echo "🔐 Setting up BuildKit authentication..."
-            echo "Registry: 10.42.2.16:3000"
+            echo "Registry: gitea-http.gitea.svc.cluster.local:3000"
             
             # Use admin credentials for registry access (from gitea-admin-secrets)
             ADMIN_USER="giteaadmin"
@@ -86,7 +86,7 @@ data:
             cat > ~/.docker/config.json << EOF
             {
               "auths": {
-                "10.42.2.16:3000": {
+                "gitea-http.gitea.svc.cluster.local:3000": {
                   "auth": "$AUTH_STRING"
                 }
               }

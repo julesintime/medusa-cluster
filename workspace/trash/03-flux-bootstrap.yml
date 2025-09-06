@@ -112,7 +112,8 @@
           --branch=master \
           --path=./clusters/labinfra \
           --personal \
-          --token-auth
+          --token-auth \
+          --components-extra=image-reflector-controller,image-automation-controller
       environment: 
         GITHUB_TOKEN: "{{ github_token }}"
         KUBECONFIG: "{{ kubeconfig_path }}"

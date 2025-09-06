@@ -3,6 +3,4 @@ kind: Kustomization
 resources:
   - coder.yaml
   - gitea.yaml
-  - nginx-test.xuperson.org
-  - postgres-test.xuperson.org
   - hello.xuperson.org
