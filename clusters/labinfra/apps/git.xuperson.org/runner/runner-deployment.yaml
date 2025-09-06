@@ -1,0 +1,178 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: act-runner-simple
+  namespace: gitea
+  labels:
+    app: act-runner-simple
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: act-runner-simple
+  template:
+    metadata:
+      labels:
+        app: act-runner-simple
+    spec:
+      serviceAccountName: gitea-runner-init
+      restartPolicy: Always
+      
+      initContainers:
+      # Wait for runner registration token
+      - name: wait-for-secret
+        image: bitnami/kubectl:latest
+        command:
+          - /bin/bash
+          - -c
+          - |
+            echo "🔍 Waiting for runner-secret to be created by bootstrap job..."
+            while ! kubectl get secret runner-secret -n gitea >/dev/null 2>&1; do
+              echo "   Secret not found, waiting 10 seconds..."
+              sleep 10
+            done
+            echo "✅ Found runner-secret! Act-runner can now start."
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "50m"
+          limits:
+            memory: "64Mi"
+            cpu: "100m"
+      
+      # Install buildctl from BuildKit container
+      - name: install-buildctl
+        image: moby/buildkit:latest
+        command:
+        - sh
+        - -c
+        - |
+          # Copy buildctl from BuildKit container
+          cp /usr/bin/buildctl /shared/buildctl && chmod +x /shared/buildctl
+          echo "✅ Installed buildctl from BuildKit container"
+          ls -la /shared/
+        volumeMounts:
+        - name: shared-binaries
+          mountPath: /shared
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "50m"
+          limits:
+            memory: "64Mi"
+            cpu: "100m"
+
+      # Install Docker client
+      - name: install-docker
+        image: docker:24.0.7
+        command:
+        - sh
+        - -c
+        - |
+          # Copy Docker client
+          cp /usr/local/bin/docker /shared/docker && chmod +x /shared/docker
+          echo "✅ Installed Docker client"
+          ls -la /shared/
+        volumeMounts:
+        - name: shared-binaries
+          mountPath: /shared
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "50m"
+          limits:
+            memory: "64Mi"
+            cpu: "100m"
+
+      containers:
+      - name: runner
+        image: gitea/act_runner:nightly
+        workingDir: /data
+        command:
+          - sh
+          - -c
+          - |
+            # Clean any existing config and re-register with fresh token
+            echo "🔧 Cleaning old runner config..."
+            rm -f /data/.runner
+            
+            echo "🔐 Registering runner with fresh token..."
+            act_runner register \
+              --instance "$GITEA_INSTANCE_URL" \
+              --token "$GITEA_RUNNER_REGISTRATION_TOKEN" \
+              --name "$GITEA_RUNNER_NAME" \
+              --labels "$GITEA_RUNNER_LABELS" \
+              --no-interactive
+            
+            echo "🚀 Starting runner daemon..."
+            exec act_runner daemon
+        env:
+        - name: GITEA_INSTANCE_URL
+          value: "https://git.xuperson.org"
+        - name: GITEA_RUNNER_REGISTRATION_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: runner-secret
+              key: token
+        - name: GITEA_RUNNER_NAME
+          value: "buildkit-runner"
+        - name: GITEA_RUNNER_LABELS
+          value: "ubuntu-latest"
+        - name: BUILDKIT_HOST
+          value: "tcp://buildkitd:1234"
+        - name: DOCKER_HOST
+          value: ""
+        - name: ACTIONS_RUNNER_CONTAINER_HOOKS
+          value: "false"
+        
+        volumeMounts:
+        - name: runner-data
+          mountPath: /data
+        - name: shared-binaries
+          mountPath: /usr/local/bin/buildctl
+          subPath: buildctl
+        - name: shared-binaries
+          mountPath: /usr/local/bin/docker
+          subPath: docker
+        - name: docker-sock
+          mountPath: /var/run/docker.sock
+        
+        resources:
+          requests:
+            cpu: 250m
+            memory: 1Gi
+          limits:
+            cpu: 2000m
+            memory: 4Gi
+        
+        livenessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - ps aux | grep -v grep | grep act_runner
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+        
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - ps aux | grep -v grep | grep act_runner
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+      
+      volumes:
+      - name: runner-data
+        persistentVolumeClaim:
+          claimName: act-runner-vol
+      - name: shared-binaries
+        emptyDir: {}
+      - name: docker-sock
+        hostPath:
+          path: /var/run/docker.sock
+          type: Socket
