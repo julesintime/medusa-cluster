@@ -45,7 +45,7 @@ spec:
             memory: "64Mi"
             cpu: "100m"
       
-      # Install buildctl for BuildKit connection
+      # Install buildctl 
       - name: install-buildctl
         image: moby/buildkit:latest
         command:
@@ -99,6 +99,10 @@ spec:
           value: "ubuntu-latest:docker://docker.gitea.com/runner-images:ubuntu-latest,ubuntu-22.04:docker://docker.gitea.com/runner-images:ubuntu-22.04"
         - name: BUILDKIT_HOST
           value: "tcp://buildkitd:1234"
+        - name: DOCKER_HOST
+          value: ""
+        - name: ACTIONS_RUNNER_CONTAINER_HOOKS
+          value: "false"
         
         volumeMounts:
         - name: runner-data

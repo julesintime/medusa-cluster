@@ -33,21 +33,17 @@ spec:
         securityContext:
           privileged: true
         readinessProbe:
-          exec:
-            command:
-            - buildctl
-            - debug
-            - workers
-          initialDelaySeconds: 5
-          periodSeconds: 30
+          tcpSocket:
+            port: 1234
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 3
         livenessProbe:
-          exec:
-            command:
-            - buildctl
-            - debug
-            - workers
-          initialDelaySeconds: 5
+          tcpSocket:
+            port: 1234
+          initialDelaySeconds: 30
           periodSeconds: 30
+          timeoutSeconds: 3
         resources:
           requests:
             cpu: 100m

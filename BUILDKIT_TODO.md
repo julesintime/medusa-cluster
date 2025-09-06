@@ -1,7 +1,20 @@
-# BuildKit CI/CD Implementation TODO
+# Complete GitOps CI/CD Implementation TODO
 
-**Status**: Implementation Phase - Current runner has Docker daemon connection issues
-**Goal**: Full working CI/CD flow with BuildKit service (git clone → buildctl build → push to registry)
+**Status**: Implementation Phase - Full Code-to-Site Pipeline
+**Goal**: Complete GitOps flow: Code → Build (BuildKit) → Push (Internal Registry) → Pull (External Registry) → Deploy (Flux CD)
+
+## 🎯 BREAKTHROUGH: Proven Hybrid Architecture
+
+Based on comprehensive registry testing analysis, we have a **PROVEN WORKING** architecture:
+
+```
+Code Changes → Gitea Repository → Gitea Actions (BuildKit) → Push to Internal Registry (10.42.2.16:3000)
+                                                                            │
+                                                                            │
+Kubernetes Deployment ← Flux CD Image Automation ← Pull from External Registry (git.xuperson.org) ✅ TESTED
+```
+
+**Key Discovery**: Cloudflare allows PULL operations perfectly (445MB images tested ✅) but blocks large PUSH operations
 
 ## Current State Analysis
 
@@ -60,10 +73,10 @@
 - [ ] Find correct registry URL format for Gitea packages
 - [ ] Document authentication requirements
 
-#### 3.2 Update Workflow Configuration
-- [ ] Replace `registry.k3s.internal/hello-app` with correct registry URL
-- [ ] Update authentication if required
-- [ ] Ensure registry push permissions are configured
+#### 3.2 Update Workflow Configuration  
+- [ ] Replace `registry.k3s.internal/hello-app` with **INTERNAL REGISTRY**: `10.42.2.16:3000/giteaadmin/hello-app`
+- [ ] Configure insecure registry settings for BuildKit (internal push)
+- [ ] Ensure proper Gitea authentication for package registry
 - [ ] Hot patch or commit workflow changes via Flux
 
 ### Phase 4: End-to-End Testing (1 hour)

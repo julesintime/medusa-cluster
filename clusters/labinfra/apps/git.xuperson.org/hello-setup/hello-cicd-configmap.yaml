@@ -36,7 +36,7 @@ data:
             # Get commit info for tagging
             COMMIT_SHA=$(git rev-parse --short HEAD)
             BRANCH_NAME=${{ gitea.ref_name }}
-            IMAGE_BASE="registry.k3s.internal/hello-app"
+            IMAGE_BASE="10.42.2.16:3000/giteaadmin/hello-app"
             
             # Build tags
             if [ "$BRANCH_NAME" = "main" ] || [ "$BRANCH_NAME" = "master" ]; then
@@ -54,14 +54,14 @@ data:
             echo "🔗 Testing BuildKit connection..."
             buildctl --addr $BUILDKIT_HOST debug workers
             
-            # Build and push with buildctl
+            # Build and push with buildctl (insecure registry)
             buildctl --addr $BUILDKIT_HOST build \
               --frontend dockerfile.v0 \
               --local context=/tmp/build \
               --local dockerfile=/tmp/build \
-              --output type=image,name="$TAGS",push=true \
-              --export-cache type=registry,ref=$IMAGE_BASE:cache \
-              --import-cache type=registry,ref=$IMAGE_BASE:cache
+              --output type=image,name="$TAGS",push=true,registry.insecure=true \
+              --export-cache type=registry,ref=$IMAGE_BASE:cache,registry.insecure=true \
+              --import-cache type=registry,ref=$IMAGE_BASE:cache,registry.insecure=true
             
             echo "✅ Build completed successfully!"
             echo "📋 Image tags: $TAGS"
