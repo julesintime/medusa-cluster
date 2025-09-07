@@ -15,6 +15,8 @@ spec:
       labels:
         app: hello-app
     spec:
+      imagePullSecrets:
+      - name: gitea-registry-secret
       containers:
       - name: hello
         image: git.xuperson.org/helloroot/hello-app:main-ea458e4 # {"$imagepolicy": "hello:hello-app"}
