@@ -19,7 +19,7 @@ spec:
       - name: gitea-registry-secret
       containers:
       - name: hello
-        image: git.xuperson.org/helloroot/hello-app:main-fb2e400 # {"$imagepolicy": "hello:hello-app"}
+        image: git.xuperson.org/helloroot/hello-app:main-fd26728 # {"$imagepolicy": "hello:hello-app"}
         ports:
         - containerPort: 3000
         env:
