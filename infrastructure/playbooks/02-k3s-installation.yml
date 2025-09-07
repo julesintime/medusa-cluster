@@ -391,7 +391,7 @@
 
     - name: Verify DNS resolution in cluster
       shell: |
-        k3s kubectl run test-dns --rm -i --restart=Never --image=busybox -- nslookup kubernetes.default
+        k3s kubectl run test-dns --rm -i --restart=Never --image=busybox -- nslookup kubernetes
       register: dns_test
       ignore_errors: true
 

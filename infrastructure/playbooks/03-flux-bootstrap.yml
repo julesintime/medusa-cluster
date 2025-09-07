@@ -277,7 +277,7 @@
 
     - name: Test Infisical integration by listing secrets
       ansible.builtin.shell: |
-        infisical secrets --env=prod --format=table
+        infisical secrets --env=prod
       register: infisical_test
       delegate_to: localhost
       become: false
