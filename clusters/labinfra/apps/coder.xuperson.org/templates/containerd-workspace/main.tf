@@ -53,12 +53,16 @@ resource "coder_agent" "main" {
   arch = "amd64"
   startup_script = <<EOF
 #!/bin/sh
-# Docker is already mounted via hostPath, just wait for it
+# Wait for Docker daemon in sidecar to be ready
 while ! docker info >/dev/null 2>&1; do
-  echo "Waiting for Docker..."
-  sleep 1
+  echo "Waiting for Docker daemon to be ready..."
+  sleep 2
 done
 echo "Docker ready!"
+
+# Install additional development tools
+curl -fsSL https://get.docker.com -o get-docker.sh
+sh get-docker.sh || echo "Docker client already installed"
 EOF
 }
 
@@ -80,6 +84,32 @@ resource "kubernetes_pod" "main" {
   }
 
   spec {
+    # Docker-in-Docker sidecar container
+    container {
+      name  = "docker-sidecar"
+      image = "docker:dind"
+      security_context {
+        privileged = true
+        run_as_user = 0
+      }
+      command = ["dockerd", "-H", "tcp://0.0.0.0:2375", "--tls=false"]
+      env {
+        name  = "DOCKER_TLS_CERTDIR"
+        value = ""
+      }
+      resources {
+        requests = {
+          cpu    = "250m"
+          memory = "512Mi"
+        }
+        limits = {
+          cpu    = "1"
+          memory = "1Gi"
+        }
+      }
+    }
+
+    # Main development container
     container {
       name  = "dev"
       image = "codercom/enterprise-base:ubuntu"
@@ -90,16 +120,15 @@ resource "kubernetes_pod" "main" {
         value = coder_agent.main.token
       }
 
+      # Connect to Docker daemon in sidecar
       env {
         name  = "DOCKER_HOST"
-        value = "unix:///var/run/docker.sock"
+        value = "tcp://localhost:2375"
       }
 
       security_context {
-        run_as_user = 0
-        capabilities {
-          add = ["SYS_ADMIN"]
-        }
+        run_as_user = 1000
+        run_as_group = 1000
       }
 
       resources {
@@ -113,24 +142,9 @@ resource "kubernetes_pod" "main" {
         }
       }
 
-      # Mount the Docker socket from the host
-      volume_mount {
-        name       = "docker-socket"
-        mount_path = "/var/run/docker.sock"
-      }
-
       volume_mount {
         name       = "home"
         mount_path = "/home/coder"
-      }
-    }
-
-    # Host path volume for Docker socket access
-    volume {
-      name = "docker-socket"
-      host_path {
-        path = "/var/run/docker.sock"
-        type = "Socket"
       }
     }
 
