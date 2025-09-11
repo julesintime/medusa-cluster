@@ -23,6 +23,7 @@ spec:
     esConfig:
       elasticsearch.yml: |
         discovery.type: single-node
+        cluster.initial_master_nodes: []
     extraEnvs:
       - name: ELASTIC_PASSWORD
         value: "08918e0f6d872fe5c620b016a3146a8d4ddebe170277395b"
