@@ -1,0 +1,48 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: rag-minio
+  namespace: rag
+  labels:
+    app.kubernetes.io/name: rag
+    app.kubernetes.io/component: storage
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: minio
+      version: "5.2.0"
+      sourceRef:
+        kind: HelmRepository
+        name: minio
+        namespace: rag
+      interval: 12h
+  values:
+    rootUser: "9a545e4b1d90d94944c8a93e9d886856"
+    rootPassword: "72ee82f6f310061be6f0661fc55c2a06b9dc92ebfabf10cad3e2cc4dee432e12"
+    persistence:
+      enabled: true
+      size: 10Gi
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    service:
+      type: ClusterIP
+    consoleService:
+      type: ClusterIP
+    buckets:
+      - name: ragflow
+        policy: none
+        purge: false
+  install:
+    createNamespace: false
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3

@@ -4,3 +4,4 @@ resources:
   - coder.yaml
   - gitea.yaml
   - hello.yaml
+  - rag.yaml

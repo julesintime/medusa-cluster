@@ -1,0 +1,48 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rag-service-account
+  namespace: rag
+  labels:
+    app.kubernetes.io/name: rag
+    app.kubernetes.io/component: service-account
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: rag-role
+  namespace: rag
+  labels:
+    app.kubernetes.io/name: rag
+    app.kubernetes.io/component: rbac
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: [""]
+  resources: ["pods", "pods/log"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: rag-role-binding
+  namespace: rag
+  labels:
+    app.kubernetes.io/name: rag
+    app.kubernetes.io/component: rbac
+subjects:
+- kind: ServiceAccount
+  name: rag-service-account
+  namespace: rag
+roleRef:
+  kind: Role
+  name: rag-role
+  apiGroup: rbac.authorization.k8s.io

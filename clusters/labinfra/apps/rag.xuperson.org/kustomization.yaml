@@ -1,0 +1,17 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - rag-namespace.yaml
+  - rag-rbac.yaml
+  - rag-helmrepository-bitnami.yaml
+  - rag-helmrepository-minio.yaml
+  - rag-helmrepository-elastic.yaml
+  - rag-mysql-helmrelease.yaml
+  - rag-redis-helmrelease.yaml
+  - rag-minio-helmrelease.yaml
+  - rag-elasticsearch-helmrelease.yaml
+  - rag-deployment.yaml
+  - rag-service.yaml
+  - rag-ingress.yaml
+  - rag-infisical-secrets.yaml

@@ -1,0 +1,52 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: rag-elasticsearch
+  namespace: rag
+  labels:
+    app.kubernetes.io/name: rag
+    app.kubernetes.io/component: search
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: elasticsearch
+      version: "8.5.1"
+      sourceRef:
+        kind: HelmRepository
+        name: elastic
+        namespace: rag
+      interval: 12h
+  values:
+    replicas: 1
+    minimumMasterNodes: 1
+    esConfig:
+      elasticsearch.yml: |
+        xpack.security.enabled: false
+        discovery.type: single-node
+    extraEnvs:
+      - name: ELASTIC_PASSWORD
+        value: "08918e0f6d872fe5c620b016a3146a8d4ddebe170277395b"
+    persistence:
+      enabled: true
+      size: 10Gi
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+    volumeClaimTemplate:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 10Gi
+  install:
+    createNamespace: false
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
