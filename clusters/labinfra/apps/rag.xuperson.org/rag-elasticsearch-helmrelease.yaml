@@ -27,6 +27,8 @@ spec:
     extraEnvs:
       - name: ELASTIC_PASSWORD
         value: "08918e0f6d872fe5c620b016a3146a8d4ddebe170277395b"
+      - name: cluster.initial_master_nodes
+        value: ""
     persistence:
       enabled: true
       size: 10Gi
