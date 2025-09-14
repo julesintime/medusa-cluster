@@ -1,8 +1,8 @@
 apiVersion: source.toolkit.fluxcd.io/v1beta2
 kind: HelmRepository
 metadata:
-  name: n8n
+  name: community-charts
   namespace: n8n
 spec:
   interval: 1h
-  url: https://8gears.github.io/open-8gears
+  url: https://community-charts.github.io/helm-charts

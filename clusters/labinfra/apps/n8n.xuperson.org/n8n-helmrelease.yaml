@@ -11,58 +11,50 @@ spec:
       version: "*"
       sourceRef:
         kind: HelmRepository
-        name: n8n
+        name: community-charts
         namespace: n8n
       interval: 12h
   values:
-    main:
-      config:
-        n8n:
-          encryption_key: "$(N8N_ENCRYPTION_KEY)"
-        db:
-          type: postgresdb
-          postgresdb:
-            host: "n8n-postgresql"
-            port: 5432
-            database: "n8n"
-            user: "n8n"
-            password: "$(DB_POSTGRESDB_PASSWORD)"
-      extraEnv:
-        N8N_ENCRYPTION_KEY:
-          valueFrom:
-            secretKeyRef:
-              name: n8n-secrets
-              key: encryption-key
-        DB_POSTGRESDB_PASSWORD:
-          valueFrom:
-            secretKeyRef:
-              name: n8n-secrets
-              key: postgres-password
-      service:
-        type: ClusterIP
-        port: 80
-      persistence:
-        enabled: true
-        size: 8Gi
-      resources:
-        requests:
-          memory: 512Mi
-          cpu: 250m
-        limits:
-          memory: 2Gi
-          cpu: 1000m
+    config:
+      encryptionKey:
+        existingSecret:
+          name: n8n-secrets
+          key: encryption-key
+      database:
+        type: postgresdb
+        postgresdb:
+          host: n8n-postgresql
+          port: 5432
+          database: n8n
+          user: n8n
+          existingSecret:
+            name: n8n-secrets
+            key: postgres-password
+    service:
+      type: ClusterIP
+      port: 80
     ingress:
       enabled: false
     postgresql:
       enabled: true
       auth:
-        username: "n8n"
-        database: "n8n"
-        existingSecret: "n8n-secrets"
+        database: n8n
+        username: n8n
+        existingSecret: n8n-secrets
         secretKeys:
-          adminPasswordKey: "postgres-password"
-          userPasswordKey: "postgres-password"
+          adminPasswordKey: postgres-password
+          userPasswordKey: postgres-password
       primary:
         persistence:
           enabled: true
           size: 8Gi
+    persistence:
+      enabled: true
+      size: 8Gi
+    resources:
+      requests:
+        memory: 512Mi
+        cpu: 250m
+      limits:
+        memory: 2Gi
+        cpu: 1000m

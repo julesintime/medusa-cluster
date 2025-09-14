@@ -14,10 +14,10 @@ spec:
         app: browserless
     spec:
       securityContext:
-        runAsNonRoot: true
-        runAsUser: 1000
-        runAsGroup: 1000
-        fsGroup: 1000
+        runAsNonRoot: false
+        runAsUser: 0
+        runAsGroup: 0
+        fsGroup: 0
       containers:
       - name: browserless
         image: ghcr.io/browserless/chromium:latest
@@ -42,13 +42,13 @@ spec:
         - name: DATA_DIR
           value: "/tmp"
         securityContext:
-          allowPrivilegeEscalation: false
+          allowPrivilegeEscalation: true
           capabilities:
-            drop:
-            - ALL
+            add:
+            - SYS_ADMIN
           readOnlyRootFilesystem: false
-          runAsNonRoot: true
-          runAsUser: 1000
+          runAsNonRoot: false
+          runAsUser: 0
         resources:
           requests:
             memory: "1Gi"
