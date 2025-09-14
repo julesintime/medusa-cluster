@@ -13,12 +13,23 @@ spec:
       labels:
         app: browserless
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
       containers:
       - name: browserless
-        image: browserless/chrome:latest
+        image: ghcr.io/browserless/chromium:latest
         ports:
         - containerPort: 3000
         env:
+        - name: NODE_ENV
+          value: "production"
+        - name: HOST
+          value: "0.0.0.0"
+        - name: PORT
+          value: "3000"
         - name: TOKEN
           valueFrom:
             secretKeyRef:
@@ -26,14 +37,18 @@ spec:
               key: token
         - name: CONCURRENT
           value: "10"
-        - name: MAX_CPU_PERCENT
-          value: "99"
-        - name: MAX_MEMORY_PERCENT
-          value: "99"
-        - name: KEEP_ALIVE
-          value: "true"
-        - name: CHROME_REFRESH_TIME
-          value: "2000"
+        - name: TIMEOUT
+          value: "30000"
+        - name: DATA_DIR
+          value: "/tmp"
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: false
+          runAsNonRoot: true
+          runAsUser: 1000
         resources:
           requests:
             memory: "1Gi"
@@ -47,9 +62,20 @@ spec:
             port: 3000
           initialDelaySeconds: 30
           periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
         livenessProbe:
           httpGet:
             path: /
             port: 3000
           initialDelaySeconds: 60
           periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        volumeMounts:
+        - name: tmp-volume
+          mountPath: /tmp
+      volumes:
+      - name: tmp-volume
+        emptyDir:
+          sizeLimit: 1Gi
