@@ -5,4 +5,4 @@ metadata:
   namespace: n8n
 spec:
   interval: 1h
-  url: https://n8n-io.github.io/chart
+  url: https://8gears.github.io/open-8gears
