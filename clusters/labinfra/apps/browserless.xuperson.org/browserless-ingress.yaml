@@ -1,0 +1,23 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: browserless
+  namespace: browserless
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: "browserless.xuperson.org"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/websocket-services: "browserless"
+    nginx.ingress.kubernetes.io/proxy-set-headers: "ingress-nginx/proxy-headers"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: browserless.xuperson.org
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: browserless
+            port:
+              number: 80

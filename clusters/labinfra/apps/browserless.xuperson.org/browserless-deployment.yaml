@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: browserless
+  namespace: browserless
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: browserless
+  template:
+    metadata:
+      labels:
+        app: browserless
+    spec:
+      containers:
+      - name: browserless
+        image: browserless/chrome:latest
+        ports:
+        - containerPort: 3000
+        env:
+        - name: TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: browserless-secrets
+              key: token
+        - name: CONCURRENT
+          value: "10"
+        - name: MAX_CPU_PERCENT
+          value: "99"
+        - name: MAX_MEMORY_PERCENT
+          value: "99"
+        - name: KEEP_ALIVE
+          value: "true"
+        - name: CHROME_REFRESH_TIME
+          value: "2000"
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 60
+          periodSeconds: 30
