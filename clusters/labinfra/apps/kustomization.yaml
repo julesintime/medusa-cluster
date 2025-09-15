@@ -6,5 +6,4 @@ resources:
   - crawl4ai.xuperson.org
   - gitea.yaml
   - hello.yaml
-  - kestra.xuperson.org
   - n8n.yaml
