@@ -1,0 +1,105 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: kestra
+  namespace: kestra
+spec:
+  interval: 5m
+  chart:
+    spec:
+      chart: kestra
+      version: "*"
+      sourceRef:
+        kind: HelmRepository
+        name: kestra
+        namespace: kestra
+      interval: 1m
+  values:
+    image:
+      tag: latest
+      pullPolicy: IfNotPresent
+    
+    # Deployment configuration - standalone mode for simplicity
+    deployments:
+      standalone:
+        enabled: true
+        replicas: 1
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+      
+      # Disable individual services in favor of standalone
+      webserver:
+        enabled: false
+      executor:
+        enabled: false
+      indexer:
+        enabled: false
+      scheduler:
+        enabled: false
+      worker:
+        enabled: false
+    
+    # Use internal PostgreSQL for now (can be replaced with external later)
+    postgresql:
+      enabled: true
+      auth:
+        database: kestra
+        existingSecret: kestra-database-secrets
+        secretKeys:
+          adminPasswordKey: postgres-password
+          userPasswordKey: postgres-password
+      primary:
+        persistence:
+          enabled: true
+          size: 10Gi
+    
+    # Use internal MinIO for object storage
+    minio:
+      enabled: true
+      mode: standalone
+      persistence:
+        enabled: true
+        size: 10Gi
+      rootUser: admin
+      rootPassword: kestraMinioAdmin123
+    
+    # Configuration for Kestra
+    configuration:
+      kestra:
+        queue:
+          type: postgres
+        repository:
+          type: postgres
+        storage:
+          type: minio
+          minio:
+            endpoint: "http://kestra-minio:9000"
+            accessKey: "admin"
+            secretKey: "kestraMinioAdmin123"
+            bucket: "kestra"
+      datasources:
+        postgres:
+          url: jdbc:postgresql://kestra-postgresql:5432/kestra
+          driverClassName: org.postgresql.Driver
+          username: postgres
+          password: "{{ .Env.postgres-password }}"
+    
+    # Security context
+    securityContext:
+      runAsUser: 1000
+      runAsGroup: 1000
+      fsGroup: 1000
+    
+    # Service configuration
+    service:
+      type: ClusterIP
+      port: 8080
+    
+    # Enable ingress later via separate manifest
+    ingress:
+      enabled: false
