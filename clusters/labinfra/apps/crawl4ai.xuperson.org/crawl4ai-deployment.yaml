@@ -22,11 +22,13 @@ spec:
         - containerPort: 11235
           name: http
         env:
-        - name: GOOGLE_API_KEY
+        - name: GEMINI_API_TOKEN
           valueFrom:
             secretKeyRef:
               name: crawl4ai-secrets
               key: gemini-api-key
+        - name: LLM_PROVIDER
+          value: "gemini/gemini-1.5-pro"
         resources:
           requests:
             memory: "2Gi"
