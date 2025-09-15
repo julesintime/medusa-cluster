@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kestra-postgresql
+  namespace: kestra
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kestra-postgresql
+  template:
+    metadata:
+      labels:
+        app: kestra-postgresql
+    spec:
+      containers:
+      - name: postgresql
+        image: postgres:15
+        env:
+        - name: POSTGRES_DB
+          value: kestra
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: kestra-database-secrets
+              key: postgres-username
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: kestra-database-secrets
+              key: postgres-password
+        ports:
+        - containerPort: 5432
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        volumeMounts:
+        - name: postgresql-data
+          mountPath: /var/lib/postgresql/data
+      volumes:
+      - name: postgresql-data
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kestra-postgresql
+  namespace: kestra
+spec:
+  selector:
+    app: kestra-postgresql
+  ports:
+  - port: 5432
+    targetPort: 5432
+  type: ClusterIP
