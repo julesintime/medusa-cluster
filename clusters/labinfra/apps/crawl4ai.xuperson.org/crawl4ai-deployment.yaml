@@ -46,6 +46,9 @@ spec:
             port: 11235
           initialDelaySeconds: 60
           periodSeconds: 30
+        securityContext:
+          runAsUser: 999
+          runAsGroup: 999
         volumeMounts:
         - name: shm
           mountPath: /dev/shm
