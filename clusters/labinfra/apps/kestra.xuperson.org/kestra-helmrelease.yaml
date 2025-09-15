@@ -64,12 +64,12 @@ spec:
             type: local
             local:
               basePath: "/tmp/kestra-storage"
-          datasources:
-            default:
-              url: jdbc:postgresql://kestra-postgresql:5432/kestra
-              driverClassName: org.postgresql.Driver
-              username: kestra
-              password: "6ome6bd7pRltxCRWE4nSQov/BM0b3LvLXg6aa8k/AVk="
+        datasources:
+          default:
+            url: jdbc:postgresql://kestra-postgresql:5432/kestra
+            driverClassName: org.postgresql.Driver
+            username: kestra
+            password: "6ome6bd7pRltxCRWE4nSQov/BM0b3LvLXg6aa8k/AVk="
     
     # Security context
     securityContext:
