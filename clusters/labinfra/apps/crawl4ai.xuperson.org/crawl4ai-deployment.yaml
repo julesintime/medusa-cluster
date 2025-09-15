@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crawl4ai
+  namespace: crawl4ai
+  labels:
+    app: crawl4ai
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: crawl4ai
+  template:
+    metadata:
+      labels:
+        app: crawl4ai
+    spec:
+      containers:
+      - name: crawl4ai
+        image: unclecode/crawl4ai:latest
+        ports:
+        - containerPort: 11235
+          name: http
+        env:
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: crawl4ai-secrets
+              key: openai-api-key
+              optional: true
+        - name: ANTHROPIC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: crawl4ai-secrets
+              key: anthropic-api-key
+              optional: true
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 11235
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 11235
+          initialDelaySeconds: 60
+          periodSeconds: 30
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: crawl4ai-service
+  namespace: crawl4ai
+  labels:
+    app: crawl4ai
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 11235
+    protocol: TCP
+    name: http
+  selector:
+    app: crawl4ai

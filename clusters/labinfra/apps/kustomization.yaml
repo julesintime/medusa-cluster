@@ -3,6 +3,7 @@ kind: Kustomization
 resources:
   - browserless.yaml
   - coder.yaml
+  - crawl4ai.xuperson.org
   - gitea.yaml
   - hello.yaml
   - n8n.yaml
