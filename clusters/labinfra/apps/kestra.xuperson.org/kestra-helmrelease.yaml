@@ -65,7 +65,7 @@ spec:
             local:
               basePath: "/tmp/kestra-storage"
           datasources:
-            postgres:
+            default:
               url: jdbc:postgresql://kestra-postgresql:5432/kestra
               driverClassName: org.postgresql.Driver
               username: kestra
