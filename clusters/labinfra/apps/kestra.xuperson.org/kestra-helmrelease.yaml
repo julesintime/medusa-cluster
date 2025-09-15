@@ -50,34 +50,26 @@ spec:
     
     # Use internal MinIO for object storage
     minio:
-      enabled: true
-      mode: standalone
-      persistence:
-        enabled: true
-        size: 10Gi
-      rootUser: admin
-      rootPassword: kestraMinioAdmin123
+      enabled: false
     
-    # Configuration for Kestra
-    configuration:
-      kestra:
-        queue:
-          type: postgres
-        repository:
-          type: postgres
-        storage:
-          type: minio
-          minio:
-            endpoint: "http://kestra-minio:9000"
-            accessKey: "admin"
-            secretKey: "kestraMinioAdmin123"
-            bucket: "kestra"
-      datasources:
-        postgres:
-          url: jdbc:postgresql://kestra-postgresql:5432/kestra
-          driverClassName: org.postgresql.Driver
-          username: kestra
-          password: "6ome6bd7pRltxCRWE4nSQov/BM0b3LvLXg6aa8k/AVk="
+    # Configuration for Kestra using new format
+    configurations:
+      secrets:
+        kestra:
+          queue:
+            type: postgres
+          repository:
+            type: postgres
+          storage:
+            type: local
+            local:
+              basePath: "/tmp/kestra-storage"
+          datasources:
+            postgres:
+              url: jdbc:postgresql://kestra-postgresql:5432/kestra
+              driverClassName: org.postgresql.Driver
+              username: kestra
+              password: "6ome6bd7pRltxCRWE4nSQov/BM0b3LvLXg6aa8k/AVk="
     
     # Security context
     securityContext:
