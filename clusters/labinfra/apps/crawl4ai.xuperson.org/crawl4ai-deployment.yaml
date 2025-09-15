@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: crawl4ai
-        image: unclecode/crawl4ai:latest
+        image: unclecode/crawl4ai:basic
         ports:
         - containerPort: 11235
           name: http
