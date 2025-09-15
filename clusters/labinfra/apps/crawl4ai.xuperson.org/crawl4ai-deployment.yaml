@@ -22,18 +22,11 @@ spec:
         - containerPort: 11235
           name: http
         env:
-        - name: OPENAI_API_KEY
+        - name: GOOGLE_API_KEY
           valueFrom:
             secretKeyRef:
               name: crawl4ai-secrets
-              key: openai-api-key
-              optional: true
-        - name: ANTHROPIC_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: crawl4ai-secrets
-              key: anthropic-api-key
-              optional: true
+              key: gemini-api-key
         resources:
           requests:
             memory: "2Gi"
