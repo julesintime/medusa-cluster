@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: crawl4ai
-        image: unclecode/crawl4ai:basic
+        image: unclecode/crawl4ai:latest
         ports:
         - containerPort: 11235
           name: http
@@ -46,8 +46,6 @@ spec:
             port: 11235
           initialDelaySeconds: 60
           periodSeconds: 30
-        securityContext:
-          privileged: true
         volumeMounts:
         - name: shm
           mountPath: /dev/shm
