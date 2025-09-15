@@ -53,6 +53,14 @@ spec:
           capabilities:
             drop:
             - ALL
+        volumeMounts:
+        - name: shm
+          mountPath: /dev/shm
+      volumes:
+      - name: shm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 1Gi
 ---
 apiVersion: v1
 kind: Service
