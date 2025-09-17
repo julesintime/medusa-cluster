@@ -14,18 +14,20 @@ data:
         litellm_params:
           model: anthropic/claude-3-5-sonnet-20241022
           api_key: os.environ/LITELLM_ANTHROPIC_API_KEY
-      - model_name: gemini-key-1
+      - model_name: gemini-pro
         litellm_params:
           model: gemini/gemini-1.5-flash
           api_key: "AIzaSyDLRSBbwgfj9qtHCXzVGGl9z7BScrd5iTY"
-      - model_name: gemini-key-2
+        model_info:
+          id: "gemini-deployment-1"
+      - model_name: gemini-pro
         litellm_params:
           model: gemini/gemini-1.5-flash
           api_key: "AIzaSyANeBDFZKrWwrsAnmPYf8WvuFSSbPt7Ki4"
+        model_info:
+          id: "gemini-deployment-2"
 
     router_settings:
       routing_strategy: simple-shuffle
       num_retries: 3
       timeout: 30
-      model_group_alias: 
-        "gemini-pro": ["gemini-key-1", "gemini-key-2"]
