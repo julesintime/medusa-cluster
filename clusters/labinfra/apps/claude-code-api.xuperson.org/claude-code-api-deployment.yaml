@@ -19,7 +19,7 @@ spec:
       - name: gitea-registry-secret
       containers:
       - name: claude-code-api
-        image: git.xuperson.org/helloroot/claude-code-openai-wrapper:main-90d2f39 # {"$imagepolicy": "claude-code-api:claude-code-api"}
+        image: git.xuperson.org/helloroot/claude-code-openai-wrapper:main-c3a0def # {"$imagepolicy": "claude-code-api:claude-code-api"}
         ports:
         - containerPort: 8000
         env:
