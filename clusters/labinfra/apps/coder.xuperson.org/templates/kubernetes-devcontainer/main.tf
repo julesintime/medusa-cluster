@@ -24,6 +24,12 @@ data "coder_provisioner" "me" {}
 data "coder_workspace" "me" {}
 data "coder_workspace_owner" "me" {}
 
+# External authentication for private GitHub repositories
+data "coder_external_auth" "github" {
+  id       = "github"
+  optional = true
+}
+
 variable "use_kubeconfig" {
   type        = bool
   description = <<-EOF
@@ -40,7 +46,7 @@ EOF
 
 variable "namespace" {
   type        = string
-  default     = "coder-workspaces"
+  default     = "coder"
   description = "The Kubernetes namespace to create workspaces in (must exist prior to creating workspaces). If the Coder host is itself running as a Pod on the same Kubernetes cluster as you are deploying workspaces to, set this to the same namespace."
 }
 
@@ -154,14 +160,18 @@ locals {
   git_author_name            = coalesce(data.coder_workspace_owner.me.full_name, data.coder_workspace_owner.me.name)
   git_author_email           = data.coder_workspace_owner.me.email
   repo_url                   = data.coder_parameter.repo.value
+  # Determine if this is a GitHub repository
+  has_repo = local.repo_url != ""
+  is_github_repo = local.has_repo && (can(regex("github\\.com", local.repo_url)) || can(regex("git@github\\.com", local.repo_url)))
+  
   # The envbuilder provider requires a key-value map of environment variables.
-  envbuilder_env = {
+  envbuilder_env = merge({
     "CODER_AGENT_TOKEN" : coder_agent.main.token,
     # Use the docker gateway if the access URL is 127.0.0.1
     "CODER_AGENT_URL" : replace(data.coder_workspace.me.access_url, "/localhost|127\\.0\\.0\\.1/", "host.docker.internal"),
     # ENVBUILDER_GIT_URL and ENVBUILDER_CACHE_REPO will be overridden by the provider
     # if the cache repo is enabled.
-    "ENVBUILDER_GIT_URL" : var.cache_repo == "" ? local.repo_url : "",
+    "ENVBUILDER_GIT_URL" : var.cache_repo == "" && local.has_repo ? local.repo_url : "",
     # Use the docker gateway if the access URL is 127.0.0.1
     "ENVBUILDER_INIT_SCRIPT" : replace(coder_agent.main.init_script, "/localhost|127\\.0\\.0\\.1/", "host.docker.internal"),
     "ENVBUILDER_FALLBACK_IMAGE" : data.coder_parameter.fallback_image.value,
@@ -171,7 +181,11 @@ locals {
     # For example, when testing in KinD, it was necessary to set `/product_name` and `/product_uuid` in
     # addition to `/var/run`.
     # "ENVBUILDER_IGNORE_PATHS": "/product_name,/product_uuid,/var/run",
-  }
+  },
+  # Add GitHub authentication if using a GitHub repository and external auth is available
+  local.is_github_repo && data.coder_external_auth.github.access_token != "" ? {
+    "ENVBUILDER_GIT_USERNAME" : data.coder_external_auth.github.access_token
+  } : {})
 }
 
 # Check for the presence of a prebuilt image in the cache repo
