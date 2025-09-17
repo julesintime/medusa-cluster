@@ -5,7 +5,7 @@ metadata:
   name: claude-code-api
   namespace: claude-code-api
 spec:
-  image: git.xuperson.org/helloroot/claude-code-wrapper
+  image: git.xuperson.org/helloroot/claude-code-openai-wrapper
   interval: 2m
   secretRef:
     name: gitea-registry-secret
