@@ -5,3 +5,4 @@ resources:
   - backstage-namespace.yaml
   - backstage-helmrelease.yaml
   - backstage-ingress.yaml
+  - backstage-infisical-secrets.yaml
