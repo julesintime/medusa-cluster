@@ -11,3 +11,4 @@ resources:
   - coder-helmrelease.yaml
   - coder-ingress.yaml
   - coder-infisical-secrets.yaml
+  - coder-github-external-auth-infisical-secrets.yaml
