@@ -1,0 +1,118 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hello-cicd-workflow
+  namespace: gitea
+  labels:
+    app.kubernetes.io/name: hello-app
+    app.kubernetes.io/component: cicd-workflow
+    app.kubernetes.io/managed-by: flux
+data:
+  buildkit-ci.yml: |
+    name: Simple BuildKit CI
+
+    on:
+      push:
+        branches: [ main, master ]
+      pull_request:
+        branches: [ main, master ]
+
+    jobs:
+      build:
+        runs-on: ubuntu-latest
+
+        steps:
+        - name: Build and push with buildctl
+          run: |
+            set -e
+            
+            echo "📦 Setting up workspace..."
+            echo "📁 Initial working directory: $(pwd)"
+            
+            # Clone the repository to current directory
+            echo "🔄 Cloning repository..."
+            echo "Server URL: ${{ gitea.server_url }}"
+            echo "Repository: ${{ gitea.repository }}"
+            echo "SHA: ${{ gitea.sha }}"
+            REPO_URL="${{ gitea.server_url }}/${{ gitea.repository }}.git"
+            echo "Full URL: $REPO_URL"
+            git clone "$REPO_URL" repo
+            cd repo
+            git checkout "${{ gitea.sha }}"
+            
+            echo "📁 Repository directory: $(pwd)"
+            echo "📋 Repository contents:"
+            ls -la
+            
+            # Get commit info for tagging
+            COMMIT_SHA=$(git rev-parse --short HEAD)
+            BRANCH_NAME=${{ gitea.ref_name }}
+            IMAGE_BASE="gitea-http.gitea.svc.cluster.local:3000/helloroot/hello-app"
+            
+            # Build tags
+            if [ "$BRANCH_NAME" = "main" ] || [ "$BRANCH_NAME" = "master" ]; then
+              TAGS="$IMAGE_BASE:latest,$IMAGE_BASE:$BRANCH_NAME-$COMMIT_SHA"
+            else
+              TAGS="$IMAGE_BASE:$BRANCH_NAME-$COMMIT_SHA"
+            fi
+            
+            echo "🔨 Building image with tags: $TAGS"
+            echo "🔍 Checking for Dockerfile..."
+            if [ -f "Dockerfile" ]; then
+              echo "✅ Found Dockerfile"
+              cat Dockerfile
+            else
+              echo "❌ No Dockerfile found"
+              exit 1
+            fi
+            
+            # Test buildctl connectivity
+            echo "🔗 Testing BuildKit connection..."
+            buildctl --addr $BUILDKIT_HOST debug workers
+            
+            # Setup BuildKit authentication - using known working credentials
+            echo "🔐 Setting up BuildKit authentication..."
+            echo "Registry: gitea-http.gitea.svc.cluster.local:3000"
+            
+            # Use admin credentials from Infisical-managed secrets
+            ADMIN_USER="${{ secrets.ADMIN_USER }}"
+            ADMIN_PASS="${{ secrets.ADMIN_PASS }}"
+            
+            echo "Configuring BuildKit authentication for user: $ADMIN_USER"
+            # Create Docker auth config for BuildKit to use
+            mkdir -p ~/.docker
+            AUTH_STRING=$(echo -n "$ADMIN_USER:$ADMIN_PASS" | base64)
+            cat > ~/.docker/config.json << EOF
+            {
+              "auths": {
+                "gitea-http.gitea.svc.cluster.local:3000": {
+                  "auth": "$AUTH_STRING"
+                }
+              }
+            }
+            EOF
+            echo "✅ BuildKit authentication configured"
+            
+            # Verify auth config
+            echo "Auth config created:"
+            cat ~/.docker/config.json
+            
+            # Build and push with buildctl (insecure registry)
+            echo "🏗️ Starting BuildKit build..."
+            echo "Building with tags: $TAGS"
+            
+            # Split tags and build for each one
+            for TAG in $(echo $TAGS | tr "," "\n"); do
+              echo "Building and pushing tag: $TAG"
+              buildctl --addr $BUILDKIT_HOST build \
+                --frontend dockerfile.v0 \
+                --local context=. \
+                --local dockerfile=. \
+                --output type=image,name="$TAG",push=true,registry.insecure=true \
+                --export-cache type=registry,ref=$IMAGE_BASE:cache,registry.insecure=true \
+                --import-cache type=registry,ref=$IMAGE_BASE:cache,registry.insecure=true
+            done
+            
+            echo "✅ Build completed successfully!"
+            echo "📋 Image tags: $TAGS"

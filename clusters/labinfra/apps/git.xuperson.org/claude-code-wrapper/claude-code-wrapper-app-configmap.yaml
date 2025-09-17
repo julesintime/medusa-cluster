@@ -1,0 +1,122 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: claude-code-wrapper-app-code
+  namespace: gitea
+  labels:
+    app.kubernetes.io/name: claude-code-wrapper
+    app.kubernetes.io/component: application-code
+    app.kubernetes.io/managed-by: flux
+data:
+  pyproject.toml: |
+    [tool.poetry]
+    name = "claude-code-openai-wrapper"
+    version = "1.0.0"
+    description = "OpenAI API-compatible wrapper for Claude Code"
+    authors = ["Richard Atkinson <richardatk01@gmail.com>"]
+    readme = "README.md"
+    license = "MIT"
+    packages = [{include = "*.py"}]
+
+    [tool.poetry.dependencies]
+    python = "^3.10"
+    fastapi = "^0.115.0"
+    uvicorn = {extras = ["standard"], version = "^0.32.0"}
+    pydantic = "^2.10.0"
+    python-dotenv = "^1.0.1"
+    httpx = "^0.27.2"
+    sse-starlette = "^2.1.3"
+    python-multipart = "^0.0.12"
+    claude-code-sdk = "^0.0.14"
+
+    [tool.poetry.group.dev.dependencies]
+    black = "^24.0.0"
+    pytest = "^8.0.0"
+    pytest-asyncio = "^0.23.0"
+    requests = "^2.32.0"
+    openai = "^1.0.0"
+
+    [build-system]
+    requires = ["poetry-core"]
+    build-backend = "poetry.core.masonry.api"
+
+    [tool.black]
+    line-length = 100
+    target-version = ['py310']
+
+    [tool.poetry.scripts]
+    claude-wrapper = "main:run_server"
+    
+  Dockerfile: |
+    FROM python:3.10-slim
+
+    WORKDIR /app
+
+    # Install system dependencies
+    RUN apt-get update && apt-get install -y \
+        curl \
+        git \
+        && rm -rf /var/lib/apt/lists/*
+
+    # Install Claude Code CLI
+    RUN curl -fsSL https://claude.ai/download/claude-code/linux | sh
+
+    # Copy requirements
+    COPY pyproject.toml ./
+
+    # Install poetry and dependencies (without lock file initially)
+    RUN pip install poetry && \
+        poetry config virtualenvs.create false && \
+        poetry install --only=main
+
+    # Copy application code
+    COPY *.py ./
+
+    # Set environment variables
+    ENV PORT=8000
+    ENV PYTHONPATH=/app
+
+    # Health check
+    HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+        CMD curl -f http://localhost:8000/health || exit 1
+
+    # Expose port
+    EXPOSE 8000
+
+    # Run the application
+    CMD ["python", "main.py"]
+
+  README.md: |
+    # Claude Code OpenAI Wrapper
+
+    OpenAI API-compatible wrapper for Claude Code, providing familiar OpenAI endpoints.
+
+    ## Features
+
+    - 🚀 Gitea Actions CI/CD pipeline
+    - 🏗️ BuildKit remote building
+    - 📦 Containerized Python FastAPI application
+    - ⚡ Automatic build triggers
+    - 🔌 OpenAI API compatibility
+
+    ## Local Development
+
+    ```bash
+    poetry install
+    poetry run python main.py
+    ```
+
+    ## CI/CD Pipeline
+
+    The pipeline automatically:
+    1. Tests BuildKit connectivity
+    2. Builds Docker image with BuildKit
+    3. Sets build metadata and versioning
+
+    ## Architecture
+
+    - **CI**: Gitea Actions
+    - **Build**: Remote BuildKit service
+    - **Runtime**: Python 3.10 with FastAPI
+    - **Deployment**: GitOps with Flux

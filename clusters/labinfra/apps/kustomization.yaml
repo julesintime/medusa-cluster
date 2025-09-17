@@ -3,6 +3,7 @@ kind: Kustomization
 resources:
   - backstage.xuperson.org
   - browserless.yaml
+  - claude-code.xuperson.org
   - coder.yaml
   - crawl4ai.xuperson.org
   - gitea.yaml

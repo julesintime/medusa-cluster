@@ -1,0 +1,154 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: coder-template-init
+  namespace: coder
+  labels:
+    app.kubernetes.io/name: coder-template-init
+    app.kubernetes.io/component: template-automation
+    app.kubernetes.io/managed-by: flux
+  annotations:
+    # Ensure job runs after Coder deployment is ready
+    flux.weave.works/depends-on: "coder:helmrelease/coder"
+spec:
+  # Clean up completed jobs after 1 hour
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: coder-template-init
+        app.kubernetes.io/component: template-automation
+    spec:
+      serviceAccountName: coder-template-automation
+      restartPolicy: OnFailure
+      
+      # Install kubectl binary in shared volume
+      initContainers:
+      - name: install-kubectl
+        image: bitnami/kubectl:latest
+        imagePullPolicy: IfNotPresent
+        command:
+        - sh
+        - -c
+        - |
+          echo "Installing kubectl binary..."
+          cp /opt/bitnami/kubectl/bin/kubectl /shared/kubectl
+          chmod +x /shared/kubectl
+          echo "kubectl installed successfully"
+        volumeMounts:
+        - name: kubectl-binary
+          mountPath: /shared
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1001
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+
+      containers:
+      - name: coder-template-setup
+        image: alpine/curl:latest
+        imagePullPolicy: IfNotPresent
+        command: ["/scripts/template-init.sh"]
+        
+        env:
+        - name: CODER_URL
+          value: "https://coder.xuperson.org"
+        - name: TEMPLATE_NAME
+          value: "kubernetes-devcontainer"
+        - name: KUBERNETES_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        
+        volumeMounts:
+        - name: script-volume
+          mountPath: /scripts
+        - name: template-files
+          mountPath: /template-files
+        - name: kubectl-binary
+          mountPath: /usr/local/bin/kubectl
+          subPath: kubectl
+        
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+
+      volumes:
+      - name: script-volume
+        configMap:
+          name: coder-template-init-script
+          defaultMode: 0755
+      - name: template-files
+        configMap:
+          name: coder-template-files
+      - name: kubectl-binary
+        emptyDir: {}
+
+---
+# Service Account for template automation
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: coder-template-automation
+  namespace: coder
+  labels:
+    app.kubernetes.io/name: coder-template-automation
+    app.kubernetes.io/component: template-automation
+    app.kubernetes.io/managed-by: flux
+
+---
+# ClusterRole for template automation (secrets management)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: coder-template-automation
+  labels:
+    app.kubernetes.io/name: coder-template-automation
+    app.kubernetes.io/component: template-automation
+    app.kubernetes.io/managed-by: flux
+rules:
+# Secrets management for API token automation
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "create", "patch", "update", "list", "delete"]
+# ConfigMaps access for template files
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list"]
+# Pods access for job execution
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+
+---
+# ClusterRoleBinding for template automation
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: coder-template-automation
+  labels:
+    app.kubernetes.io/name: coder-template-automation
+    app.kubernetes.io/component: template-automation
+    app.kubernetes.io/managed-by: flux
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: coder-template-automation
+subjects:
+- kind: ServiceAccount
+  name: coder-template-automation
+  namespace: coder

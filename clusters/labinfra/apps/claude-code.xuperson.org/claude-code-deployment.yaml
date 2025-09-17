@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: claude-code-wrapper
+  namespace: claude-code
+  labels:
+    app: claude-code-wrapper
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: claude-code-wrapper
+  template:
+    metadata:
+      labels:
+        app: claude-code-wrapper
+    spec:
+      imagePullSecrets:
+      - name: gitea-registry-secret
+      containers:
+      - name: claude-code-wrapper
+        image: git.xuperson.org/helloroot/claude-code-wrapper:main-placeholder # {"$imagepolicy": "claude-code:claude-code-wrapper"}
+        ports:
+        - containerPort: 8000
+        env:
+        - name: PORT
+          value: "8000"
+        - name: DEBUG_MODE
+          value: "false"
+        - name: CORS_ORIGINS
+          value: '["*"]'
+        - name: ANTHROPIC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: claude-code-secrets
+              key: anthropic-api-key
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 10
