@@ -19,13 +19,7 @@ data:
           model: gemini/gemini-2.5-flash
           api_key: "AIzaSyDLRSBbwgfj9qtHCXzVGGl9z7BScrd5iTY"
         model_info:
-          id: "gemini-deployment-1"
-      - model_name: gemini-2.5-flash
-        litellm_params:
-          model: gemini/gemini-2.5-flash
-          api_key: "AIzaSyANeBDFZKrWwrsAnmPYf8WvuFSSbPt7Ki4"
-        model_info:
-          id: "gemini-deployment-2"
+          id: "gemini-working-key"
 
     router_settings:
       routing_strategy: simple-shuffle
