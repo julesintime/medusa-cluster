@@ -30,6 +30,10 @@ spec:
         envFrom:
         - secretRef:
             name: claude-code-api-secrets
+        volumeMounts:
+        - name: claude-auth
+          mountPath: /root/.config/claude-code
+          readOnly: true
         resources:
           requests:
             cpu: 100m
@@ -49,3 +53,10 @@ spec:
             port: 8000
           initialDelaySeconds: 10
           periodSeconds: 10
+      volumes:
+      - name: claude-auth
+        secret:
+          secretName: claude-code-api-secrets
+          items:
+          - key: auth.json
+            path: auth.json
