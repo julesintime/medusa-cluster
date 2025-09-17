@@ -166,8 +166,12 @@ spec:
           set -e
           cd /app
           
+          # Create home directory and set proper permissions
+          mkdir -p /root
+          export HOME=/root
+          
           # Install dependencies directly with pip
-          pip install fastapi==0.115.0 \
+          pip install --break-system-packages fastapi==0.115.0 \
                      uvicorn[standard]==0.32.0 \
                      pydantic==2.10.0 \
                      python-dotenv==1.0.1 \
