@@ -1,8 +1,0 @@
-name: Simple Docker Workspace
-description: A workspace with Docker access via Docker-in-Docker sidecar (no Docker provider needed)
-icon: /emojis/1f433.png
-tags:
-  - docker
-  - development
-  - kubernetes
-  - simple
