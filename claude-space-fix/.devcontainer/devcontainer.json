@@ -1,0 +1,16 @@
+{
+  "name": "Node.js Development Environment",
+  "image": "node:20-bookworm",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.js-debug-nodejs",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode"
+      ]
+    }
+  },
+  "forwardPorts": [3000],
+  "postCreateCommand": "npm install",
+  "postStartCommand": "npm install -g @anthropic-ai/claude-code || echo 'Claude Code install failed'"
+}
