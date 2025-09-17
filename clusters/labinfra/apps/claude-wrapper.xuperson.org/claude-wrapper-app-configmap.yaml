@@ -1,0 +1,259 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: claude-wrapper-app
+  namespace: claude-wrapper
+data:
+  Dockerfile: |
+    FROM python:3.11-slim
+
+    # Set environment variables
+    ENV PYTHONUNBUFFERED=1
+    ENV PYTHONDONTWRITEBYTECODE=1
+    ENV PORT=8000
+    ENV API_KEY=""
+    ENV DEBUG_MODE=false
+    ENV VERBOSE=false
+
+    # Create app directory
+    WORKDIR /app
+
+    # Install system dependencies
+    RUN apt-get update && apt-get install -y \
+        curl \
+        git \
+        && rm -rf /var/lib/apt/lists/*
+
+    # Install Poetry
+    RUN pip install poetry==1.7.1
+
+    # Copy poetry files
+    COPY pyproject.toml poetry.lock* ./
+
+    # Configure poetry
+    RUN poetry config virtualenvs.create false
+
+    # Install dependencies
+    RUN poetry install --only=main --no-dev
+
+    # Copy application code
+    COPY *.py ./
+
+    # Create non-root user
+    RUN useradd --create-home --shell /bin/bash app \
+        && chown -R app:app /app
+    USER app
+
+    # Health check
+    HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+        CMD curl -f http://localhost:${PORT}/health || exit 1
+
+    # Expose port
+    EXPOSE 8000
+
+    # Run the application
+    CMD ["python", "main.py"]
+
+  pyproject.toml: |
+    [tool.poetry]
+    name = "claude-code-openai-wrapper"
+    version = "1.0.0"
+    description = "OpenAI API-compatible wrapper for Claude Code"
+    authors = ["Richard Atkinson <richardatk01@gmail.com>"]
+    readme = "README.md"
+    license = "MIT"
+    packages = [{include = "*.py"}]
+
+    [tool.poetry.dependencies]
+    python = "^3.10"
+    fastapi = "^0.115.0"
+    uvicorn = {extras = ["standard"], version = "^0.32.0"}
+    pydantic = "^2.10.0"
+    python-dotenv = "^1.0.1"
+    httpx = "^0.27.2"
+    sse-starlette = "^2.1.3"
+    python-multipart = "^0.0.12"
+    claude-code-sdk = "^0.0.14"
+
+    [tool.poetry.group.dev.dependencies]
+    black = "^24.0.0"
+    pytest = "^8.0.0"
+    pytest-asyncio = "^0.23.0"
+    requests = "^2.32.0"
+    openai = "^1.0.0"
+
+    [build-system]
+    requires = ["poetry-core"]
+    build-backend = "poetry.core.masonry.api"
+
+    [tool.black]
+    line-length = 100
+    target-version = ['py310']
+
+    [tool.poetry.scripts]
+    claude-wrapper = "main:run_server"
+
+  poetry.lock: |
+    # This is a placeholder - the actual lock file will be generated during build
+    # Poetry will create the real lock file when resolving dependencies
+
+  main.py: |
+    import os
+    import json
+    import asyncio
+    import logging
+    import secrets
+    import string
+    from typing import Optional, AsyncGenerator, Dict, Any
+    from contextlib import asynccontextmanager
+
+    from fastapi import FastAPI, HTTPException, Request, Depends
+    from fastapi.security import HTTPAuthorizationCredentials
+    from fastapi.middleware.cors import CORSMiddleware
+    from fastapi.responses import StreamingResponse, JSONResponse
+    from fastapi.exceptions import RequestValidationError
+    from pydantic import ValidationError
+    from dotenv import load_dotenv
+
+    from models import (
+        ChatCompletionRequest, 
+        ChatCompletionResponse, 
+        ChatCompletionStreamResponse,
+        Choice, 
+        Message, 
+        Usage,
+        StreamChoice,
+        ErrorResponse,
+        ErrorDetail,
+        SessionInfo,
+        SessionListResponse
+    )
+    from claude_cli import ClaudeCodeCLI
+    from message_adapter import MessageAdapter
+    from auth import verify_api_key, security, validate_claude_code_auth, get_claude_code_auth_info
+    from parameter_validator import ParameterValidator, CompatibilityReporter
+    from session_manager import session_manager
+
+    # Load environment variables
+    load_dotenv()
+
+    # Configure logging based on debug mode
+    DEBUG_MODE = os.getenv('DEBUG_MODE', 'false').lower() in ('true', '1', 'yes', 'on')
+    VERBOSE = os.getenv('VERBOSE', 'false').lower() in ('true', '1', 'yes', 'on')
+
+    # Set logging level based on debug/verbose mode
+    log_level = logging.DEBUG if (DEBUG_MODE or VERBOSE) else logging.INFO
+    logging.basicConfig(
+        level=log_level,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    logger = logging.getLogger(__name__)
+
+    # Global variable to store runtime-generated API key
+    runtime_api_key = None
+
+    def generate_secure_token(length: int = 32) -> str:
+        """Generate a secure random token for API authentication."""
+        alphabet = string.ascii_letters + string.digits + '-_'
+        return ''.join(secrets.choice(alphabet) for _ in range(length))
+
+    def prompt_for_api_protection() -> Optional[str]:
+        """
+        Interactively ask user if they want API key protection.
+        Returns the generated token if user chooses protection, None otherwise.
+        """
+        # Don't prompt if API_KEY is already set via environment variable
+        if os.getenv("API_KEY"):
+            return None
+        
+        # In container environment, don't prompt for API key
+        # Use environment variable or no protection
+        return None
+
+    # Initialize Claude CLI
+    claude_cli = ClaudeCodeCLI(
+        timeout=int(os.getenv("MAX_TIMEOUT", "600000")),
+        cwd=os.getenv("CLAUDE_CWD")
+    )
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        """Verify Claude Code authentication and CLI on startup."""
+        logger.info("Verifying Claude Code authentication and CLI...")
+        
+        # Validate authentication first
+        auth_valid, auth_info = validate_claude_code_auth()
+        
+        if not auth_valid:
+            logger.error("❌ Claude Code authentication failed!")
+            for error in auth_info.get('errors', []):
+                logger.error(f"  - {error}")
+            logger.warning("Authentication setup guide:")
+            logger.warning("  1. For Anthropic API: Set ANTHROPIC_API_KEY")
+            logger.warning("  2. For Bedrock: Set CLAUDE_CODE_USE_BEDROCK=1 + AWS credentials")
+            logger.warning("  3. For Vertex AI: Set CLAUDE_CODE_USE_VERTEX=1 + GCP credentials")
+        else:
+            logger.info(f"✅ Claude Code authentication validated: {auth_info['method']}")
+        
+        # Then verify CLI
+        cli_verified = await claude_cli.verify_cli()
+        
+        if cli_verified:
+            logger.info("✅ Claude Code CLI verified successfully")
+        else:
+            logger.warning("⚠️  Claude Code CLI verification failed!")
+            logger.warning("The server will start, but requests may fail.")
+        
+        # Start session cleanup task
+        session_manager.start_cleanup_task()
+        
+        yield
+        
+        # Cleanup on shutdown
+        logger.info("Shutting down session manager...")
+        session_manager.shutdown()
+
+    # Create FastAPI app
+    app = FastAPI(
+        title="Claude Code OpenAI API Wrapper",
+        description="OpenAI-compatible API for Claude Code",
+        version="1.0.0",
+        lifespan=lifespan
+    )
+
+    # Configure CORS
+    cors_origins = json.loads(os.getenv("CORS_ORIGINS", '["*"]'))
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    @app.get("/health")
+    async def health_check():
+        """Health check endpoint."""
+        return {"status": "healthy", "service": "claude-code-openai-wrapper"}
+
+    @app.get("/v1/models")
+    async def list_models():
+        """List available models."""
+        return {
+            "object": "list",
+            "data": [
+                {"id": "claude-sonnet-4-20250514", "object": "model", "owned_by": "anthropic"},
+                {"id": "claude-opus-4-20250514", "object": "model", "owned_by": "anthropic"},
+                {"id": "claude-3-7-sonnet-20250219", "object": "model", "owned_by": "anthropic"},
+                {"id": "claude-3-5-sonnet-20241022", "object": "model", "owned_by": "anthropic"},
+                {"id": "claude-3-5-haiku-20241022", "object": "model", "owned_by": "anthropic"},
+            ]
+        }
+
+    if __name__ == "__main__":
+        import uvicorn
+        port = int(os.getenv("PORT", "8000"))
+        uvicorn.run(app, host="0.0.0.0", port=port)
+
+  # Additional source files would be added here in a real deployment
+  # For now, we'll use a minimal implementation to get the service running

@@ -1,0 +1,194 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: claude-wrapper
+  namespace: claude-wrapper
+  labels:
+    app: claude-wrapper
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: claude-wrapper
+  template:
+    metadata:
+      labels:
+        app: claude-wrapper
+    spec:
+      serviceAccountName: claude-wrapper
+      containers:
+      - name: claude-wrapper
+        image: python:3.11-slim
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        - name: PORT
+          value: "8000"
+        - name: DEBUG_MODE
+          value: "false"
+        - name: VERBOSE
+          value: "false"
+        
+        # Claude Code authentication - from Infisical secrets
+        - name: ANTHROPIC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: claude-wrapper-auth
+              key: anthropic-api-key
+              optional: true
+        
+        # AWS Bedrock authentication
+        - name: CLAUDE_CODE_USE_BEDROCK
+          valueFrom:
+            secretKeyRef:
+              name: claude-wrapper-auth
+              key: claude-use-bedrock
+              optional: true
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: claude-wrapper-auth
+              key: aws-access-key-id
+              optional: true
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: claude-wrapper-auth
+              key: aws-secret-access-key
+              optional: true
+        - name: AWS_REGION
+          valueFrom:
+            secretKeyRef:
+              name: claude-wrapper-auth
+              key: aws-region
+              optional: true
+        
+        # Vertex AI authentication
+        - name: CLAUDE_CODE_USE_VERTEX
+          valueFrom:
+            secretKeyRef:
+              name: claude-wrapper-auth
+              key: claude-use-vertex
+              optional: true
+        - name: ANTHROPIC_VERTEX_PROJECT_ID
+          valueFrom:
+            secretKeyRef:
+              name: claude-wrapper-auth
+              key: anthropic-vertex-project-id
+              optional: true
+        - name: CLOUD_ML_REGION
+          valueFrom:
+            secretKeyRef:
+              name: claude-wrapper-auth
+              key: cloud-ml-region
+              optional: true
+        
+        # Optional API key protection
+        - name: API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: claude-wrapper-auth
+              key: api-key
+              optional: true
+        
+        # Configuration
+        - name: MAX_TIMEOUT
+          valueFrom:
+            secretKeyRef:
+              name: claude-wrapper-auth
+              key: max-timeout
+              optional: true
+        - name: CORS_ORIGINS
+          valueFrom:
+            secretKeyRef:
+              name: claude-wrapper-auth
+              key: cors-origins
+              optional: true
+        
+        # Google Application Credentials (for Vertex AI)
+        - name: GOOGLE_APPLICATION_CREDENTIALS
+          value: "/etc/gcp/credentials.json"
+        
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop:
+            - ALL
+        
+        volumeMounts:
+        - name: app-code
+          mountPath: /app
+        - name: gcp-credentials
+          mountPath: /etc/gcp
+          readOnly: true
+        
+        command: ["/bin/bash", "-c"]
+        args:
+        - |
+          set -e
+          cd /app
+          
+          # Install Poetry
+          pip install poetry==1.7.1
+          
+          # Configure poetry
+          poetry config virtualenvs.create false
+          
+          # Install dependencies
+          poetry install --only=main --no-dev
+          
+          # Run the application
+          python main.py
+      
+      volumes:
+      - name: app-code
+        configMap:
+          name: claude-wrapper-app
+          defaultMode: 0755
+      - name: gcp-credentials
+        secret:
+          secretName: claude-wrapper-auth
+          items:
+          - key: google-application-credentials
+            path: credentials.json
+          optional: true
+      
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: claude-wrapper
+  namespace: claude-wrapper
+  labels:
+    app: claude-wrapper
