@@ -1,11 +1,11 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: litellm-config
+  name: litellm-config-file
   namespace: litellm
 data:
   config.yaml: |
-    model_list:
+    model_list: 
       - model_name: gpt-4o
         litellm_params:
           model: openai/gpt-4o
@@ -14,20 +14,3 @@ data:
         litellm_params:
           model: anthropic/claude-3-5-sonnet-20241022
           api_key: os.environ/LITELLM_ANTHROPIC_API_KEY
-    
-    general_settings:
-      master_key: os.environ/LITELLM_MASTER_KEY
-      database_url: os.environ/LITELLM_DATABASE_URL
-      store_model_in_db: true
-      
-      # Security settings
-      enforce_user_param: true
-      max_budget: 100.0
-      budget_duration: "30d"
-      
-      # Logging and monitoring
-      success_callback: ["prometheus"]
-      failure_callback: ["prometheus"]
-      
-      # UI settings
-      ui_logo_path: "https://litellm.ai/img/logo.jpg"

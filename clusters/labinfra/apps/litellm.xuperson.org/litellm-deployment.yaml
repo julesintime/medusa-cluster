@@ -1,10 +1,11 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: litellm
+  name: litellm-deployment
   namespace: litellm
+  labels:
+    app: litellm
 spec:
-  replicas: 1
   selector:
     matchLabels:
       app: litellm
@@ -13,12 +14,6 @@ spec:
       labels:
         app: litellm
     spec:
-      serviceAccountName: litellm
-      securityContext:
-        runAsNonRoot: false
-        runAsUser: 0
-        runAsGroup: 0
-        fsGroup: 0
       containers:
       - name: litellm
         image: ghcr.io/berriai/litellm:main-stable
@@ -27,74 +22,20 @@ spec:
           - "/app/proxy_server_config.yaml"
         ports:
         - containerPort: 4000
-          name: http
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/proxy_server_config.yaml
+          subPath: config.yaml
         env:
         - name: LITELLM_MASTER_KEY
           valueFrom:
             secretKeyRef:
               name: litellm-secrets
               key: master-key
-        - name: LITELLM_OPENAI_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: litellm-secrets
-              key: openai-api-key
-        - name: LITELLM_ANTHROPIC_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: litellm-secrets
-              key: anthropic-api-key
-        - name: LITELLM_DATABASE_URL
-          value: "postgresql://postgres:litellm-postgres-password@postgresql:5432/litellm"
-        - name: DISABLE_SCHEMA_UPDATE
-          value: "false"
-        volumeMounts:
-        - name: config-volume
-          mountPath: /app/proxy_server_config.yaml
-          subPath: config.yaml
-        - name: cache-volume
-          mountPath: /.cache
-        - name: tmp-volume
-          mountPath: /tmp
-        resources:
-          requests:
-            cpu: 100m
-            memory: 256Mi
-          limits:
-            cpu: 1000m
-            memory: 1Gi
-        securityContext:
-          allowPrivilegeEscalation: true
-          readOnlyRootFilesystem: false
-          capabilities:
-            add:
-            - CHOWN
-            - DAC_OVERRIDE
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 4000
-            scheme: HTTP
-          initialDelaySeconds: 60
-          periodSeconds: 30
-          timeoutSeconds: 10
-          successThreshold: 1
-          failureThreshold: 5
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 4000
-            scheme: HTTP
-          initialDelaySeconds: 30
-          periodSeconds: 10
-          timeoutSeconds: 5
-          successThreshold: 1
-          failureThreshold: 3
+        envFrom:
+        - secretRef:
+            name: litellm-secrets
       volumes:
-      - name: config-volume
-        configMap:
-          name: litellm-config
-      - name: cache-volume
-        emptyDir: {}
-      - name: tmp-volume
-        emptyDir: {}
+        - name: config-volume
+          configMap:
+            name: litellm-config-file
