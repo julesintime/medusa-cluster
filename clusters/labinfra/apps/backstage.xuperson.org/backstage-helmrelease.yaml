@@ -27,39 +27,61 @@ spec:
         repository: spotify/backstage
         tag: latest
       
-      # Minimal configuration - use SQLite instead of PostgreSQL
-      appConfig:
-        app:
-          title: Developer Portal
-          baseUrl: https://backstage.xuperson.org
-        
-        backend:
-          baseUrl: https://backstage.xuperson.org
-          database:
-            client: better-sqlite3
-            connection: ':memory:'
-        
-        # Guest authentication for single user setup
-        auth:
-          providers:
-            guest:
-              dangerouslyAllowOutsideDevelopment: true
+      # Use environment variables for configuration
+      extraEnvVars:
+        - name: APP_CONFIG_app_title
+          value: "Developer Portal"
+        - name: APP_CONFIG_app_baseUrl
+          value: "https://backstage.xuperson.org"
+        - name: APP_CONFIG_backend_baseUrl
+          value: "https://backstage.xuperson.org"
+        - name: APP_CONFIG_backend_database_client
+          value: "pg"
+        - name: POSTGRES_HOST
+          value: "backstage-postgresql"
+        - name: POSTGRES_PORT
+          value: "5432"
+        - name: POSTGRES_USER
+          value: "backstage"
+        - name: POSTGRES_DB
+          value: "backstage"
+      
+      # Reference secrets for sensitive data
+      extraEnvVarsSecrets:
+        - backstage-secrets
+      
+      # Resource limits
+      resources:
+        requests:
+          memory: "512Mi"
+          cpu: "500m"
+        limits:
+          memory: "1Gi"
+          cpu: "1000m"
     
-    # Disable PostgreSQL dependency for minimal setup
+    # Enable PostgreSQL for persistent storage
     postgresql:
-      enabled: false
+      enabled: true
+      auth:
+        username: backstage
+        database: backstage
+        existingSecret: backstage-secrets
+        secretKeys:
+          adminPasswordKey: postgres-password
+          userPasswordKey: postgres-password
+      persistence:
+        enabled: true
+        size: 8Gi
+      resources:
+        requests:
+          memory: "256Mi"
+          cpu: "250m"
+        limits:
+          memory: "512Mi"
+          cpu: "500m"
     
-    # Service configuration
+    # Service configuration (correct schema)
     service:
       type: ClusterIP
-      port: 80
-      targetPort: 7007
-    
-    # Resource limits for minimal setup
-    resources:
-      requests:
-        memory: "256Mi"
-        cpu: "250m"
-      limits:
-        memory: "512Mi"
-        cpu: "500m"
+      ports:
+        backend: 7007
