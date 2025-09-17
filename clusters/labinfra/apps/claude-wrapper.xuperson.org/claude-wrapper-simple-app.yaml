@@ -1,0 +1,144 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: claude-wrapper-simple-app
+  namespace: claude-wrapper
+data:
+  main.py: |
+    import os
+    import json
+    import uvicorn
+    from fastapi import FastAPI, HTTPException
+    from fastapi.middleware.cors import CORSMiddleware
+    from pydantic import BaseModel
+    from typing import List, Optional
+
+    app = FastAPI(
+        title="Claude Code OpenAI API Wrapper",
+        description="OpenAI-compatible API for Claude Code",
+        version="1.0.0"
+    )
+
+    # Configure CORS
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    # Basic models for OpenAI compatibility
+    class Message(BaseModel):
+        role: str
+        content: str
+
+    class ChatCompletionRequest(BaseModel):
+        model: str
+        messages: List[Message]
+        stream: Optional[bool] = False
+        temperature: Optional[float] = 1.0
+        max_tokens: Optional[int] = None
+
+    class ChatCompletionResponse(BaseModel):
+        id: str
+        object: str = "chat.completion"
+        created: int
+        model: str
+        choices: List[dict]
+        usage: dict
+
+    @app.get("/health")
+    async def health_check():
+        """Health check endpoint."""
+        # Check if OAuth config is available
+        oauth_config = os.getenv("CLAUDE_OAUTH_CONFIG", "{}")
+        try:
+            config = json.loads(oauth_config)
+            has_oauth = "claudeAiOauth" in config
+        except:
+            has_oauth = False
+        
+        return {
+            "status": "healthy", 
+            "service": "claude-code-openai-wrapper",
+            "oauth_configured": has_oauth
+        }
+
+    @app.get("/v1/models")
+    async def list_models():
+        """List available models."""
+        return {
+            "object": "list",
+            "data": [
+                {"id": "claude-sonnet-4-20250514", "object": "model", "owned_by": "anthropic"},
+                {"id": "claude-opus-4-20250514", "object": "model", "owned_by": "anthropic"},
+                {"id": "claude-3-5-sonnet-20241022", "object": "model", "owned_by": "anthropic"},
+                {"id": "claude-3-5-haiku-20241022", "object": "model", "owned_by": "anthropic"},
+            ]
+        }
+
+    @app.post("/v1/chat/completions")
+    async def chat_completions(request: ChatCompletionRequest):
+        """Basic chat completions endpoint - placeholder implementation."""
+        # For now, return a simple response to test the deployment
+        # The full Claude Code SDK integration would go here
+        
+        import time
+        response_id = f"chatcmpl-{int(time.time())}"
+        
+        return {
+            "id": response_id,
+            "object": "chat.completion",
+            "created": int(time.time()),
+            "model": request.model,
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": "Hello! This is a test response from the Claude Code OpenAI Wrapper. The service is running but Claude Code SDK integration is not yet implemented in this minimal version."
+                    },
+                    "finish_reason": "stop"
+                }
+            ],
+            "usage": {
+                "prompt_tokens": 10,
+                "completion_tokens": 25,
+                "total_tokens": 35
+            }
+        }
+
+    @app.get("/v1/auth/status")
+    async def auth_status():
+        """Check authentication status."""
+        oauth_config = os.getenv("CLAUDE_OAUTH_CONFIG", "{}")
+        try:
+            config = json.loads(oauth_config)
+            has_oauth = "claudeAiOauth" in config
+            if has_oauth:
+                # Don't expose the actual tokens, just confirm they exist
+                oauth_info = {
+                    "configured": True,
+                    "has_access_token": bool(config.get("claudeAiOauth", {}).get("accessToken")),
+                    "has_refresh_token": bool(config.get("claudeAiOauth", {}).get("refreshToken")),
+                    "expires_at": config.get("claudeAiOauth", {}).get("expiresAt"),
+                    "scopes": config.get("claudeAiOauth", {}).get("scopes", [])
+                }
+            else:
+                oauth_info = {"configured": False}
+        except Exception as e:
+            oauth_info = {"configured": False, "error": str(e)}
+        
+        return {
+            "oauth": oauth_info,
+            "anthropic_api_key": bool(os.getenv("ANTHROPIC_API_KEY")),
+            "environment": {
+                "port": os.getenv("PORT", "8000"),
+                "debug_mode": os.getenv("DEBUG_MODE", "false")
+            }
+        }
+
+    if __name__ == "__main__":
+        port = int(os.getenv("PORT", "8000"))
+        uvicorn.run(app, host="0.0.0.0", port=port)

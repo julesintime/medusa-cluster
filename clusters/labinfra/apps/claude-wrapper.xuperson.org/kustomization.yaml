@@ -6,7 +6,7 @@ namespace: claude-wrapper
 resources:
   - claude-wrapper-namespace.yaml
   - claude-wrapper-infisical-secrets.yaml
-  - claude-wrapper-app-configmap.yaml
+  - claude-wrapper-simple-app.yaml
   - claude-wrapper-deployment.yaml
   - claude-wrapper-service.yaml
   - claude-wrapper-ingress.yaml
