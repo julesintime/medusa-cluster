@@ -14,11 +14,10 @@ data:
         litellm_params:
           model: anthropic/claude-3-5-sonnet-20241022
           api_key: os.environ/LITELLM_ANTHROPIC_API_KEY
-      - model_name: gemma-3-27b
+      - model_name: test-model
         litellm_params:
-          model: vertex_ai/gemma-3-27b-it
-          vertex_project: os.environ/VERTEX_PROJECT_ID
-          vertex_location: "us-central1"
+          model: gpt-4o-mini
+          api_key: os.environ/LITELLM_OPENAI_API_KEY
 
     router_settings:
       routing_strategy: simple-shuffle
