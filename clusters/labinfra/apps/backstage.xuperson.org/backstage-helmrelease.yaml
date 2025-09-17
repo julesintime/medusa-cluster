@@ -21,23 +21,22 @@ spec:
       sourceRef:
         kind: HelmRepository
         name: backstage
+  # MINIMAL CONFIGURATION - ADD GITHUB AUTH TO EXISTING GUEST
   values:
     backstage:
-      # GitHub OAuth configuration
-      extraEnvVars:
-        - name: APP_CONFIG_app_title
-          value: "Developer Portal"
-        - name: APP_CONFIG_app_baseUrl
-          value: "https://backstage.xuperson.org"
-        - name: APP_CONFIG_backend_baseUrl
-          value: "https://backstage.xuperson.org"
-        - name: APP_CONFIG_auth_providers_github_development_clientId
-          valueFrom:
-            secretKeyRef:
-              name: backstage-secrets
-              key: AUTH_GITHUB_CLIENT_ID
-        - name: APP_CONFIG_auth_providers_github_development_clientSecret
-          valueFrom:
-            secretKeyRef:
-              name: backstage-secrets
-              key: AUTH_GITHUB_CLIENT_SECRET
+      appConfig:
+        app:
+          title: Developer Portal
+          baseUrl: https://backstage.xuperson.org
+        backend:
+          baseUrl: https://backstage.xuperson.org
+        auth:
+          providers:
+            guest: {}
+            github:
+              development:
+                clientId: ${AUTH_GITHUB_CLIENT_ID}
+                clientSecret: ${AUTH_GITHUB_CLIENT_SECRET}
+      
+      extraEnvVarsSecrets:
+        - backstage-secrets
