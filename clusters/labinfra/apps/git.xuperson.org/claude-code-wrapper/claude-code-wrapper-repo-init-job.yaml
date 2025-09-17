@@ -20,12 +20,12 @@ spec:
         - name: GITEA_ADMIN_USER
           valueFrom:
             secretKeyRef:
-              name: gitea-admin-credentials
+              name: gitea-admin-secrets
               key: username
         - name: GITEA_ADMIN_PASS
           valueFrom:
             secretKeyRef:
-              name: gitea-admin-credentials
+              name: gitea-admin-secrets
               key: password
         - name: REPO_NAME
           value: "claude-code-wrapper"
