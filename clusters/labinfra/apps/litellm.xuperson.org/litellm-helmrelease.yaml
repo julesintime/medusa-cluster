@@ -8,8 +8,11 @@ spec:
   timeout: 10m
   chart:
     spec:
-      chart: oci://ghcr.io/berriai/litellm-helm
+      chart: litellm-helm
       version: "0.1.2"
+      sourceRef:
+        kind: OCIRepository
+        name: litellm-chart
   install:
     createNamespace: false
   values:
