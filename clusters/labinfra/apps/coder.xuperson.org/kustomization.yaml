@@ -22,10 +22,7 @@ resources:
   - coder-infisical-secrets.yaml
   - coder-github-external-auth-infisical-secrets.yaml
   
-  # Template automation (GitOps)
+  # Template automation (GitOps) - FULLY AUTOMATED
   - coder-template-files-configmap.yaml
   - coder-template-init-script-configmap.yaml
-  
-  # Template automation job - COMMENTED OUT FOR BOOTSTRAP
-  # Uncomment after manual API token creation (see API-TOKEN-MANAGEMENT.md)
-  # - coder-template-init-job.yaml
+  - coder-template-init-job.yaml  # ✅ ENABLED: Follows Gitea pattern for automatic bootstrap

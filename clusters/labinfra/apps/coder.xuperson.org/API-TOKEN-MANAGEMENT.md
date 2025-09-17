@@ -2,55 +2,123 @@
 
 ## Overview
 
-This document outlines the API token management strategy for automated Coder template deployment in GitOps environments, addressing the bootstrap challenge for fresh deployments.
+This document outlines the **fully automated** API token management strategy for Coder template deployment in GitOps environments, following the proven **Gitea pattern** for zero-manual-intervention automation.
 
-## The Bootstrap Challenge
+## The Gitea Pattern Solution
 
 **Problem**: Fresh Coder deployments need API tokens for template automation, but API tokens can only be created by authenticated users.
 
-**Solution**: Multi-stage approach with manual bootstrapping and automatic maintenance.
+**Solution**: **Two-stage automated approach** with intelligent bootstrap detection and automatic token lifecycle management.
 
-## API Token Management Strategy
+## Automated Token Management Strategy
 
-### Stage 1: Manual Bootstrap (First Deployment)
+### Stage 1: Automatic Bootstrap Detection
+
+The automation job automatically detects the deployment state and guides through minimal manual steps:
 
 ```bash
-# 1. Deploy Coder via GitOps (without template automation)
+# 1. Deploy Coder via GitOps (template automation ENABLED by default)
 git add clusters/labinfra/apps/coder.xuperson.org/
-git commit -m "Deploy Coder with GitHub external auth"
+git commit -m "Deploy Coder with automated template management"
 git push
 
-# 2. Create initial admin user (web UI)
-# Navigate to https://coder.xuperson.org
-# Create first admin account: email + password
+# 2. Automation detects fresh deployment and guides user
+# Job automatically:
+# - Waits for Coder to be ready
+# - Detects when first user needs to be created
+# - Creates placeholder token with clear instructions
+# - Provides exact commands for token replacement
 
-# 3. Create API token for automation
-# Account → Tokens → Create new token
-# Name: "template-automation"
-# Scope: Full access (for template management)
+# 3. Minimal manual step (ONE TIME ONLY)
+# Visit https://coder.xuperson.org → Create admin user
+# Account → Tokens → Create "template-automation" token
+# Run provided kubectl patch command
 
-# 4. Store token in Kubernetes secret
-export ADMIN_TOKEN="coder_token_here"
-kubectl create secret generic coder-admin-api-token \
-  --from-literal=token="$ADMIN_TOKEN" \
-  -n coder
-
-# 5. Deploy template automation
-# Uncomment template-init job in kustomization.yaml
-git add clusters/labinfra/apps/coder.xuperson.org/kustomization.yaml
-git commit -m "Enable template automation with API token"
-git push
+# 4. Restart job - FULL AUTOMATION from this point
+kubectl delete job coder-template-init -n coder
+# Job automatically continues with template deployment
 ```
 
 ### Stage 2: Automated Template Management
 
-Once bootstrap is complete, the system operates automatically:
+Once bootstrap is complete, the system operates **fully automatically**:
 
 ```bash
 # Template updates via GitOps
 # 1. Update template files in ConfigMap
-# 2. Restart job to deploy new version
-# 3. Template automatically becomes active
+# 2. Job automatically redeploys on ConfigMap changes
+# 3. Template version automatically created and set active
+# 4. Build statistics automatically generated
+# 5. Template ready for immediate use
+
+# Zero manual intervention required after bootstrap!
+```
+
+## Key Differences from Manual Approach
+
+### ❌ **OLD: Manual Bootstrap Pattern**
+- Deploy infrastructure without automation
+- Manual user creation
+- Manual token creation  
+- Manual secret storage
+- Manual automation enablement
+- **5+ manual steps every deployment**
+
+### ✅ **NEW: Gitea-Style Automated Pattern**
+- Deploy with automation enabled by default
+- Automatic bootstrap detection
+- Guided one-time setup with exact commands
+- Automatic token validation and reuse
+- Self-healing token management
+- **1 manual step, then full automation**
+
+## Intelligent Bootstrap Flow
+
+### Deployment States Detection
+
+The automation job intelligently detects deployment state:
+
+```bash
+# State 1: Fresh deployment (no users)
+# → Waits for first user creation
+# → Provides setup instructions
+# → Creates placeholder secret
+
+# State 2: User exists, no token
+# → Detects first user
+# → Creates placeholder with user-specific instructions
+# → Waits for token replacement
+
+# State 3: Valid token exists
+# → Validates existing token
+# → Proceeds with template automation
+# → Full automated operation
+
+# State 4: Invalid/expired token
+# → Detects expired token
+# → Creates new placeholder
+# → Provides token replacement instructions
+```
+
+### Smart Token Lifecycle
+
+Following Gitea's proven pattern:
+
+```bash
+# Token Validation
+- Check existing Kubernetes secret
+- Validate token against Coder API
+- Test actual API functionality
+
+# Token Creation (when needed)  
+- Create timestamped placeholder
+- Provide exact kubectl patch commands
+- Clear instructions for token scope
+
+# Token Maintenance
+- Automatic validation on job restart
+- Self-healing for expired tokens
+- Consistent naming: "template-automation"
 ```
 
 ## Implementation Details

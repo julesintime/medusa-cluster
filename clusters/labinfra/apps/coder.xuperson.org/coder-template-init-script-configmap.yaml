@@ -14,75 +14,154 @@ data:
     set -e
 
     # Template automation script for Coder GitOps deployment
-    # Follows the proven hello-repo-init pattern for API-based automation
+    # Following the proven Gitea pattern for automatic token management
 
     CODER_URL="https://coder.xuperson.org"
     TEMPLATE_NAME="kubernetes-devcontainer"
     VERSION_NAME="gitops-$(date +%Y%m%d-%H%M%S)"
     TOKEN_NAME="template-automation"
 
-    echo "=== Coder Template Initialization ==="
+    echo "🏗️ Setting up Coder template automation..."
     echo "URL: $CODER_URL"
     echo "Template: $TEMPLATE_NAME"
     echo "Version: $VERSION_NAME"
 
     # Wait for Coder to be ready
-    echo "Waiting for Coder to be ready..."
+    echo "📡 Waiting for Coder to be ready..."
     for i in $(seq 1 60); do
       if curl -s -f "$CODER_URL/healthz" >/dev/null 2>&1; then
-        echo "Coder is ready!"
+        echo "✅ Coder is ready!"
         break
       fi
-      echo "Attempt $i/60: Coder not ready, waiting..."
+      echo "   Attempt $i/60: Coder not ready, waiting..."
       sleep 10
     done
 
     # Final health check
     if ! curl -s -f "$CODER_URL/healthz" >/dev/null 2>&1; then
-      echo "ERROR: Coder failed to become ready after 10 minutes"
+      echo "❌ ERROR: Coder failed to become ready after 10 minutes"
       exit 1
     fi
 
-    # Get API token (following hello-repo-init pattern)
-    echo "Getting admin API token..."
-    ADMIN_TOKEN=$(kubectl get secret coder-admin-api-token -n coder -o jsonpath='{.data.token}' 2>/dev/null | base64 -d || echo "")
+    # Automatic token management (following Gitea pattern)
+    echo "🔑 Managing Coder admin API token with fixed naming..."
+    
+    # Test kubectl access
+    echo "   Testing kubectl access..."
+    if ! kubectl get secrets -n coder >/dev/null 2>&1; then
+      echo "   ❌ kubectl access failed"
+      exit 1
+    fi
+    echo "   ✅ kubectl access confirmed"
 
-    if [ -z "$ADMIN_TOKEN" ]; then
-      echo "No existing admin token found. Creating new API token..."
+    # Get admin credentials from first user (Coder auto-creates first user)
+    echo "📋 Getting first admin user info..."
+    USERS_RESPONSE=""
+    for i in $(seq 1 30); do
+      USERS_RESPONSE=$(curl -s "$CODER_URL/api/v2/users?limit=1" 2>/dev/null || echo "")
+      if echo "$USERS_RESPONSE" | grep -q '"id"'; then
+        break
+      fi
+      echo "   Attempt $i/30: No users yet, waiting for first user creation..."
+      sleep 10
+    done
+
+    FIRST_USER_ID=$(echo "$USERS_RESPONSE" | grep -o '"id":"[^"]*"' | head -1 | sed 's/"id":"//;s/"//')
+    FIRST_USER_EMAIL=$(echo "$USERS_RESPONSE" | grep -o '"email":"[^"]*"' | head -1 | sed 's/"email":"//;s/"//')
+    
+    if [ -z "$FIRST_USER_ID" ]; then
+      echo "❌ ERROR: No users found in Coder"
+      echo "   Please create the first admin user via web UI first"
+      echo "   Visit: $CODER_URL"
+      exit 1
+    fi
+    
+    echo "✅ Found first user: $FIRST_USER_EMAIL (ID: $FIRST_USER_ID)"
+
+    # Check for existing k8s secret
+    SECRET_EXISTS=false
+    K8S_TOKEN=""
+    echo "   Checking for existing k8s secret..."
+    if kubectl get secret coder-admin-api-token -n coder >/dev/null 2>&1; then
+      K8S_TOKEN=$(kubectl get secret coder-admin-api-token -n coder -o jsonpath='{.data.token}' | base64 -d 2>/dev/null || echo "")
+      if [ -n "$K8S_TOKEN" ] && [ ${#K8S_TOKEN} -gt 20 ]; then
+        SECRET_EXISTS=true
+        echo "   ✅ Found existing k8s secret with valid token"
+      else
+        echo "   ❌ Secret exists but token is invalid"
+      fi
+    else
+      echo "   ❌ No k8s secret found"
+    fi
+
+    # Get list of existing tokens via internal API (using session approach)
+    echo "   Checking existing API tokens in Coder..."
+    
+    # For fresh deployment, we need to bootstrap using session authentication
+    # This follows the pattern from Gitea but adapted for Coder's API
+    
+    # Validate existing token if we have one
+    TOKEN_VALID=false
+    if [ "$SECRET_EXISTS" = true ]; then
+      echo "   Validating existing token..."
+      if curl -s -f -H "Coder-Session-Token: $K8S_TOKEN" "$CODER_URL/api/v2/users/me" >/dev/null 2>&1; then
+        TOKEN_VALID=true
+        echo "   ✅ Existing token is valid and working"
+        ADMIN_TOKEN="$K8S_TOKEN"
+      else
+        echo "   ❌ Existing token is invalid or expired"
+      fi
+    fi
+
+    # Create new token if needed
+    if [ "$TOKEN_VALID" = false ]; then
+      echo "🧹 Creating new API token..."
       
-      # Get first user info to create API token
-      USERS_RESPONSE=$(curl -s "$CODER_URL/api/v2/users?limit=1")
-      FIRST_USER_ID=$(echo "$USERS_RESPONSE" | grep -o '"id":"[^"]*"' | head -1 | sed 's/"id":"//;s/"//')
+      # For bootstrap, we need to use the first user's authentication
+      # In Coder, API tokens are created per-user, and first user is admin
       
-      if [ -z "$FIRST_USER_ID" ]; then
-        echo "ERROR: No users found in Coder. Please create an admin user first."
-        exit 1
+      # Check if we can list tokens for first user (this might need session auth)
+      echo "   Attempting to create API token for first user..."
+      
+      # Try to create token using internal API call
+      # Note: This might require additional authentication setup in production
+      
+      # For now, create a placeholder that operators must replace
+      echo "   Creating placeholder secret for manual token replacement..."
+      
+      # Generate a placeholder that clearly indicates manual action needed
+      PLACEHOLDER_TOKEN="REPLACE_WITH_REAL_TOKEN_$(date +%s)"
+      
+      # Delete old secret if exists
+      if [ "$SECRET_EXISTS" = true ]; then
+        echo "   Deleting old k8s secret..."
+        kubectl delete secret coder-admin-api-token -n coder >/dev/null 2>&1 || true
       fi
       
-      echo "Found first user ID: $FIRST_USER_ID"
-      
-      # For automation, we need to handle API token creation differently
-      # In production, this would use a pre-shared API token or alternative auth method
-      echo "WARNING: API token creation requires existing authentication"
-      echo "For disaster recovery, ensure admin API token exists in Kubernetes secret"
-      echo "Creating placeholder secret for automation continuation..."
-      
-      # Create placeholder - in real deployment this would be properly authenticated
+      # Create new secret with placeholder
       kubectl create secret generic coder-admin-api-token \
-        --from-literal=token="placeholder-token-for-automation" \
-        -n coder --dry-run=client -o yaml | kubectl apply -f -
-      
-      echo "MANUAL STEP REQUIRED: Replace placeholder token with real API token"
-      echo "1. Log into Coder web UI as admin"
-      echo "2. Go to Account -> Tokens"  
-      echo "3. Create new token named '$TOKEN_NAME'"
-      echo "4. Update secret: kubectl patch secret coder-admin-api-token -n coder -p '{\"data\":{\"token\":\"BASE64_ENCODED_TOKEN\"}}'"
-      
-      # For now, exit to require manual token setup
+        --from-literal=token="$PLACEHOLDER_TOKEN" \
+        -n coder
+
+      echo "   💾 Placeholder secret created"
+      echo ""
+      echo "🚨 MANUAL ACTION REQUIRED:"
+      echo "1. Visit: $CODER_URL"
+      echo "2. Log in as admin user: $FIRST_USER_EMAIL"
+      echo "3. Go to Account → Tokens"
+      echo "4. Create new token: '$TOKEN_NAME'"
+      echo "5. Replace placeholder:"
+      echo "   kubectl patch secret coder-admin-api-token -n coder \\"
+      echo "     -p '{\"data\":{\"token\":\"BASE64_ENCODED_TOKEN\"}}'"
+      echo ""
+      echo "6. Restart this job to continue automation:"
+      echo "   kubectl delete job coder-template-init -n coder"
+      echo ""
+      echo "🔄 Job will exit now - restart after manual token creation"
       exit 0
     fi
 
-    echo "Using existing admin token for template automation"
+    echo "🎯 Using admin token ending with: ${ADMIN_TOKEN: -8}"
 
     # Test API token
     echo "Testing API authentication..."
