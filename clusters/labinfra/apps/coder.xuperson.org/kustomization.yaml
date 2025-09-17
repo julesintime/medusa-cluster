@@ -6,9 +6,8 @@ resources:
   - coder-namespace.yaml
   - coder-rbac.yaml
   
-  # Database (PostgreSQL)
-  - postgresql-helmrepository.yaml
-  - postgresql-helmrelease.yaml
+  # Database (Simple PostgreSQL)
+  - postgres-deployment.yaml
   
   # Networking and proxies
   - proxy-headers.yaml
