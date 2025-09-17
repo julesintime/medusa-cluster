@@ -46,10 +46,16 @@ spec:
               key: anthropic-api-key
         - name: LITELLM_DATABASE_URL
           value: "postgresql://postgres:litellm-postgres-password@postgresql:5432/litellm"
+        - name: DISABLE_SCHEMA_UPDATE
+          value: "false"
         volumeMounts:
         - name: config-volume
           mountPath: /app/proxy_server_config.yaml
           subPath: config.yaml
+        - name: cache-volume
+          mountPath: /.cache
+        - name: tmp-volume
+          mountPath: /tmp
         resources:
           requests:
             cpu: 100m
@@ -87,3 +93,7 @@ spec:
       - name: config-volume
         configMap:
           name: litellm-config
+      - name: cache-volume
+        emptyDir: {}
+      - name: tmp-volume
+        emptyDir: {}
