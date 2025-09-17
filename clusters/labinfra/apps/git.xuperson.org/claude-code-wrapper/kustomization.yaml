@@ -2,15 +2,15 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 metadata:
-  name: hello-setup
+  name: claude-code-wrapper-setup
 
 resources:
-  - hello-app-configmap.yaml
-  - hello-cicd-configmap.yaml
-  - hello-repo-init-job.yaml
+  - claude-code-wrapper-app-configmap.yaml
+  - claude-code-wrapper-cicd-configmap.yaml
+  - claude-code-wrapper-repo-init-job.yaml
 
 labels:
   - includeSelectors: false
     pairs:
-      app.kubernetes.io/name: hello-setup
+      app.kubernetes.io/name: claude-code-wrapper-setup
       app.kubernetes.io/managed-by: flux

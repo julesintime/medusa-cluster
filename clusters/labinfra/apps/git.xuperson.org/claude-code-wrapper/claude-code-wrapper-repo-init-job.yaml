@@ -1,343 +1,185 @@
 ---
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: hello-repo-setup-script
-  namespace: gitea
-  labels:
-    app.kubernetes.io/name: hello-repo-setup
-    app.kubernetes.io/component: repository-management
-    app.kubernetes.io/managed-by: flux
-data:
-  hello-repo-setup.sh: |
-    #!/bin/sh
-    set -e
-
-    echo "🏗️ Setting up hello demo repository in Gitea..."
-
-    # Get admin credentials
-    ADMIN_USER=$(/usr/local/bin/kubectl get secret gitea-admin-secrets -n gitea -o jsonpath='{.data.username}' | base64 -d)
-    ADMIN_PASS=$(/usr/local/bin/kubectl get secret gitea-admin-secrets -n gitea -o jsonpath='{.data.password}' | base64 -d)
-
-    # Test Gitea API connection
-    echo "📡 Testing Gitea API connection..."
-    until curl -s -f -u "$ADMIN_USER:$ADMIN_PASS" "http://gitea-http:3000/api/v1/version" >/dev/null; do
-      echo "   Gitea API not ready, waiting 5 seconds..."
-      sleep 5
-    done
-    echo "✅ Gitea API is accessible"
-
-    # Simple token management: use fixed token name and proper reuse logic
-    echo "🔑 Managing admin API token with fixed naming..."
-    
-    # Test kubectl access
-    echo "   Testing kubectl access..."
-    if ! /usr/local/bin/kubectl get secrets -n gitea >/dev/null 2>&1; then
-      echo "   ❌ kubectl access failed"
-      exit 1
-    fi
-    echo "   ✅ kubectl access confirmed"
-    
-    # Use fixed token name for consistency
-    TOKEN_NAME="repo-automation"
-    
-    # Check for existing k8s secret
-    SECRET_EXISTS=false
-    K8S_TOKEN=""
-    echo "   Checking for existing k8s secret..."
-    if /usr/local/bin/kubectl get secret gitea-admin-api-token -n gitea >/dev/null 2>&1; then
-      K8S_TOKEN=$(/usr/local/bin/kubectl get secret gitea-admin-api-token -n gitea -o jsonpath='{.data.token}' | base64 -d 2>/dev/null)
-      if [ -n "$K8S_TOKEN" ] && [ ${#K8S_TOKEN} -eq 40 ]; then
-        SECRET_EXISTS=true
-        echo "   ✅ Found existing k8s secret with valid token"
-      else
-        echo "   ❌ Secret exists but token is invalid"
-      fi
-    else
-      echo "   ❌ No k8s secret found"
-    fi
-    
-    # Check if our specific token exists in Gitea
-    echo "   Checking Gitea for '$TOKEN_NAME' token..."
-    TOKENS_RESPONSE=$(curl -s -u "$ADMIN_USER:$ADMIN_PASS" "http://gitea-http:3000/api/v1/users/$ADMIN_USER/tokens")
-    TARGET_TOKEN_EXISTS=false
-    TARGET_TOKEN_SHA1=""
-    
-    if echo "$TOKENS_RESPONSE" | grep -q "\"name\":\"$TOKEN_NAME\""; then
-      echo "   ✅ Found '$TOKEN_NAME' token in Gitea"
-      TARGET_TOKEN_EXISTS=true
-      # Extract SHA1 for our specific token
-      TARGET_TOKEN_SHA1=$(echo "$TOKENS_RESPONSE" | grep -A3 "\"name\":\"$TOKEN_NAME\"" | grep '"sha1"' | head -1 | grep -o '"sha1":"[^"]*"' | sed 's/"sha1":"//;s/"//')
-    else
-      echo "   ❌ No '$TOKEN_NAME' token found in Gitea"
-    fi
-    
-    # Validate existing token if both k8s secret and Gitea token exist
-    TOKEN_VALID=false
-    if [ "$SECRET_EXISTS" = true ] && [ "$TARGET_TOKEN_EXISTS" = true ]; then
-      echo "   Validating existing token..."
-      if curl -s -f -H "Authorization: token $K8S_TOKEN" "http://gitea-http:3000/api/v1/version" >/dev/null 2>&1; then
-        TOKEN_VALID=true
-        echo "   ✅ Existing token is valid and working"
-        ADMIN_TOKEN="$K8S_TOKEN"
-      else
-        echo "   ❌ Existing token is invalid or expired"
-      fi
-    fi
-    
-    # Create new token if needed
-    if [ "$TOKEN_VALID" = false ]; then
-      echo "🧹 Cleaning up old tokens and creating new one..."
-      
-      # Delete ALL repo-automation* tokens (cleanup legacy timestamped tokens)
-      echo "   Cleaning up all repo-automation* tokens..."
-      ALL_REPO_TOKENS=$(echo "$TOKENS_RESPONSE" | grep -o '"name":"repo-automation[^"]*"' | sed 's/"name":"//;s/"//' | tr '\n' ' ')
-      if [ -n "$ALL_REPO_TOKENS" ]; then
-        for token_name in $ALL_REPO_TOKENS; do
-          if [ -n "$token_name" ]; then
-            # Get SHA1 for this token
-            TOKEN_SHA1=$(echo "$TOKENS_RESPONSE" | grep -A3 "\"name\":\"$token_name\"" | grep '"sha1"' | head -1 | grep -o '"sha1":"[^"]*"' | sed 's/"sha1":"//;s/"//')
-            if [ -n "$TOKEN_SHA1" ]; then
-              echo "   Deleting old token: $token_name"
-              curl -s -X DELETE -u "$ADMIN_USER:$ADMIN_PASS" "http://gitea-http:3000/api/v1/users/$ADMIN_USER/tokens/$TOKEN_SHA1" >/dev/null 2>&1
-            fi
-          fi
-        done
-      fi
-      
-      # Delete k8s secret if it exists
-      if [ "$SECRET_EXISTS" = true ]; then
-        echo "   Deleting old k8s secret..."
-        /usr/local/bin/kubectl delete secret gitea-admin-api-token -n gitea >/dev/null 2>&1
-      fi
-      
-      # Create new token with fixed name
-      echo "   Creating new '$TOKEN_NAME' token..."
-      RESPONSE=$(curl -s -X POST "http://gitea-http:3000/api/v1/users/$ADMIN_USER/tokens" \
-        -H "Content-Type: application/json" \
-        -u "$ADMIN_USER:$ADMIN_PASS" \
-        -d "{\"name\": \"$TOKEN_NAME\", \"scopes\": [\"all\"]}")
-      
-      # Extract the full token from response
-      ADMIN_TOKEN=$(echo "$RESPONSE" | grep -o '"sha1":"[^"]*"' | sed 's/"sha1":"//;s/"//')
-      
-      if [ -z "$ADMIN_TOKEN" ] || [ ${#ADMIN_TOKEN} -ne 40 ]; then
-        echo "❌ Failed to create new token"
-        echo "   Response: $RESPONSE"
-        exit 1
-      fi
-      
-      # Store in k8s secret
-      echo "   Storing new token in k8s secret..."
-      if /usr/local/bin/kubectl create secret generic gitea-admin-api-token \
-        --from-literal=token="$ADMIN_TOKEN" \
-        -n gitea \
-        --dry-run=client -o yaml | /usr/local/bin/kubectl apply -f - >/dev/null 2>&1; then
-        echo "   ✅ Token stored successfully in k8s secret"
-      else
-        echo "   ❌ Failed to store token in k8s secret"
-        exit 1
-      fi
-      
-      echo "✅ Created and stored new token with fixed name: $TOKEN_NAME"
-    fi
-    
-    echo "🎯 Using admin token ending with: ${ADMIN_TOKEN: -8}"
-
-    # Check if hello repository already exists and delete if it does
-    echo "📋 Checking if hello repository exists..."
-    REPO_CHECK=$(curl -s -H "Authorization: token $ADMIN_TOKEN" "http://gitea-http:3000/api/v1/repos/$ADMIN_USER/hello" 2>/dev/null || echo "")
-
-    if echo "$REPO_CHECK" | grep -q '"name":"hello"'; then
-      echo "🔄 Repository 'hello' exists, deleting and recreating..."
-      curl -s -X DELETE "http://gitea-http:3000/api/v1/repos/$ADMIN_USER/hello" \
-        -H "Authorization: token $ADMIN_TOKEN" >/dev/null
-      echo "✅ Repository 'hello' deleted successfully"
-      sleep 2
-    else
-      echo "📝 Repository 'hello' does not exist, will create new one"
-    fi
-
-    # Always create fresh hello repository
-    echo "🏗️ Creating fresh hello repository..."
-    curl -s -X POST "http://gitea-http:3000/api/v1/user/repos" \
-      -H "Authorization: token $ADMIN_TOKEN" \
-      -H "Content-Type: application/json" \
-      -d '{
-        "name": "hello",
-        "description": "Hello World CI/CD Demo",
-        "private": false,
-        "auto_init": true,
-        "default_branch": "main"
-      }' > /dev/null
-    
-    # Wait for repository to be created
-    sleep 2
-    echo "✅ Repository 'hello' created successfully"
-
-    # Create temporary directory for repository operations
-    TEMP_DIR="/tmp/hello-repo-setup"
-    rm -rf "$TEMP_DIR"
-    mkdir -p "$TEMP_DIR"
-    cd "$TEMP_DIR"
-
-    # Install git if not available
-    if ! command -v git >/dev/null 2>&1; then
-      echo "📦 Installing git..."
-      apk add --no-cache git
-    fi
-
-    # Initialize git configuration
-    git config --global user.name "$ADMIN_USER"
-    git config --global user.email "$ADMIN_USER@xuperson.org"
-
-    # Clone the repository (will be empty since we just created it)
-    echo "📥 Cloning repository..."
-    git clone "http://$ADMIN_USER:$ADMIN_PASS@gitea-http:3000/$ADMIN_USER/hello.git" .
-
-    # Create project structure
-    echo "📁 Creating project structure..."
-    mkdir -p .gitea/workflows
-
-    # Copy files from ConfigMaps
-    echo "📋 Copying application files from ConfigMaps..."
-    cp /app-code/package.json .
-    cp /app-code/Dockerfile .
-    cp /app-code/index.js .
-    cp /app-code/README.md .
-    cp /cicd-workflow/buildkit-ci.yml .gitea/workflows/
-    
-    # Create repository secrets for CI/CD workflow
-    echo "🔑 Creating repository secrets..."
-    
-    # Create ADMIN_USER secret
-    echo "   Creating ADMIN_USER secret..."
-    USER_SECRET_RESPONSE=$(curl -s -X PUT "http://gitea-http:3000/api/v1/repos/$ADMIN_USER/hello/actions/secrets/ADMIN_USER" \
-      -H "Authorization: token $ADMIN_TOKEN" \
-      -H "Content-Type: application/json" \
-      -d "{\"data\":\"$ADMIN_USER\"}")
-    
-    if echo "$USER_SECRET_RESPONSE" | grep -q "error\|Error"; then
-      echo "   ⚠️ ADMIN_USER secret may already exist or failed to create"
-    else
-      echo "   ✅ ADMIN_USER secret created"
-    fi
-    
-    # Create ADMIN_PASS secret  
-    echo "   Creating ADMIN_PASS secret..."
-    PASS_SECRET_RESPONSE=$(curl -s -X PUT "http://gitea-http:3000/api/v1/repos/$ADMIN_USER/hello/actions/secrets/ADMIN_PASS" \
-      -H "Authorization: token $ADMIN_TOKEN" \
-      -H "Content-Type: application/json" \
-      -d "{\"data\":\"$ADMIN_PASS\"}")
-    
-    if echo "$PASS_SECRET_RESPONSE" | grep -q "error\|Error"; then
-      echo "   ⚠️ ADMIN_PASS secret may already exist or failed to create"
-    else
-      echo "   ✅ ADMIN_PASS secret created"
-    fi
-    
-    # Update workflow file to use secrets and package registry permanent link
-    echo "🔧 Updating workflow file to use secrets..."
-    sed -i "s/ADMIN_USER=\"PLACEHOLDER_ADMIN_USER\"/ADMIN_USER=\"\${{ secrets.ADMIN_USER }}\"/g" .gitea/workflows/buildkit-ci.yml
-    sed -i "s/ADMIN_PASS=\"PLACEHOLDER_ADMIN_PASS\"/ADMIN_PASS=\"\${{ secrets.ADMIN_PASS }}\"/g" .gitea/workflows/buildkit-ci.yml
-    
-    # Use permanent package registry link format: gitea-host/owner/image-name
-    sed -i "s|gitea-http.gitea.svc.cluster.local:3000/helloroot/hello-app|gitea-http.gitea.svc.cluster.local:3000/$ADMIN_USER/hello-app|g" .gitea/workflows/buildkit-ci.yml
-    
-    echo "✅ Workflow file updated with secrets integration"
-
-
-
-
-
-
-
-    # Add all files and commit
-    echo "📝 Committing files..."
-    git add .
-    git commit -m "feat: fresh hello CI/CD demo setup
-
-    - Ensure repository content always aligns with ConfigMaps
-    - Add Node.js hello world application
-    - Configure BuildKit CI/CD pipeline  
-    - Include Dockerfile for containerization
-    - Setup project structure and documentation
-
-    🤖 Generated with GitOps automation - ConfigMap aligned"
-
-    # Push to repository
-    echo "📤 Pushing to repository..."
-    git push origin main
-
-    echo "✅ Hello repository setup completed successfully!"
-    echo "🎯 Repository: http://gitea-http:3000/$ADMIN_USER/hello"
-    echo "🔄 Actions will trigger automatically on push"
-
-    # Clean up
-    cd /
-    rm -rf "$TEMP_DIR"
-
-    echo "🎉 Setup complete! Check Gitea Actions for workflow execution."
----
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: hello-repo-setup
+  name: claude-code-wrapper-repo-init
   namespace: gitea
   labels:
-    app.kubernetes.io/name: hello-repo-setup
-    app.kubernetes.io/component: repository-management
+    app.kubernetes.io/name: claude-code-wrapper
+    app.kubernetes.io/component: repo-init
     app.kubernetes.io/managed-by: flux
 spec:
   ttlSecondsAfterFinished: 300
   template:
     spec:
-      restartPolicy: OnFailure
-      serviceAccountName: gitea-runner-init  # Reuse existing service account
-      initContainers:
-      - name: install-kubectl
-        image: bitnami/kubectl:latest
-        command:
-        - sh
-        - -c
-        - cp /opt/bitnami/kubectl/bin/kubectl /shared/kubectl && chmod +x /shared/kubectl
-        volumeMounts:
-        - name: kubectl-binary
-          mountPath: /shared
+      restartPolicy: Never
       containers:
-      - name: hello-repo-setup
-        image: alpine/curl:latest
-        command: ["/scripts/hello-repo-setup.sh"]
-        volumeMounts:
-        - name: script-volume
-          mountPath: /scripts
-        - name: kubectl-binary
-          mountPath: /usr/local/bin/kubectl
-          subPath: kubectl
-        - name: app-code
-          mountPath: /app-code
-        - name: cicd-workflow
-          mountPath: /cicd-workflow
-        resources:
-          requests:
-            memory: "64Mi"
-            cpu: "100m"
-          limits:
-            memory: "128Mi"
-            cpu: "200m"
+      - name: repo-init
+        image: alpine/git:latest
         env:
-        - name: GIT_SSL_NO_VERIFY
-          value: "1"
-      volumes:
-      - name: script-volume
-        configMap:
-          name: hello-repo-setup-script
-          defaultMode: 0755
-      - name: kubectl-binary
-        emptyDir: {}
-      - name: app-code
-        configMap:
-          name: hello-app-code
-      - name: cicd-workflow
-        configMap:
-          name: hello-cicd-workflow
+        - name: GITEA_ADMIN_USER
+          valueFrom:
+            secretKeyRef:
+              name: gitea-admin-credentials
+              key: username
+        - name: GITEA_ADMIN_PASS
+          valueFrom:
+            secretKeyRef:
+              name: gitea-admin-credentials
+              key: password
+        - name: REPO_NAME
+          value: "claude-code-wrapper"
+        - name: GITEA_URL
+          value: "http://gitea-http.gitea.svc.cluster.local:3000"
+        command: ["/bin/sh"]
+        args:
+        - -c
+        - |
+          set -e
+          apk add --no-cache curl jq
+          
+          echo "🔧 Setting up Claude Code Wrapper repository..."
+          
+          # Create repository in Gitea
+          echo "📝 Creating repository: $REPO_NAME"
+          curl -X POST \
+            -H "Content-Type: application/json" \
+            -u "$GITEA_ADMIN_USER:$GITEA_ADMIN_PASS" \
+            -d '{
+              "name": "'$REPO_NAME'",
+              "description": "Claude Code OpenAI API Wrapper with CI/CD",
+              "private": false,
+              "auto_init": true,
+              "gitignores": "Python",
+              "license": "MIT",
+              "readme": "Default"
+            }' \
+            "$GITEA_URL/api/v1/user/repos"
+          
+          echo "✅ Repository created successfully"
+          
+          # Clone, add files, and push
+          git config --global user.email "cicd@xuperson.org"
+          git config --global user.name "CI/CD Bot"
+          
+          git clone "$GITEA_URL/$GITEA_ADMIN_USER/$REPO_NAME.git" /tmp/repo
+          cd /tmp/repo
+          
+          # Create the application files
+          echo "📂 Adding application files..."
+          
+          cat > main.py << 'EOF'
+          # Placeholder - Upload actual files from GitHub manually
+          # Source: https://github.com/ALTIbaba/claude-code-openai-wrapper
+          
+          from fastapi import FastAPI
+          
+          app = FastAPI(title="Claude Code OpenAI Wrapper - Placeholder")
+          
+          @app.get("/")
+          def read_root():
+              return {"message": "Upload actual source code from GitHub"}
+          
+          @app.get("/health")
+          def health():
+              return {"status": "healthy"}
+          
+          if __name__ == "__main__":
+              import uvicorn
+              uvicorn.run(app, host="0.0.0.0", port=8000)
+          EOF
+          
+          cat > pyproject.toml << 'EOF'
+          [tool.poetry]
+          name = "claude-code-openai-wrapper"
+          version = "1.0.0"
+          description = "OpenAI API-compatible wrapper for Claude Code"
+          authors = ["Richard Atkinson <richardatk01@gmail.com>"]
+          readme = "README.md"
+          license = "MIT"
+          
+          [tool.poetry.dependencies]
+          python = "^3.10"
+          fastapi = "^0.115.0"
+          uvicorn = {extras = ["standard"], version = "^0.32.0"}
+          pydantic = "^2.10.0"
+          python-dotenv = "^1.0.1"
+          httpx = "^0.27.2"
+          sse-starlette = "^2.1.3"
+          python-multipart = "^0.0.12"
+          claude-code-sdk = "^0.0.14"
+          
+          [build-system]
+          requires = ["poetry-core"]
+          build-backend = "poetry.core.masonry.api"
+          EOF
+          
+          cat > Dockerfile << 'EOF'
+          FROM python:3.10-slim
+          
+          WORKDIR /app
+          
+          # Install system dependencies
+          RUN apt-get update && apt-get install -y \
+              curl \
+              git \
+              && rm -rf /var/lib/apt/lists/*
+          
+          # Install Claude Code CLI
+          RUN curl -fsSL https://claude.ai/download/claude-code/linux | sh
+          
+          # Copy requirements
+          COPY pyproject.toml ./
+          
+          # Install poetry and dependencies
+          RUN pip install poetry && \
+              poetry config virtualenvs.create false && \
+              poetry install --only=main
+          
+          # Copy application code
+          COPY *.py ./
+          
+          # Set environment variables
+          ENV PORT=8000
+          ENV PYTHONPATH=/app
+          
+          # Expose port
+          EXPOSE 8000
+          
+          # Run the application
+          CMD ["python", "main.py"]
+          EOF
+          
+          # Create CI/CD workflow
+          mkdir -p .gitea/workflows
+          cat > .gitea/workflows/buildkit-ci.yml << 'EOF'
+          name: Claude Code Wrapper BuildKit CI
+          
+          on:
+            push:
+              branches: [ main, master ]
+            pull_request:
+              branches: [ main, master ]
+          
+          jobs:
+            build:
+              runs-on: ubuntu-latest
+          
+              steps:
+              - name: Build and push with buildctl
+                run: |
+                  echo "🚀 Claude Code Wrapper CI/CD Pipeline"
+                  # Full CI/CD script will be applied via ConfigMap
+          EOF
+          
+          git add .
+          git commit -m "Initial Claude Code Wrapper setup with CI/CD
+
+          Source: https://github.com/ALTIbaba/claude-code-openai-wrapper
+          
+          Next steps:
+          1. Upload actual Python files from GitHub repo
+          2. CI/CD will automatically build and deploy"
+          git push origin main
+          
+          echo "✅ Repository setup completed!"
