@@ -1,0 +1,160 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: litellm
+  namespace: litellm
+spec:
+  interval: 10m
+  timeout: 10m
+  chart:
+    spec:
+      chart: litellm-helm
+      version: "0.1.2"
+      sourceRef:
+        kind: OCIRepository
+        name: litellm-oci
+        namespace: flux-system
+  install:
+    createNamespace: false
+  values:
+    # Number of LiteLLM proxy replicas
+    replicaCount: 1
+    
+    # Master key from Infisical secret
+    masterkeySecretName: "litellm-secrets"
+    masterkeySecretKey: "master-key"
+    
+    # Environment secrets from Infisical
+    environmentSecrets:
+      - litellm-secrets
+    
+    # Docker image configuration
+    image:
+      repository: "ghcr.io/berriai/litellm"
+      pullPolicy: "IfNotPresent"
+      tag: "main-stable"
+    
+    # Service account configuration
+    serviceAccount:
+      create: false
+      name: "litellm"
+    
+    # Service configuration
+    service:
+      type: LoadBalancer
+      port: 4000
+      loadBalancerIP: "192.168.80.120"
+    
+    # Enable proxy configuration
+    proxyConfigMap:
+      create: true
+      name: "litellm-config"
+      key: "config.yaml"
+    
+    # Proxy configuration
+    proxy_config:
+      model_list:
+        - model_name: gpt-4o
+          litellm_params:
+            model: openai/gpt-4o
+            api_key: os.environ/LITELLM_OPENAI_API_KEY
+        - model_name: claude-3-5-sonnet
+          litellm_params:
+            model: anthropic/claude-3-5-sonnet-20241022
+            api_key: os.environ/LITELLM_ANTHROPIC_API_KEY
+      
+      # General settings
+      general_settings:
+        master_key: os.environ/LITELLM_MASTER_KEY
+        database_url: os.environ/LITELLM_DATABASE_URL
+        store_model_in_db: true
+        
+        # Security settings
+        enforce_user_param: true
+        max_budget: 100.0
+        budget_duration: "30d"
+        
+        # Logging and monitoring
+        success_callback: ["prometheus"]
+        failure_callback: ["prometheus"]
+        
+        # UI settings
+        ui_logo_path: "https://litellm.ai/img/logo.jpg"
+    
+    # Enable standalone PostgreSQL database
+    db:
+      deployStandalone: true
+      useExisting: false
+    
+    # PostgreSQL configuration using Bitnami chart
+    postgresql:
+      enabled: true
+      auth:
+        postgresPassword: "litellm-postgres-password"
+        database: "litellm"
+      primary:
+        persistence:
+          enabled: true
+          size: 8Gi
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+    
+    # Migration job configuration
+    migrationJob:
+      enabled: true
+      hooks:
+        helm:
+          enabled: true
+        argocd:
+          enabled: false
+    
+    # Resource limits for LiteLLM pods
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+    
+    # Security context
+    podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
+      runAsGroup: 1000
+      fsGroup: 1000
+    
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: false
+      capabilities:
+        drop:
+        - ALL
+    
+    # Health checks
+    livenessProbe:
+      httpGet:
+        path: /health
+        port: 4000
+        scheme: HTTP
+      initialDelaySeconds: 60
+      periodSeconds: 30
+      timeoutSeconds: 10
+      successThreshold: 1
+      failureThreshold: 5
+    
+    readinessProbe:
+      httpGet:
+        path: /health
+        port: 4000
+        scheme: HTTP
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      timeoutSeconds: 5
+      successThreshold: 1
+      failureThreshold: 3
