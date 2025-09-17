@@ -15,10 +15,10 @@ spec:
     spec:
       serviceAccountName: litellm
       securityContext:
-        runAsNonRoot: true
-        runAsUser: 1000
-        runAsGroup: 1000
-        fsGroup: 1000
+        runAsNonRoot: false
+        runAsUser: 0
+        runAsGroup: 0
+        fsGroup: 0
       containers:
       - name: litellm
         image: ghcr.io/berriai/litellm:main-stable
@@ -64,11 +64,12 @@ spec:
             cpu: 1000m
             memory: 1Gi
         securityContext:
-          allowPrivilegeEscalation: false
+          allowPrivilegeEscalation: true
           readOnlyRootFilesystem: false
           capabilities:
-            drop:
-            - ALL
+            add:
+            - CHOWN
+            - DAC_OVERRIDE
         livenessProbe:
           httpGet:
             path: /health
