@@ -1,0 +1,8 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - backstage-namespace.yaml
+  - backstage-helmrelease.yaml
+  - backstage-ingress.yaml
+  - backstage-infisical-secrets.yaml
