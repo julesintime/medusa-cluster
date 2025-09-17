@@ -57,12 +57,6 @@ spec:
         - name: CODER_TELEMETRY_ENABLE
           value: "false"
         
-        # GitHub OAuth Authentication - allow user signups
-        - name: CODER_OAUTH2_GITHUB_ALLOW_SIGNUPS
-          value: "true"
-        - name: CODER_OAUTH2_GITHUB_ALLOW_EVERYONE
-          value: "true"
-        
         # Basic DERP configuration - commented out complex settings
         # - name: CODER_DERP_SERVER_ENABLE
         #   value: "true"
