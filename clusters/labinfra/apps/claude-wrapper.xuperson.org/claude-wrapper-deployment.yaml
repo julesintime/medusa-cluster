@@ -20,11 +20,11 @@ spec:
       - name: claude-wrapper
         image: python:3.11-slim
         ports:
-        - containerPort: 8000
+        - containerPort: 8687
           name: http
         env:
         - name: PORT
-          value: "8000"
+          value: "8687"
         - name: DEBUG_MODE
           value: "false"
         - name: VERBOSE
@@ -39,11 +39,11 @@ spec:
               optional: true
         
         # OAuth configuration
-        - name: CLAUDE_OAUTH_CONFIG
+        - name: CLAUDE_OAUTH_JSON
           valueFrom:
             secretKeyRef:
               name: claude-wrapper-auth
-              key: claude-oauth-config
+              key: claude-oauth-json
               optional: true
         
         # AWS Bedrock authentication
@@ -112,6 +112,38 @@ spec:
             secretKeyRef:
               name: claude-wrapper-auth
               key: cors-origins
+              optional: true
+        
+        # Rate limiting configuration
+        - name: RATE_LIMIT_ENABLED
+          valueFrom:
+            secretKeyRef:
+              name: claude-wrapper-auth
+              key: rate-limit-enabled
+              optional: true
+        - name: RATE_LIMIT_CHAT_PER_MINUTE
+          valueFrom:
+            secretKeyRef:
+              name: claude-wrapper-auth
+              key: rate-limit-chat-per-minute
+              optional: true
+        - name: RATE_LIMIT_DEBUG_PER_MINUTE
+          valueFrom:
+            secretKeyRef:
+              name: claude-wrapper-auth
+              key: rate-limit-debug-per-minute
+              optional: true
+        - name: RATE_LIMIT_AUTH_PER_MINUTE
+          valueFrom:
+            secretKeyRef:
+              name: claude-wrapper-auth
+              key: rate-limit-auth-per-minute
+              optional: true
+        - name: RATE_LIMIT_HEALTH_PER_MINUTE
+          valueFrom:
+            secretKeyRef:
+              name: claude-wrapper-auth
+              key: rate-limit-health-per-minute
               optional: true
         
         # Google Application Credentials (for Vertex AI)

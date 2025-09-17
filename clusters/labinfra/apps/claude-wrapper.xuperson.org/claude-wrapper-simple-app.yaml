@@ -52,7 +52,7 @@ data:
     async def health_check():
         """Health check endpoint."""
         # Check if OAuth config is available
-        oauth_config = os.getenv("CLAUDE_OAUTH_CONFIG", "{}")
+        oauth_config = os.getenv("CLAUDE_OAUTH_JSON", "{}")
         try:
             config = json.loads(oauth_config)
             has_oauth = "claudeAiOauth" in config
@@ -112,7 +112,7 @@ data:
     @app.get("/v1/auth/status")
     async def auth_status():
         """Check authentication status."""
-        oauth_config = os.getenv("CLAUDE_OAUTH_CONFIG", "{}")
+        oauth_config = os.getenv("CLAUDE_OAUTH_JSON", "{}")
         try:
             config = json.loads(oauth_config)
             has_oauth = "claudeAiOauth" in config
@@ -134,11 +134,11 @@ data:
             "oauth": oauth_info,
             "anthropic_api_key": bool(os.getenv("ANTHROPIC_API_KEY")),
             "environment": {
-                "port": os.getenv("PORT", "8000"),
+                "port": os.getenv("PORT", "8687"),
                 "debug_mode": os.getenv("DEBUG_MODE", "false")
             }
         }
 
     if __name__ == "__main__":
-        port = int(os.getenv("PORT", "8000"))
+        port = int(os.getenv("PORT", "8687"))
         uvicorn.run(app, host="0.0.0.0", port=port)
