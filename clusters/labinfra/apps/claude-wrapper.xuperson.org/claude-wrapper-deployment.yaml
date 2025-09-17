@@ -20,11 +20,11 @@ spec:
       - name: claude-wrapper
         image: python:3.11-slim
         ports:
-        - containerPort: 8687
+        - containerPort: 8000
           name: http
         env:
         - name: PORT
-          value: "8687"
+          value: "8000"
         - name: DEBUG_MODE
           value: "false"
         - name: VERBOSE
