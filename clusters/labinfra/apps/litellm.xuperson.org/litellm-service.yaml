@@ -5,7 +5,7 @@ metadata:
   namespace: litellm
 spec:
   type: LoadBalancer
-  loadBalancerIP: "192.168.80.120"
+  loadBalancerIP: "192.168.80.121"
   selector:
     app: litellm
   ports:
