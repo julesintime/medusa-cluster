@@ -5,6 +5,5 @@ resources:
   - litellm-namespace.yaml
   - litellm-rbac.yaml
   - litellm-infisical-secrets.yaml
-  - litellm-ocirepository.yaml
   - litellm-helmrelease.yaml
   - litellm-ingress.yaml

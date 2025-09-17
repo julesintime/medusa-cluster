@@ -8,12 +8,8 @@ spec:
   timeout: 10m
   chart:
     spec:
-      chart: litellm-helm
+      chart: oci://ghcr.io/berriai/litellm-helm
       version: "0.1.2"
-      sourceRef:
-        kind: OCIRepository
-        name: litellm-oci
-        namespace: flux-system
   install:
     createNamespace: false
   values:
