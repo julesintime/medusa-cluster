@@ -4,6 +4,7 @@ resources:
   - backstage.xuperson.org
   - browserless.yaml
   - claude-code.xuperson.org
+  - claude-code-api.xuperson.org
   - coder.yaml
   - crawl4ai.xuperson.org
   - gitea.yaml
