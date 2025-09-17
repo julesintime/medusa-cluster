@@ -1,16 +1,5 @@
+---
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-
-metadata:
-  name: claude-code-wrapper-setup
-
 resources:
-  - claude-code-wrapper-app-configmap.yaml
-  - claude-code-wrapper-cicd-configmap.yaml
-  - claude-code-wrapper-repo-init-job.yaml
-
-labels:
-  - includeSelectors: false
-    pairs:
-      app.kubernetes.io/name: claude-code-wrapper-setup
-      app.kubernetes.io/managed-by: flux
+  - claude-code-wrapper-files-job.yaml

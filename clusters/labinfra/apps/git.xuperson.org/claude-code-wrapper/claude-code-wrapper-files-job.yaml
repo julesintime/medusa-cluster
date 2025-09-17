@@ -1,0 +1,95 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: claude-code-wrapper-add-files
+  namespace: gitea
+  labels:
+    app.kubernetes.io/name: claude-code-wrapper
+    app.kubernetes.io/component: add-files
+    app.kubernetes.io/managed-by: flux
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: add-files
+        image: alpine/git:latest
+        env:
+        - name: GITEA_ADMIN_USER
+          valueFrom:
+            secretKeyRef:
+              name: gitea-admin-secrets
+              key: username
+        - name: GITEA_ADMIN_PASS
+          valueFrom:
+            secretKeyRef:
+              name: gitea-admin-secrets
+              key: password
+        - name: REPO_NAME
+          value: "claude-code-openai-wrapper"
+        - name: GITEA_URL
+          value: "http://gitea-http.gitea.svc.cluster.local:3000"
+        command: ["/bin/sh"]
+        args:
+        - -c
+        - |
+          set -e
+          apk add --no-cache curl jq
+          
+          echo "🔧 Adding Dockerfile and CI/CD to existing claude-code-openai-wrapper repo..."
+          
+          # Check if repo exists
+          echo "📝 Checking if repository exists: $REPO_NAME"
+          curl -u "$GITEA_ADMIN_USER:$GITEA_ADMIN_PASS" \
+            "$GITEA_URL/api/v1/repos/helloroot/$REPO_NAME" > /dev/null
+          
+          if [ $? -eq 0 ]; then
+            echo "✅ Repository exists"
+          else
+            echo "❌ Repository not found"
+            exit 1
+          fi
+          
+          # Clone the repo to check current state
+          git config --global user.email "cicd@xuperson.org"
+          git config --global user.name "CI/CD Bot"
+          
+          # Since it's a mirror, we need to check if files already exist
+          echo "🔍 Checking current repository state..."
+          curl -u "$GITEA_ADMIN_USER:$GITEA_ADMIN_PASS" \
+            "$GITEA_URL/api/v1/repos/helloroot/$REPO_NAME/contents" > /tmp/contents.json
+          
+          echo "📋 Current repository contents:"
+          cat /tmp/contents.json | jq -r '.[].name'
+          
+          # Check if Dockerfile exists
+          if cat /tmp/contents.json | jq -e '.[] | select(.name=="Dockerfile")' > /dev/null; then
+            echo "✅ Dockerfile already exists"
+          else
+            echo "❌ Dockerfile missing - this mirror needs to sync from source"
+          fi
+          
+          # Check if .gitea/workflows exists
+          if cat /tmp/contents.json | jq -e '.[] | select(.name==".gitea")' > /dev/null; then
+            echo "✅ .gitea directory exists"
+            curl -u "$GITEA_ADMIN_USER:$GITEA_ADMIN_PASS" \
+              "$GITEA_URL/api/v1/repos/helloroot/$REPO_NAME/contents/.gitea" > /tmp/gitea_contents.json
+            
+            if cat /tmp/gitea_contents.json | jq -e '.[] | select(.name=="workflows")' > /dev/null; then
+              echo "✅ .gitea/workflows directory exists"
+              curl -u "$GITEA_ADMIN_USER:$GITEA_ADMIN_PASS" \
+                "$GITEA_URL/api/v1/repos/helloroot/$REPO_NAME/contents/.gitea/workflows" > /tmp/workflows_contents.json
+              echo "📋 Workflow files:"
+              cat /tmp/workflows_contents.json | jq -r '.[].name'
+            else
+              echo "❌ .gitea/workflows directory missing"
+            fi
+          else
+            echo "❌ .gitea directory missing"
+          fi
+          
+          echo "🎯 Repository status check completed!"
+          echo "💡 Since this is a mirror repository, files must be added to the source repository"
+          echo "💡 The source will sync to Gitea automatically"
