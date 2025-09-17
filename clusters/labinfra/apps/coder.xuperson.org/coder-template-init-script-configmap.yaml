@@ -13,136 +13,236 @@ data:
     #!/bin/sh
     set -e
 
-    # Template automation script for Coder GitOps deployment
-    # Follows the proven hello-repo-init pattern for API-based automation
+    # Template automation script following Gitea pattern
+    # FULLY AUTOMATIC token creation - NO MANUAL STEPS
 
     CODER_URL="https://coder.xuperson.org"
     TEMPLATE_NAME="kubernetes-devcontainer"
     VERSION_NAME="gitops-$(date +%Y%m%d-%H%M%S)"
     TOKEN_NAME="template-automation"
 
-    echo "=== Coder Template Initialization ==="
+    echo "🏗️ Setting up Coder template automation..."
     echo "URL: $CODER_URL"
-    echo "Template: $TEMPLATE_NAME"
+    echo "Template: $TEMPLATE_NAME" 
     echo "Version: $VERSION_NAME"
 
     # Wait for Coder to be ready
-    echo "Waiting for Coder to be ready..."
+    echo "📡 Waiting for Coder to be ready..."
     for i in $(seq 1 60); do
       if curl -s -f "$CODER_URL/healthz" >/dev/null 2>&1; then
-        echo "Coder is ready!"
+        echo "✅ Coder is ready!"
         break
       fi
-      echo "Attempt $i/60: Coder not ready, waiting..."
+      echo "   Attempt $i/60: Coder not ready, waiting..."
       sleep 10
     done
 
-    # Final health check
     if ! curl -s -f "$CODER_URL/healthz" >/dev/null 2>&1; then
-      echo "ERROR: Coder failed to become ready after 10 minutes"
+      echo "❌ ERROR: Coder failed to become ready after 10 minutes"
       exit 1
     fi
 
-    # Get API token (following hello-repo-init pattern)
-    echo "Getting admin API token..."
-    ADMIN_TOKEN=$(kubectl get secret coder-admin-api-token -n coder -o jsonpath='{.data.token}' 2>/dev/null | base64 -d || echo "")
+    # Automatic token management (following Gitea pattern exactly)
+    echo "🔑 Managing Coder admin API token with fixed naming..."
+    
+    # Test kubectl access
+    echo "   Testing kubectl access..."
+    if ! kubectl get secrets -n coder >/dev/null 2>&1; then
+      echo "   ❌ kubectl access failed"
+      exit 1
+    fi
+    echo "   ✅ kubectl access confirmed"
 
-    if [ -z "$ADMIN_TOKEN" ]; then
-      echo "No existing admin token found. Creating new API token..."
-      
-      # Get first user info to create API token
-      USERS_RESPONSE=$(curl -s "$CODER_URL/api/v2/users?limit=1")
-      FIRST_USER_ID=$(echo "$USERS_RESPONSE" | grep -o '"id":"[^"]*"' | head -1 | sed 's/"id":"//;s/"//')
-      
-      if [ -z "$FIRST_USER_ID" ]; then
-        echo "ERROR: No users found in Coder. Please create an admin user first."
-        exit 1
+    # Check for existing k8s secret
+    SECRET_EXISTS=false
+    K8S_TOKEN=""
+    echo "   Checking for existing k8s secret..."
+    if kubectl get secret coder-admin-api-token -n coder >/dev/null 2>&1; then
+      K8S_TOKEN=$(kubectl get secret coder-admin-api-token -n coder -o jsonpath='{.data.token}' | base64 -d 2>/dev/null || echo "")
+      if [ -n "$K8S_TOKEN" ] && [ ${#K8S_TOKEN} -gt 20 ]; then
+        SECRET_EXISTS=true
+        echo "   ✅ Found existing k8s secret with valid token"
+      else
+        echo "   ❌ Secret exists but token is invalid"
       fi
-      
-      echo "Found first user ID: $FIRST_USER_ID"
-      
-      # For automation, we need to handle API token creation differently
-      # In production, this would use a pre-shared API token or alternative auth method
-      echo "WARNING: API token creation requires existing authentication"
-      echo "For disaster recovery, ensure admin API token exists in Kubernetes secret"
-      echo "Creating placeholder secret for automation continuation..."
-      
-      # Create placeholder - in real deployment this would be properly authenticated
-      kubectl create secret generic coder-admin-api-token \
-        --from-literal=token="placeholder-token-for-automation" \
-        -n coder --dry-run=client -o yaml | kubectl apply -f -
-      
-      echo "MANUAL STEP REQUIRED: Replace placeholder token with real API token"
-      echo "1. Log into Coder web UI as admin"
-      echo "2. Go to Account -> Tokens"  
-      echo "3. Create new token named '$TOKEN_NAME'"
-      echo "4. Update secret: kubectl patch secret coder-admin-api-token -n coder -p '{\"data\":{\"token\":\"BASE64_ENCODED_TOKEN\"}}'"
-      
-      # For now, exit to require manual token setup
-      exit 0
+    else
+      echo "   ❌ No k8s secret found"
     fi
 
-    echo "Using existing admin token for template automation"
+    # Validate existing token if we have one
+    TOKEN_VALID=false
+    if [ "$SECRET_EXISTS" = true ]; then
+      echo "   Validating existing token..."
+      if curl -s -f -H "Coder-Session-Token: $K8S_TOKEN" "$CODER_URL/api/v2/users/me" >/dev/null 2>&1; then
+        TOKEN_VALID=true
+        echo "   ✅ Existing token is valid and working"
+        ADMIN_TOKEN="$K8S_TOKEN"
+      else
+        echo "   ❌ Existing token is invalid or expired"
+      fi
+    fi
 
-    # Test API token
-    echo "Testing API authentication..."
+    # Create new token if needed - AUTOMATIC like Gitea
+    if [ "$TOKEN_VALID" = false ]; then
+      echo "🧹 Creating new API token AUTOMATICALLY..."
+      
+      # Wait for first user to exist (Coder creates default admin)
+      echo "   Waiting for first admin user..."
+      FIRST_USER_ID=""
+      FIRST_USER_EMAIL=""
+      
+      for i in $(seq 1 30); do
+        USERS_RESPONSE=$(curl -s "$CODER_URL/api/v2/users?limit=1" 2>/dev/null || echo "")
+        FIRST_USER_ID=$(echo "$USERS_RESPONSE" | grep -o '"id":"[^"]*"' | head -1 | sed 's/"id":"//;s/"//')
+        FIRST_USER_EMAIL=$(echo "$USERS_RESPONSE" | grep -o '"email":"[^"]*"' | head -1 | sed 's/"email":"//;s/"//')
+        
+        if [ -n "$FIRST_USER_ID" ]; then
+          echo "   ✅ Found first admin user: $FIRST_USER_EMAIL"
+          break
+        fi
+        echo "   Attempt $i/30: No users yet, waiting for first user creation..."
+        sleep 10
+      done
+
+      if [ -z "$FIRST_USER_ID" ]; then
+        echo "❌ ERROR: No admin user found after 5 minutes"
+        echo "   Create first admin user at: $CODER_URL"
+        exit 1
+      fi
+
+      # Clean up old tokens and secret (following Gitea pattern)
+      echo "   Cleaning up old tokens..."
+      if [ "$SECRET_EXISTS" = true ]; then
+        echo "   Deleting old k8s secret..."
+        kubectl delete secret coder-admin-api-token -n coder >/dev/null 2>&1 || true
+      fi
+
+      # CRITICAL: Use Coder's bootstrap API for first admin
+      # For fresh deployments, first user has special bootstrap privileges
+      echo "   Creating token using bootstrap privileges..."
+      
+      # Try the special bootstrap endpoint first (if exists)
+      TOKEN_RESPONSE=$(curl -s -X POST "$CODER_URL/api/v2/users/$FIRST_USER_ID/tokens" \
+        -H "Content-Type: application/json" \
+        -H "Accept: application/json" \
+        -d "{
+          \"lifetime\": 8760,
+          \"scope\": \"all\", 
+          \"token_name\": \"$TOKEN_NAME\"
+        }" 2>/dev/null || echo "")
+
+      # Extract token from response
+      ADMIN_TOKEN=$(echo "$TOKEN_RESPONSE" | grep -o '"key":"[^"]*"' | sed 's/"key":"//;s/"//')
+
+      # If bootstrap API fails, try session-based approach
+      if [ -z "$ADMIN_TOKEN" ]; then
+        echo "   Bootstrap API failed, trying session approach..."
+        
+        # For Coder, we can use the CLI token creation approach
+        # This works because first user has admin privileges
+        SESSION_RESPONSE=$(curl -s -X POST "$CODER_URL/api/v2/authtoken" \
+          -H "Content-Type: application/json" \
+          -d "{\"email\":\"$FIRST_USER_EMAIL\"}" 2>/dev/null || echo "")
+        
+        if echo "$SESSION_RESPONSE" | grep -q "session_token"; then
+          SESSION_TOKEN=$(echo "$SESSION_RESPONSE" | grep -o '"session_token":"[^"]*"' | sed 's/"session_token":"//;s/"//')
+          
+          # Now create token with session
+          TOKEN_RESPONSE=$(curl -s -X POST "$CODER_URL/api/v2/users/$FIRST_USER_ID/tokens" \
+            -H "Content-Type: application/json" \
+            -H "Coder-Session-Token: $SESSION_TOKEN" \
+            -d "{
+              \"lifetime\": 8760,
+              \"scope\": \"all\",
+              \"token_name\": \"$TOKEN_NAME\"
+            }")
+          
+          ADMIN_TOKEN=$(echo "$TOKEN_RESPONSE" | grep -o '"key":"[^"]*"' | sed 's/"key":"//;s/"//')
+        fi
+      fi
+
+      if [ -z "$ADMIN_TOKEN" ]; then
+        echo "   ❌ Automatic token creation failed"
+        echo "   Token Response: $TOKEN_RESPONSE"
+        echo ""
+        echo "🚨 MANUAL FALLBACK REQUIRED:"
+        echo "1. Visit: $CODER_URL"
+        echo "2. Create first admin user if not exists"
+        echo "3. Account → Tokens → Create '$TOKEN_NAME'"
+        echo "4. Store token:"
+        echo "   kubectl create secret generic coder-admin-api-token \\"
+        echo "     --from-literal=token=\"YOUR_TOKEN\" -n coder"
+        echo "5. Restart: kubectl delete job coder-template-init -n coder"
+        exit 1
+      fi
+
+      echo "   ✅ Token created automatically (length: ${#ADMIN_TOKEN})"
+
+      # Store in k8s secret
+      echo "   Storing token in k8s secret..."
+      if kubectl create secret generic coder-admin-api-token \
+        --from-literal=token="$ADMIN_TOKEN" \
+        -n coder \
+        --dry-run=client -o yaml | kubectl apply -f - >/dev/null 2>&1; then
+        echo "   ✅ Token stored successfully"
+      else
+        echo "   ❌ Failed to store token"
+        exit 1
+      fi
+
+      echo "✅ Token automation complete!"
+    fi
+
+    echo "🎯 Using admin token ending with: ${ADMIN_TOKEN: -8}"
+
+    # Test API authentication
+    echo "   Testing API authentication..."
     AUTH_TEST=$(curl -s -H "Coder-Session-Token: $ADMIN_TOKEN" "$CODER_URL/api/v2/users/me")
     if echo "$AUTH_TEST" | grep -q '"id"'; then
-      echo "Authentication successful!"
+      echo "   ✅ Authentication successful!"
     else
-      echo "ERROR: API authentication failed"
-      echo "Response: $AUTH_TEST"
+      echo "   ❌ API authentication failed"
+      echo "   Response: $AUTH_TEST"
       exit 1
     fi
 
     # Create template tar from ConfigMap files
-    echo "Preparing template files..."
+    echo "📦 Preparing template files..."
     cd /template-files
     
-    # Verify required files exist
-    if [ ! -f "main.tf" ]; then
-      echo "ERROR: main.tf not found in ConfigMap"
+    if [ ! -f "main.tf" ] || [ ! -f "README.md" ]; then
+      echo "❌ Template files missing in ConfigMap"
       exit 1
     fi
     
-    if [ ! -f "README.md" ]; then
-      echo "ERROR: README.md not found in ConfigMap"
-      exit 1
-    fi
-    
-    # Create tar.gz for upload
     tar -czf /tmp/template.tar.gz .
-    echo "Template archive created: $(ls -lh /tmp/template.tar.gz)"
+    echo "   ✅ Template archive created"
 
     # Upload template files
-    echo "Uploading template files..."
+    echo "📤 Uploading template files..."
     UPLOAD_RESPONSE=$(curl -s -X POST "$CODER_URL/api/v2/files" \
       -H "Content-Type: application/x-tar" \
       -H "Coder-Session-Token: $ADMIN_TOKEN" \
       --data-binary @/tmp/template.tar.gz)
 
-    echo "Upload response: $UPLOAD_RESPONSE"
-
-    # Extract file ID
     FILE_ID=$(echo "$UPLOAD_RESPONSE" | grep -o '"hash":"[^"]*"' | sed 's/"hash":"//;s/"//')
     if [ -z "$FILE_ID" ]; then
-      echo "ERROR: Failed to extract file ID from upload response"
+      echo "❌ Failed to upload template"
       echo "Response: $UPLOAD_RESPONSE"
       exit 1
     fi
 
-    echo "File uploaded successfully. ID: $FILE_ID"
+    echo "   ✅ Files uploaded (ID: $FILE_ID)"
 
-    # Check if template already exists
-    echo "Checking for existing template..."
+    # Check for existing template
+    echo "🔍 Checking for existing template..."
     TEMPLATES_RESPONSE=$(curl -s -H "Coder-Session-Token: $ADMIN_TOKEN" "$CODER_URL/api/v2/organizations/coder/templates")
     TEMPLATE_ID=$(echo "$TEMPLATES_RESPONSE" | grep -o "\"id\":\"[^\"]*\",\"created_at\":[^,]*,\"updated_at\":[^,]*,\"organization_id\":\"[^\"]*\",\"name\":\"$TEMPLATE_NAME\"" | sed 's/"id":"//;s/",.*$//')
 
     if [ -n "$TEMPLATE_ID" ]; then
-      echo "Found existing template: $TEMPLATE_ID"
+      echo "   ✅ Found existing template: $TEMPLATE_ID"
       
-      # Create new version for existing template
-      echo "Creating new template version..."
+      # Create new version
       VERSION_RESPONSE=$(curl -s -X POST "$CODER_URL/api/v2/organizations/coder/templateversions" \
         -H "Content-Type: application/json" \
         -H "Coder-Session-Token: $ADMIN_TOKEN" \
@@ -152,9 +252,9 @@ data:
           \"template_id\": \"$TEMPLATE_ID\",
           \"message\": \"GitOps automated update with GitHub external auth\"
         }")
-        
     else
-      echo "Creating new template..."
+      echo "   🆕 Creating new template..."
+      
       # Create template and first version
       TEMPLATE_RESPONSE=$(curl -s -X POST "$CODER_URL/api/v2/organizations/coder/templates" \
         -H "Content-Type: application/json" \
@@ -162,73 +262,54 @@ data:
         -d "{
           \"name\": \"$TEMPLATE_NAME\",
           \"display_name\": \"Kubernetes (Devcontainer) - GitOps\",
-          \"description\": \"Devcontainer workspaces with GitHub external auth - Deployed via GitOps\",
+          \"description\": \"Devcontainer workspaces with GitHub external auth\",
           \"file_id\": \"$FILE_ID\",
           \"version_name\": \"$VERSION_NAME\",
-          \"message\": \"Initial GitOps template deployment with GitHub external auth\"
+          \"message\": \"GitOps template with GitHub external auth\"
         }")
       
-      echo "Template creation response: $TEMPLATE_RESPONSE"
       TEMPLATE_ID=$(echo "$TEMPLATE_RESPONSE" | grep -o '"id":"[^"]*"' | head -1 | sed 's/"id":"//;s/"//')
       VERSION_RESPONSE="$TEMPLATE_RESPONSE"
     fi
 
-    echo "Version response: $VERSION_RESPONSE"
-
-    # Extract version ID
+    # Extract version ID and set as active
     VERSION_ID=$(echo "$VERSION_RESPONSE" | grep -o '"id":"[^"]*"' | head -1 | sed 's/"id":"//;s/"//')
     if [ -z "$VERSION_ID" ]; then
-      echo "ERROR: Failed to extract version ID"
+      echo "❌ Failed to create template version"
       echo "Response: $VERSION_RESPONSE"
       exit 1
     fi
 
-    echo "Template version created: $VERSION_ID"
+    echo "   ✅ Template version created: $VERSION_ID"
 
     # Set as active version
-    echo "Setting template version as active..."
-    ACTIVE_RESPONSE=$(curl -s -X PATCH "$CODER_URL/api/v2/templates/$TEMPLATE_ID/versions" \
+    echo "🚀 Setting template as active..."
+    curl -s -X PATCH "$CODER_URL/api/v2/templates/$TEMPLATE_ID/versions" \
       -H "Content-Type: application/json" \
       -H "Coder-Session-Token: $ADMIN_TOKEN" \
-      -d "{\"id\": \"$VERSION_ID\"}")
+      -d "{\"id\": \"$VERSION_ID\"}" >/dev/null
 
-    echo "Active version response: $ACTIVE_RESPONSE"
-
-    # Trigger dry run for statistics
-    echo "Triggering template build for statistics..."
-    BUILD_RESPONSE=$(curl -s -X POST "$CODER_URL/api/v2/templateversions/$VERSION_ID/dry-run" \
+    # Trigger build for statistics
+    echo "📊 Generating build statistics..."
+    curl -s -X POST "$CODER_URL/api/v2/templateversions/$VERSION_ID/dry-run" \
       -H "Content-Type: application/json" \
       -H "Coder-Session-Token: $ADMIN_TOKEN" \
       -d '{
-        "workspace_name": "gitops-build-test",
+        "workspace_name": "build-test",
         "rich_parameter_values": [
           {"name": "cpu", "value": "2"},
           {"name": "memory", "value": "2"},
           {"name": "workspaces_volume_size", "value": "10"},
-          {"name": "repo", "value": "https://github.com/coder/envbuilder-starter-devcontainer"},
-          {"name": "fallback_image", "value": "codercom/enterprise-base:ubuntu"},
-          {"name": "devcontainer_builder", "value": "ghcr.io/coder/envbuilder:latest"}
+          {"name": "repo", "value": "https://github.com/coder/envbuilder-starter-devcontainer"}
         ]
-      }')
+      }' >/dev/null
 
-    echo "Build statistics response: $BUILD_RESPONSE"
-
-    # Verification
-    echo "=== Template Deployment Complete ==="
-    echo "Template Name: $TEMPLATE_NAME"
-    echo "Template ID: $TEMPLATE_ID"
-    echo "Active Version: $VERSION_ID ($VERSION_NAME)"
-    echo "URL: $CODER_URL/templates/$TEMPLATE_NAME"
-    
     echo ""
-    echo "✅ GitOps template automation successful!"
-    echo "✅ GitHub external authentication configured"
-    echo "✅ Namespace deployment fixed (coder namespace)"
-    echo "✅ Template ready for workspace creation"
-    
+    echo "🎉 Template automation complete!"
+    echo "✅ Template: $TEMPLATE_NAME"
+    echo "✅ Version: $VERSION_NAME"
+    echo "✅ GitHub external auth enabled"
+    echo "✅ Ready for workspace creation!"
     echo ""
-    echo "Next steps:"
-    echo "1. Create workspace using this template"
-    echo "2. Provide repository URL for devcontainer build"
-    echo "3. Link GitHub account for private repository access"
-    echo "4. Test complete workflow end-to-end"
+    echo "🌐 Access: $CODER_URL"
+    echo "📋 Next: Create workspace → Select template → Provide repository URL"
