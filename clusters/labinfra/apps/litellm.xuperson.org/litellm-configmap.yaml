@@ -17,9 +17,13 @@ data:
       - model_name: gemini-pro
         litellm_params:
           model: gemini/gemini-1.5-flash
-          api_key: os.environ/GEMINI_API_KEY
+          api_key: "AIzaSyDLRSBbwgfj9qtHCXzVGGl9z7BScrd5iTY"
+      - model_name: gemini-pro
+        litellm_params:
+          model: gemini/gemini-1.5-flash
+          api_key: "AIzaSyANeBDFZKrWwrsAnmPYf8WvuFSSbPt7Ki4"
 
     router_settings:
       routing_strategy: simple-shuffle
-      num_retries: 2
+      num_retries: 3
       timeout: 30
