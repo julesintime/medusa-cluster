@@ -1,10 +1,7 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - backstage.xuperson.org
   - browserless.yaml
-  - claude-code.xuperson.org
-  - claude-code-api.xuperson.org
   - coder.yaml
   - crawl4ai.xuperson.org
   - gitea.yaml

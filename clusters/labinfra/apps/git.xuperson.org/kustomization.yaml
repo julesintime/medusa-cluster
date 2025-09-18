@@ -13,8 +13,6 @@ resources:
   - buildkit
   # Deploy hello repository setup (creates demo repo with CI/CD workflow)
   - hello
-  # Deploy claude-code-wrapper repository setup (claude-code openai wrapper with CI/CD)
-  - claude-code-wrapper
 
 labels:
   - includeSelectors: false
