@@ -194,8 +194,8 @@ data:
         # "ENVBUILDER_IGNORE_PATHS": "/product_name,/product_uuid,/var/run",
       }, 
       # Add GitHub authentication if using a GitHub repository and external auth is available
-      local.is_github_repo && data.coder_external_auth.github.access_token != "" ? {
-        "ENVBUILDER_GIT_USERNAME" : data.coder_external_auth.github.access_token
+      local.is_github_repo ? {
+        "ENVBUILDER_GIT_USERNAME" : try(data.coder_external_auth.github.access_token, "")
       } : {})
     }
 
