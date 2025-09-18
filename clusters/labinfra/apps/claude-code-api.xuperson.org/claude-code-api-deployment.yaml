@@ -32,7 +32,7 @@ spec:
             name: claude-code-api-secrets
         volumeMounts:
         - name: claude-credentials
-          mountPath: /root/.claude
+          mountPath: /tmp/claude-credentials
           readOnly: true
         resources:
           requests:
