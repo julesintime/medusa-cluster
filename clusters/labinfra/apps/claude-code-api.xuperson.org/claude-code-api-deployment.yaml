@@ -17,6 +17,22 @@ spec:
     spec:
       imagePullSecrets:
       - name: gitea-registry-secret
+      initContainers:
+      - name: setup-credentials
+        image: alpine:latest
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          mkdir -p /root/.claude
+          cp /tmp/claude-credentials/.credentials.json /root/.claude/.credentials.json
+          echo "Credentials copied successfully"
+          ls -la /root/.claude/
+        volumeMounts:
+        - name: claude-credentials
+          mountPath: /tmp/claude-credentials
+          readOnly: true
+        - name: claude-config
+          mountPath: /root/.claude
       containers:
       - name: claude-code-api
         image: git.xuperson.org/helloroot/claude-code-openai-wrapper:main-f450866 # {"$imagepolicy": "claude-code-api:claude-code-api"}
@@ -34,6 +50,8 @@ spec:
         - name: claude-credentials
           mountPath: /tmp/claude-credentials
           readOnly: true
+        - name: claude-config
+          mountPath: /root/.claude
         resources:
           requests:
             cpu: 100m
@@ -60,3 +78,5 @@ spec:
           items:
           - key: credentials.json
             path: .credentials.json
+      - name: claude-config
+        emptyDir: {}
