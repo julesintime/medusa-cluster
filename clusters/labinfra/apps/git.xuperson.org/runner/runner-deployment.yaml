@@ -22,7 +22,7 @@ spec:
       initContainers:
       # Wait for runner registration token
       - name: wait-for-secret
-        image: alpine/k8s:1.30.3
+        image: bitnami/kubectl:latest
         command:
           - /bin/bash
           - -c
