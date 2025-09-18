@@ -169,8 +169,8 @@ data:
     locals {
       deployment_name            = "coder-${lower(data.coder_workspace.me.id)}"
       devcontainer_builder_image = data.coder_parameter.devcontainer_builder.value
-      git_author_name            = coalesce(data.coder_workspace_owner.me.full_name, data.coder_workspace_owner.me.name)
-      git_author_email           = data.coder_workspace_owner.me.email
+      git_author_name            = try(coalesce(data.coder_workspace_owner.me.full_name, data.coder_workspace_owner.me.name), "coder-user")
+      git_author_email           = try(data.coder_workspace_owner.me.email, "coder@example.com")
       repo_url                   = data.coder_parameter.repo.value
       has_repo                   = local.repo_url != ""
       is_github_repo             = local.has_repo && (can(regex("github\\.com", local.repo_url)) || can(regex("git@github\\.com", local.repo_url)))
@@ -223,11 +223,11 @@ data:
           "com.coder.resource"       = "true"
           "com.coder.workspace.id"   = data.coder_workspace.me.id
           "com.coder.workspace.name" = data.coder_workspace.me.name
-          "com.coder.user.id"        = data.coder_workspace_owner.me.id
-          "com.coder.user.username"  = data.coder_workspace_owner.me.name
+          "com.coder.user.id"        = try(data.coder_workspace_owner.me.id, "unknown")
+          "com.coder.user.username"  = try(data.coder_workspace_owner.me.name, "unknown")
         }
         annotations = {
-          "com.coder.user.email" = data.coder_workspace_owner.me.email
+          "com.coder.user.email" = try(data.coder_workspace_owner.me.email, "unknown@example.com")
         }
       }
       wait_until_bound = false
@@ -258,11 +258,11 @@ data:
           "com.coder.resource"         = "true"
           "com.coder.workspace.id"     = data.coder_workspace.me.id
           "com.coder.workspace.name"   = data.coder_workspace.me.name
-          "com.coder.user.id"          = data.coder_workspace_owner.me.id
-          "com.coder.user.username"    = data.coder_workspace_owner.me.name
+          "com.coder.user.id"          = try(data.coder_workspace_owner.me.id, "unknown")
+          "com.coder.user.username"    = try(data.coder_workspace_owner.me.name, "unknown")
         }
         annotations = {
-          "com.coder.user.email" = data.coder_workspace_owner.me.email
+          "com.coder.user.email" = try(data.coder_workspace_owner.me.email, "unknown@example.com")
         }
       }
 
