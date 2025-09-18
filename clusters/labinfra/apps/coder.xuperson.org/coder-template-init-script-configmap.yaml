@@ -261,39 +261,38 @@ data:
     else
       echo "   🆕 Creating new template..."
       
-      # Create template first  
-      TEMPLATE_CREATE_RESPONSE=$(curl -s -X POST "$CODER_URL/api/v2/organizations/coder/templates" \
-        -H "Content-Type: application/json" \
-        -H "Coder-Session-Token: $ADMIN_TOKEN" \
-        -d "{
-          \"name\": \"$TEMPLATE_NAME\",
-          \"display_name\": \"Kubernetes (Devcontainer) - GitOps\",
-          \"description\": \"Devcontainer workspaces with GitHub external auth\"
-        }")
-      
-      TEMPLATE_ID=$(echo "$TEMPLATE_CREATE_RESPONSE" | grep -o '"id":"[^"]*"' | head -1 | sed 's/"id":"//;s/"//')
-      
-      if [ -z "$TEMPLATE_ID" ]; then
-        echo "   ❌ Failed to create template"
-        echo "   Response: $TEMPLATE_CREATE_RESPONSE"
-        exit 1
-      fi
-      
-      echo "   ✅ Template created: $TEMPLATE_ID"
-      
-      # Create first version for the template
-      TEMPLATE_RESPONSE=$(curl -s -X POST "$CODER_URL/api/v2/organizations/coder/templateversions" \
+      # Create template version first (without template association)
+      VERSION_RESPONSE=$(curl -s -X POST "$CODER_URL/api/v2/organizations/coder/templateversions" \
         -H "Content-Type: application/json" \
         -H "Coder-Session-Token: $ADMIN_TOKEN" \
         -d "{
           \"file_id\": \"$FILE_ID\",
           \"name\": \"$VERSION_NAME\",
-          \"template_id\": \"$TEMPLATE_ID\",
           \"message\": \"GitOps template with GitHub external auth\"
         }")
       
+      VERSION_ID=$(echo "$VERSION_RESPONSE" | grep -o '"id":"[^"]*"' | head -1 | sed 's/"id":"//;s/"//')
+      
+      if [ -z "$VERSION_ID" ]; then
+        echo "   ❌ Failed to create template version"
+        echo "   Response: $VERSION_RESPONSE"
+        exit 1
+      fi
+      
+      echo "   ✅ Template version created: $VERSION_ID"
+      
+      # Now create template with the version
+      TEMPLATE_RESPONSE=$(curl -s -X POST "$CODER_URL/api/v2/organizations/coder/templates" \
+        -H "Content-Type: application/json" \
+        -H "Coder-Session-Token: $ADMIN_TOKEN" \
+        -d "{
+          \"name\": \"$TEMPLATE_NAME\",
+          \"display_name\": \"Kubernetes (Devcontainer) - GitOps\",
+          \"description\": \"Devcontainer workspaces with GitHub external auth\",
+          \"template_version_id\": \"$VERSION_ID\"
+        }")
+      
       TEMPLATE_ID=$(echo "$TEMPLATE_RESPONSE" | grep -o '"id":"[^"]*"' | head -1 | sed 's/"id":"//;s/"//')
-      VERSION_RESPONSE="$TEMPLATE_RESPONSE"
     fi
 
     # Extract version ID and set as active
