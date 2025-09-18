@@ -22,7 +22,7 @@ spec:
       initContainers:
       # Wait for runner registration token
       - name: wait-for-secret
-        image: bitnami/kubectl:latest
+        image: rancher/kubectl:v1.30.0
         command:
           - /bin/bash
           - -c

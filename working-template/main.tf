@@ -326,13 +326,7 @@ resource "coder_agent" "main" {
   }
 }
 
-module "code-server" {
-  count  = data.coder_workspace.me.start_count
-  source = "registry.coder.com/coder/code-server/coder"
-  version = "~> 1.0"
-  agent_id = coder_agent.main.id
-  order    = 1
-}
+# Module removed to avoid validation issues - code-server can be installed via startup script
 
 resource "coder_metadata" "container_info" {
   count       = data.coder_workspace.me.start_count
