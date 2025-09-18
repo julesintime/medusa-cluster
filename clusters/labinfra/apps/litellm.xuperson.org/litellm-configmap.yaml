@@ -18,12 +18,18 @@ data:
           api_key: "os.environ/GEMINI_KEY_1"
           rpm: 5
           tpm: 250000
+        model_info:
+          health_check_timeout: 15               # Extended timeout for large models
+          cooldown_time: 1800                    # 30min cooldown for quota exhaustion
       - model_name: "gemini-2.5-pro"
         litellm_params:
           model: "gemini/gemini-2.5-pro"
           api_key: "os.environ/GEMINI_KEY_2"
           rpm: 5
           tpm: 250000
+        model_info:
+          health_check_timeout: 15
+          cooldown_time: 1800
           
       # Gemini 2.5 Flash - Adaptive thinking, cost efficient
       - model_name: "gemini-2.5-flash"
@@ -32,12 +38,18 @@ data:
           api_key: "os.environ/GEMINI_KEY_1"
           rpm: 10
           tpm: 250000
+        model_info:
+          health_check_timeout: 10
+          cooldown_time: 1200                    # 20min cooldown for quota issues
       - model_name: "gemini-2.5-flash"
         litellm_params:
           model: "gemini/gemini-2.5-flash"
           api_key: "os.environ/GEMINI_KEY_2"
           rpm: 10
           tpm: 250000
+        model_info:
+          health_check_timeout: 10
+          cooldown_time: 1200
           
       # Gemini 2.5 Flash-Lite - Most cost-efficient
       - model_name: "gemini-2.5-flash-lite"
@@ -46,12 +58,18 @@ data:
           api_key: "os.environ/GEMINI_KEY_1"
           rpm: 15
           tpm: 250000
+        model_info:
+          health_check_timeout: 8
+          cooldown_time: 900                     # 15min cooldown
       - model_name: "gemini-2.5-flash-lite"
         litellm_params:
           model: "gemini/gemini-2.5-flash-lite"
           api_key: "os.environ/GEMINI_KEY_2"
           rpm: 15
           tpm: 250000
+        model_info:
+          health_check_timeout: 8
+          cooldown_time: 900
           
       # Gemini 2.0 Flash - High throughput
       - model_name: "gemini-2.0-flash"
@@ -60,12 +78,18 @@ data:
           api_key: "os.environ/GEMINI_KEY_1"
           rpm: 15
           tpm: 1000000
+        model_info:
+          health_check_timeout: 8
+          cooldown_time: 600                     # 10min cooldown
       - model_name: "gemini-2.0-flash"
         litellm_params:
           model: "gemini/gemini-2.0-flash"
           api_key: "os.environ/GEMINI_KEY_2"
           rpm: 15
           tpm: 1000000
+        model_info:
+          health_check_timeout: 8
+          cooldown_time: 600
           
       # Gemini 2.0 Flash Experimental - Higher rate limits (correct model ID)
       - model_name: "gemini-2.0-flash-lite"
@@ -74,12 +98,18 @@ data:
           api_key: "os.environ/GEMINI_KEY_1"
           rpm: 15
           tpm: 1000000
+        model_info:
+          health_check_timeout: 8
+          cooldown_time: 600                     # 10min cooldown
       - model_name: "gemini-2.0-flash-lite"
         litellm_params:
           model: "gemini/gemini-2.0-flash-exp"
           api_key: "os.environ/GEMINI_KEY_2"
           rpm: 15
           tpm: 1000000
+        model_info:
+          health_check_timeout: 8
+          cooldown_time: 600
           
           
       # === WILDCARD ROUTING ===
@@ -102,12 +132,18 @@ data:
           api_key: "os.environ/GEMINI_KEY_1"
           rpm: 5
           tpm: 250000
+        model_info:
+          health_check_timeout: 15
+          cooldown_time: 1800
       - model_name: "gpt-4"
         litellm_params:
           model: "gemini/gemini-2.5-pro"
           api_key: "os.environ/GEMINI_KEY_2"
           rpm: 5
           tpm: 250000
+        model_info:
+          health_check_timeout: 15
+          cooldown_time: 1800
           
       - model_name: "gpt-4"
         litellm_params:
@@ -115,12 +151,18 @@ data:
           api_key: "os.environ/GEMINI_KEY_1"
           rpm: 10
           tpm: 250000
+        model_info:
+          health_check_timeout: 10
+          cooldown_time: 1200
       - model_name: "gpt-4"
         litellm_params:
           model: "gemini/gemini-2.5-flash"
           api_key: "os.environ/GEMINI_KEY_2"
           rpm: 10
           tpm: 250000
+        model_info:
+          health_check_timeout: 10
+          cooldown_time: 1200
           
       - model_name: "gpt-4"
         litellm_params:
@@ -128,12 +170,18 @@ data:
           api_key: "os.environ/GEMINI_KEY_1"
           rpm: 15
           tpm: 250000
+        model_info:
+          health_check_timeout: 8
+          cooldown_time: 900
       - model_name: "gpt-4"
         litellm_params:
           model: "gemini/gemini-2.5-flash-lite"
           api_key: "os.environ/GEMINI_KEY_2"
           rpm: 15
           tpm: 250000
+        model_info:
+          health_check_timeout: 8
+          cooldown_time: 900
           
       - model_name: "gpt-4"
         litellm_params:
@@ -141,12 +189,18 @@ data:
           api_key: "os.environ/GEMINI_KEY_1"
           rpm: 15
           tpm: 1000000
+        model_info:
+          health_check_timeout: 8
+          cooldown_time: 600
       - model_name: "gpt-4"
         litellm_params:
           model: "gemini/gemini-2.0-flash"
           api_key: "os.environ/GEMINI_KEY_2"
           rpm: 15
           tpm: 1000000
+        model_info:
+          health_check_timeout: 8
+          cooldown_time: 600
           
       - model_name: "gpt-4"
         litellm_params:
@@ -154,42 +208,50 @@ data:
           api_key: "os.environ/GEMINI_KEY_1"
           rpm: 15
           tpm: 1000000
+        model_info:
+          health_check_timeout: 8
+          cooldown_time: 600
       - model_name: "gpt-4"
         litellm_params:
           model: "gemini/gemini-2.0-flash-exp"
           api_key: "os.environ/GEMINI_KEY_2"
           rpm: 15
           tpm: 1000000
+        model_info:
+          health_check_timeout: 8
+          cooldown_time: 600
           
     
-    # Router settings for quota rotation and rate limit handling
+    # Advanced router settings with proper cooldown and health checking
     router_settings:
-      routing_strategy: simple-shuffle          # Rotate through all deployments
-      num_retries: 8                           # More retries for rate limits/quota
-      timeout: 60                              # Timeout per request
-      retry_after: 0.5                         # Faster retry for quota rotation
-      cooldown_time: 5                         # Shorter cooldown for faster recovery
-      allowed_fails: 5                         # More lenient for rate limits
+      routing_strategy: least-busy             # Route to least busy deployment
+      num_retries: 3                           # Conservative retries to avoid cycling
+      timeout: 60                              # Request timeout
+      retry_after: 2                           # 2s delay between retries
+      cooldown_time: 300                       # 5min default cooldown for failed models
+      allowed_fails: 2                         # Cooldown after 2 failures per minute
       
-      # Enable fallbacks on quota/rate limit errors
-      enable_pre_call_checks: true             # Check deployment health before routing
-      disable_spend_logs: false                # Keep spend tracking
+      # Enable intelligent routing and health monitoring
+      enable_pre_call_checks: true             # CRITICAL: Skip unhealthy deployments
+      disable_spend_logs: false                # Keep cost tracking
       
-      # Specific retry policies for different error types
+      # Error-specific retry policies (minimize retries for quota issues)
       retry_policy:
-        "RateLimitErrorRetries": 8             # More retries for rate limits
-        "ResourceExhaustedErrorRetries": 8     # Handle quota exhaustion
-        "ServiceUnavailableErrorRetries": 8    # Handle service unavailable
-        "BadRequestErrorRetries": 2            # Fewer retries for bad requests
-        "AuthenticationErrorRetries": 1        # Don't retry auth errors
+        "RateLimitErrorRetries": 2             # Limited retries for rate limits
+        "ResourceExhaustedErrorRetries": 0     # NO retries for quota exhaustion
+        "ServiceUnavailableErrorRetries": 1    # Minimal retries for service issues
+        "TimeoutErrorRetries": 2               # Retry timeouts
+        "BadRequestErrorRetries": 0            # No retries for bad requests
+        "AuthenticationErrorRetries": 0        # No retries for auth errors
         
-      # Specific cooldown policies for different error types  
+      # Error-specific cooldown policies (long cooldowns for quota issues)
       allowed_fails_policy:
-        "RateLimitErrorAllowedFails": 100      # Very lenient for rate limits
-        "ResourceExhaustedErrorAllowedFails": 100  # Very lenient for quota exhaustion
-        "ServiceUnavailableErrorAllowedFails": 100 # Very lenient for service issues
-        "BadRequestErrorAllowedFails": 2       # Cooldown quickly for bad requests
-        "AuthenticationErrorAllowedFails": 1   # Cooldown immediately for auth errors
+        "RateLimitErrorAllowedFails": 3        # Cool down after 3 rate limit errors
+        "ResourceExhaustedErrorAllowedFails": 1 # Cool down immediately on quota exhaustion
+        "ServiceUnavailableErrorAllowedFails": 2 # Cool down after 2 service errors
+        "TimeoutErrorAllowedFails": 5          # More lenient for timeouts
+        "BadRequestErrorAllowedFails": 1       # Cool down immediately for bad requests
+        "AuthenticationErrorAllowedFails": 1   # Cool down immediately for auth errors
     
     # Advanced fallback configuration
     litellm_settings:
@@ -219,8 +281,14 @@ data:
       drop_params: true                        # Drop unsupported parameters
       set_verbose: false                       # Reduce logging noise
       
-      # Enable detailed error handling
+      # Enhanced error handling and performance settings
       request_timeout: 60                      # Request timeout
-      max_retries: 8                           # Max retries before fallback
+      max_retries: 3                           # Conservative max retries
       fallback_immediately_on_429: true       # Immediate fallback on rate limits
       fallback_immediately_on_503: true       # Immediate fallback on service unavailable
+      
+    # Background health monitoring and performance optimization
+    general_settings:
+      background_health_checks: true          # Enable proactive health monitoring
+      health_check_interval: 120              # Check health every 2 minutes
+      health_check_timeout: 10                # 10s timeout for health checks
