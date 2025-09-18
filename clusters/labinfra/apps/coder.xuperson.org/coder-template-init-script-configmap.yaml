@@ -105,10 +105,22 @@ data:
       DB_URL=$(kubectl get secret coder-database-secrets -n coder -o jsonpath='{.data.database-url}' | base64 -d)
       echo "   Using database: ${DB_URL%%@*}@***"
       
-      # Set admin user credentials
-      ADMIN_USERNAME="coder-admin"
-      ADMIN_EMAIL="coder-admin@xuperson.org"
-      ADMIN_PASSWORD=$(head -c 32 /dev/urandom | base64 | tr -d '+=/' | head -c 32)
+      # Check for existing admin credentials first
+      if kubectl get secret coder-admin-credentials -n coder >/dev/null 2>&1; then
+        # Use existing stored credentials
+        ADMIN_USERNAME=$(kubectl get secret coder-admin-credentials -n coder -o jsonpath='{.data.username}' | base64 -d)
+        ADMIN_EMAIL=$(kubectl get secret coder-admin-credentials -n coder -o jsonpath='{.data.email}' | base64 -d)
+        ADMIN_PASSWORD=$(kubectl get secret coder-admin-credentials -n coder -o jsonpath='{.data.password}' | base64 -d)
+        echo "   ✅ Using existing stored admin credentials: $ADMIN_USERNAME"
+        CREDENTIALS_EXIST=true
+      else
+        # Generate new admin credentials
+        ADMIN_USERNAME="coder-admin"
+        ADMIN_EMAIL="coder-admin@xuperson.org"
+        ADMIN_PASSWORD=$(head -c 32 /dev/urandom | base64 | tr -d '+=/' | head -c 32)
+        echo "   🔧 Generated new admin credentials: $ADMIN_USERNAME"
+        CREDENTIALS_EXIST=false
+      fi
       
       echo "   Creating admin user: $ADMIN_USERNAME ($ADMIN_EMAIL)"
       
@@ -152,6 +164,22 @@ data:
         
         if [ -n "$ADMIN_TOKEN" ] && [ ${#ADMIN_TOKEN} -gt 20 ]; then
           echo "   ✅ API token created via REST API (length: ${#ADMIN_TOKEN})"
+          
+          # Store admin credentials if they weren't already stored
+          if [ "$CREDENTIALS_EXIST" = false ]; then
+            echo "   💾 Storing admin credentials for future use..."
+            kubectl create secret generic coder-admin-credentials \
+              --from-literal=username="$ADMIN_USERNAME" \
+              --from-literal=email="$ADMIN_EMAIL" \
+              --from-literal=password="$ADMIN_PASSWORD" \
+              -n coder >/dev/null 2>&1
+            
+            if [ $? -eq 0 ]; then
+              echo "   ✅ Admin credentials stored successfully"
+            else
+              echo "   ⚠️  Failed to store admin credentials, but continuing..."
+            fi
+          fi
         else
           echo "   ❌ Failed to create API token via REST API"
           echo "   Response: $TOKEN_RESPONSE"
