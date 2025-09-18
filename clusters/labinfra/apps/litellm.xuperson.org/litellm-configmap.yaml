@@ -5,49 +5,48 @@ metadata:
   namespace: litellm
 data:
   config.yaml: |
-    # Key pool with maximum rate limit rotation
+    # Advanced routing: specific models, wildcards, and default rotation with fallbacks
     model_list: 
-      # All deployments use same model name "gpt-4" - LiteLLM rotates through them
       
-      # Gemini 2.5 Pro - Enhanced thinking and reasoning, multimodal understanding
-      - model_name: "gpt-4"
+      # === SPECIFIC MODEL ROUTING ===
+      # Direct routing to specific models when requested by exact name
+      
+      # Gemini 2.5 Pro - Enhanced thinking and reasoning
+      - model_name: "gemini-2.5-pro"
         litellm_params:
           model: "gemini/gemini-2.5-pro"
           api_key: "os.environ/GEMINI_KEY_1"
           rpm: 5
           tpm: 250000
-          
-      - model_name: "gpt-4"
+      - model_name: "gemini-2.5-pro"
         litellm_params:
           model: "gemini/gemini-2.5-pro"
           api_key: "os.environ/GEMINI_KEY_2"
           rpm: 5
           tpm: 250000
           
-      # Gemini 2.5 Flash - Adaptive thinking, cost efficiency
-      - model_name: "gpt-4"
+      # Gemini 2.5 Flash - Adaptive thinking, cost efficient
+      - model_name: "gemini-2.5-flash"
         litellm_params:
           model: "gemini/gemini-2.5-flash"
           api_key: "os.environ/GEMINI_KEY_1"
           rpm: 10
           tpm: 250000
-          
-      - model_name: "gpt-4"
+      - model_name: "gemini-2.5-flash"
         litellm_params:
           model: "gemini/gemini-2.5-flash"
           api_key: "os.environ/GEMINI_KEY_2"
           rpm: 10
           tpm: 250000
           
-      # Gemini 2.5 Flash-Lite - Most cost-efficient model
-      - model_name: "gpt-4"
+      # Gemini 2.5 Flash-Lite - Most cost-efficient
+      - model_name: "gemini-2.5-flash-lite"
         litellm_params:
           model: "gemini/gemini-2.5-flash-lite"
           api_key: "os.environ/GEMINI_KEY_1"
           rpm: 15
           tpm: 250000
-          
-      - model_name: "gpt-4"
+      - model_name: "gemini-2.5-flash-lite"
         litellm_params:
           model: "gemini/gemini-2.5-flash-lite"
           api_key: "os.environ/GEMINI_KEY_2"
@@ -55,29 +54,27 @@ data:
           tpm: 250000
           
       # Gemini 2.0 Flash - High throughput
-      - model_name: "gpt-4"
+      - model_name: "gemini-2.0-flash"
         litellm_params:
           model: "gemini/gemini-2.0-flash"
           api_key: "os.environ/GEMINI_KEY_1"
           rpm: 15
           tpm: 1000000
-          
-      - model_name: "gpt-4"
+      - model_name: "gemini-2.0-flash"
         litellm_params:
           model: "gemini/gemini-2.0-flash"
           api_key: "os.environ/GEMINI_KEY_2"
           rpm: 15
           tpm: 1000000
           
-      # Gemini 2.0 Flash-Lite - Higher rate limits
-      - model_name: "gpt-4"
+      # Gemini 2.0 Flash-Lite - Higher rate limits  
+      - model_name: "gemini-2.0-flash-lite"
         litellm_params:
           model: "gemini/gemini-2.0-flash-lite"
           api_key: "os.environ/GEMINI_KEY_1"
           rpm: 30
           tpm: 1000000
-          
-      - model_name: "gpt-4"
+      - model_name: "gemini-2.0-flash-lite"
         litellm_params:
           model: "gemini/gemini-2.0-flash-lite"
           api_key: "os.environ/GEMINI_KEY_2"
@@ -85,14 +82,13 @@ data:
           tpm: 1000000
           
       # Gemma 3 - Open model
-      - model_name: "gpt-4"
+      - model_name: "gemma-3"
         litellm_params:
           model: "gemini/gemma-3"
           api_key: "os.environ/GEMINI_KEY_1"
           rpm: 30
           tpm: 15000
-          
-      - model_name: "gpt-4"
+      - model_name: "gemma-3"
         litellm_params:
           model: "gemini/gemma-3"
           api_key: "os.environ/GEMINI_KEY_2"
@@ -100,13 +96,117 @@ data:
           tpm: 15000
           
       # Gemma 3n - Open model variant
+      - model_name: "gemma-3n"
+        litellm_params:
+          model: "gemini/gemma-3n"
+          api_key: "os.environ/GEMINI_KEY_1"
+          rpm: 30
+          tpm: 15000
+      - model_name: "gemma-3n"
+        litellm_params:
+          model: "gemini/gemma-3n"
+          api_key: "os.environ/GEMINI_KEY_2"
+          rpm: 30
+          tpm: 15000
+          
+      # === WILDCARD ROUTING ===
+      # Handles any gemini/* model requests (e.g., gemini/gemini-2.5-pro, gemini/new-model)
+      - model_name: "gemini/*"
+        litellm_params:
+          model: "gemini/*"
+          api_key: "os.environ/GEMINI_KEY_1"
+      - model_name: "gemini/*"
+        litellm_params:
+          model: "gemini/*"
+          api_key: "os.environ/GEMINI_KEY_2"
+          
+      # === DEFAULT ROTATION POOL ===
+      # "gpt-4" and catch-all models rotate through all available models
+      
+      - model_name: "gpt-4"
+        litellm_params:
+          model: "gemini/gemini-2.5-pro"
+          api_key: "os.environ/GEMINI_KEY_1"
+          rpm: 5
+          tpm: 250000
+      - model_name: "gpt-4"
+        litellm_params:
+          model: "gemini/gemini-2.5-pro"
+          api_key: "os.environ/GEMINI_KEY_2"
+          rpm: 5
+          tpm: 250000
+          
+      - model_name: "gpt-4"
+        litellm_params:
+          model: "gemini/gemini-2.5-flash"
+          api_key: "os.environ/GEMINI_KEY_1"
+          rpm: 10
+          tpm: 250000
+      - model_name: "gpt-4"
+        litellm_params:
+          model: "gemini/gemini-2.5-flash"
+          api_key: "os.environ/GEMINI_KEY_2"
+          rpm: 10
+          tpm: 250000
+          
+      - model_name: "gpt-4"
+        litellm_params:
+          model: "gemini/gemini-2.5-flash-lite"
+          api_key: "os.environ/GEMINI_KEY_1"
+          rpm: 15
+          tpm: 250000
+      - model_name: "gpt-4"
+        litellm_params:
+          model: "gemini/gemini-2.5-flash-lite"
+          api_key: "os.environ/GEMINI_KEY_2"
+          rpm: 15
+          tpm: 250000
+          
+      - model_name: "gpt-4"
+        litellm_params:
+          model: "gemini/gemini-2.0-flash"
+          api_key: "os.environ/GEMINI_KEY_1"
+          rpm: 15
+          tpm: 1000000
+      - model_name: "gpt-4"
+        litellm_params:
+          model: "gemini/gemini-2.0-flash"
+          api_key: "os.environ/GEMINI_KEY_2"
+          rpm: 15
+          tpm: 1000000
+          
+      - model_name: "gpt-4"
+        litellm_params:
+          model: "gemini/gemini-2.0-flash-lite"
+          api_key: "os.environ/GEMINI_KEY_1"
+          rpm: 30
+          tpm: 1000000
+      - model_name: "gpt-4"
+        litellm_params:
+          model: "gemini/gemini-2.0-flash-lite"
+          api_key: "os.environ/GEMINI_KEY_2"
+          rpm: 30
+          tpm: 1000000
+          
+      - model_name: "gpt-4"
+        litellm_params:
+          model: "gemini/gemma-3"
+          api_key: "os.environ/GEMINI_KEY_1"
+          rpm: 30
+          tpm: 15000
+      - model_name: "gpt-4"
+        litellm_params:
+          model: "gemini/gemma-3"
+          api_key: "os.environ/GEMINI_KEY_2"
+          rpm: 30
+          tpm: 15000
+          
       - model_name: "gpt-4"
         litellm_params:
           model: "gemini/gemma-3n"
           api_key: "os.environ/GEMINI_KEY_1"
           rpm: 30
           tpm: 15000
-          
       - model_name: "gpt-4"
         litellm_params:
           model: "gemini/gemma-3n"
@@ -117,13 +217,28 @@ data:
     # Router settings for key pool rotation
     router_settings:
       routing_strategy: simple-shuffle          # Rotate through all deployments
-      num_retries: 14                          # Try all 14 model combinations before failing
+      num_retries: 3                           # Try 3 times per model group
       timeout: 60                              # Timeout per request
       cooldown_time: 30                        # Cool down failed deployments  
       allowed_fails: 1                         # Try next deployment after 1 failure
     
-    # Fallback configuration for rate limit handling
+    # Advanced fallback configuration
     litellm_settings:
+      # Specific model fallbacks - fall back to gpt-4 rotation pool
+      fallbacks:
+        "gemini-2.5-pro": ["gpt-4"]
+        "gemini-2.5-flash": ["gpt-4"] 
+        "gemini-2.5-flash-lite": ["gpt-4"]
+        "gemini-2.0-flash": ["gpt-4"]
+        "gemini-2.0-flash-lite": ["gpt-4"]
+        "gemma-3": ["gpt-4"]
+        "gemma-3n": ["gpt-4"]
+        "gemini/*": ["gpt-4"]                  # Wildcard fallback to rotation
+      
+      # Default fallback for any unrecognized model
+      default_fallbacks: ["gpt-4"]
+      
+      # General settings
       success_callback: ["langfuse"]           # Optional: track successful requests
       failure_callback: ["langfuse"]           # Optional: track failed requests
       drop_params: true                        # Drop unsupported parameters
