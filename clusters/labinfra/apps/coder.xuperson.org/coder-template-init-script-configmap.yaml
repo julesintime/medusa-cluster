@@ -120,7 +120,7 @@ data:
       # Create dedicated automation admin user via API
       AUTOMATION_USERNAME="coder-automation" 
       AUTOMATION_EMAIL="coder-automation@xuperson.org"
-      AUTOMATION_PASSWORD=$(head -c 32 /dev/urandom | base64 | tr -d '+=/' | head -c 32)
+      AUTOMATION_PASSWORD="CoderAdmin2024"  # Fixed password for reliability
       
       echo "   Creating automation admin: $AUTOMATION_USERNAME"
       
