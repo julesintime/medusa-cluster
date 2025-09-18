@@ -22,7 +22,7 @@ spec:
         - name: POSTGRES_USER
           value: "postgres"
         - name: POSTGRES_PASSWORD
-          value: "litellm-password"
+          value: "wFG4VmtVO6iCqsEzqTHL1xRMeD8SltU1"
         ports:
         - containerPort: 5432
           name: postgres
