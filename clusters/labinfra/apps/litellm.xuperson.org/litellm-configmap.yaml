@@ -225,15 +225,15 @@ data:
     # Advanced fallback configuration
     litellm_settings:
       # Specific model fallbacks - fall back to gpt-4 rotation pool
-      fallbacks:
-        "gemini-2.5-pro": ["gpt-4"]
-        "gemini-2.5-flash": ["gpt-4"] 
-        "gemini-2.5-flash-lite": ["gpt-4"]
-        "gemini-2.0-flash": ["gpt-4"]
-        "gemini-2.0-flash-lite": ["gpt-4"]
-        "gemma-3": ["gpt-4"]
-        "gemma-3n": ["gpt-4"]
-        "gemini/*": ["gpt-4"]                  # Wildcard fallback to rotation
+      fallbacks: 
+        - "gemini-2.5-pro": ["gpt-4"]
+        - "gemini-2.5-flash": ["gpt-4"] 
+        - "gemini-2.5-flash-lite": ["gpt-4"]
+        - "gemini-2.0-flash": ["gpt-4"]
+        - "gemini-2.0-flash-lite": ["gpt-4"]
+        - "gemma-3": ["gpt-4"]
+        - "gemma-3n": ["gpt-4"]
+        - "gemini/*": ["gpt-4"]                  # Wildcard fallback to rotation
       
       # Default fallback for any unrecognized model
       default_fallbacks: ["gpt-4"]
