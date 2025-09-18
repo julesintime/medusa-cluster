@@ -21,6 +21,7 @@ resources:
   # Secrets management (Infisical)
   - coder-infisical-secrets.yaml
   - coder-github-external-auth-infisical-secrets.yaml
+  - coder-admin-credentials-infisical-secrets.yaml
   
   # Template automation (GitOps)
   - coder-template-files-configmap.yaml

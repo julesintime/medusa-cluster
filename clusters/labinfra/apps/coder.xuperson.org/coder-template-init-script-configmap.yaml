@@ -118,9 +118,10 @@ data:
       echo "   🔧 Using bootstrap token to create automation admin..."
       
       # Create dedicated automation admin user via API
-      AUTOMATION_USERNAME="coder-automation" 
-      AUTOMATION_EMAIL="coder-automation@xuperson.org"
-      AUTOMATION_PASSWORD="CoderAdmin2024"  # Fixed password for reliability
+      # Get credentials from Infisical-synced secret
+      AUTOMATION_USERNAME=$(kubectl get secret coder-admin-credentials -n coder -o jsonpath='{.data.username}' | base64 -d)
+      AUTOMATION_EMAIL=$(kubectl get secret coder-admin-credentials -n coder -o jsonpath='{.data.email}' | base64 -d)
+      AUTOMATION_PASSWORD=$(kubectl get secret coder-admin-credentials -n coder -o jsonpath='{.data.password}' | base64 -d)
       
       echo "   Creating automation admin: $AUTOMATION_USERNAME"
       
