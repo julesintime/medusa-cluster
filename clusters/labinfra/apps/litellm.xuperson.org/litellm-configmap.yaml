@@ -81,47 +81,6 @@ data:
           rpm: 15
           tpm: 1000000
           
-      # Gemma 3n E2B - Efficient 2B model
-      - model_name: "gemma-3n-e2b-it"
-        litellm_params:
-          model: "gemini/gemma-3n-e2b-it"
-          api_key: "os.environ/GEMINI_KEY_1"
-          rpm: 30
-          tpm: 15000
-      - model_name: "gemma-3n-e2b-it"
-        litellm_params:
-          model: "gemini/gemma-3n-e2b-it"
-          api_key: "os.environ/GEMINI_KEY_2"
-          rpm: 30
-          tpm: 15000
-          
-      # Gemma 3n E4B - Efficient 4B model  
-      - model_name: "gemma-3n-e4b-it"
-        litellm_params:
-          model: "gemini/gemma-3n-e4b-it"
-          api_key: "os.environ/GEMINI_KEY_1"
-          rpm: 30
-          tpm: 15000
-      - model_name: "gemma-3n-e4b-it"
-        litellm_params:
-          model: "gemini/gemma-3n-e4b-it"
-          api_key: "os.environ/GEMINI_KEY_2"
-          rpm: 30
-          tpm: 15000
-          
-      # Gemma 3 27B - Large model for complex tasks
-      - model_name: "gemma-3-27b-it"
-        litellm_params:
-          model: "gemini/gemma-3-27b-it"
-          api_key: "os.environ/GEMINI_KEY_1"
-          rpm: 30
-          tpm: 15000
-      - model_name: "gemma-3-27b-it"
-        litellm_params:
-          model: "gemini/gemma-3-27b-it"
-          api_key: "os.environ/GEMINI_KEY_2"
-          rpm: 30
-          tpm: 15000
           
       # === WILDCARD ROUTING ===
       # Handles any gemini/* model requests (e.g., gemini/gemini-2.5-pro, gemini/new-model)
@@ -202,44 +161,6 @@ data:
           rpm: 15
           tpm: 1000000
           
-      - model_name: "gpt-4"
-        litellm_params:
-          model: "gemini/gemma-3n-e2b-it"
-          api_key: "os.environ/GEMINI_KEY_1"
-          rpm: 30
-          tpm: 15000
-      - model_name: "gpt-4"
-        litellm_params:
-          model: "gemini/gemma-3n-e2b-it"
-          api_key: "os.environ/GEMINI_KEY_2"
-          rpm: 30
-          tpm: 15000
-          
-      - model_name: "gpt-4"
-        litellm_params:
-          model: "gemini/gemma-3n-e4b-it"
-          api_key: "os.environ/GEMINI_KEY_1"
-          rpm: 30
-          tpm: 15000
-      - model_name: "gpt-4"
-        litellm_params:
-          model: "gemini/gemma-3n-e4b-it"
-          api_key: "os.environ/GEMINI_KEY_2"
-          rpm: 30
-          tpm: 15000
-          
-      - model_name: "gpt-4"
-        litellm_params:
-          model: "gemini/gemma-3-27b-it"
-          api_key: "os.environ/GEMINI_KEY_1"
-          rpm: 30
-          tpm: 15000
-      - model_name: "gpt-4"
-        litellm_params:
-          model: "gemini/gemma-3-27b-it"
-          api_key: "os.environ/GEMINI_KEY_2"
-          rpm: 30
-          tpm: 15000
     
     # Router settings for quota rotation and rate limit handling
     router_settings:
@@ -272,16 +193,13 @@ data:
     
     # Advanced fallback configuration
     litellm_settings:
-      # Specific model fallbacks - fall back to gpt-4 rotation pool
+      # Specific model fallbacks - fall back to gpt-4 rotation pool (tool-calling models only)
       fallbacks: 
         - "gemini-2.5-pro": ["gpt-4"]
         - "gemini-2.5-flash": ["gpt-4"] 
         - "gemini-2.5-flash-lite": ["gpt-4"]
         - "gemini-2.0-flash": ["gpt-4"]
         - "gemini-2.0-flash-lite": ["gpt-4"]
-        - "gemma-3n-e2b-it": ["gpt-4"]
-        - "gemma-3n-e4b-it": ["gpt-4"]
-        - "gemma-3-27b-it": ["gpt-4"]
         - "gemini/*": ["gpt-4"]                  # Wildcard fallback to rotation
       
       # Default fallback for any unrecognized model
