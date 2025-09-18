@@ -26,7 +26,7 @@ spec:
       # Install kubectl and coder CLI binaries in shared volume
       initContainers:
       - name: install-binaries
-        image: alpine:latest
+        image: alpine/curl:latest
         imagePullPolicy: IfNotPresent
         command:
         - sh
@@ -40,8 +40,9 @@ spec:
           chmod +x /shared/kubectl
           echo "kubectl installed successfully"
           
-          # Install coder CLI
-          curl -fsSL https://coder.com/install.sh | sh -s -- --method=standalone --prefix=/shared
+          # Install coder CLI directly
+          CODER_VERSION="v2.26.0"
+          curl -L "https://github.com/coder/coder/releases/download/${CODER_VERSION}/coder_${CODER_VERSION#v}_linux_amd64.tar.gz" | tar -xz -C /shared
           chmod +x /shared/coder
           echo "coder CLI installed successfully"
           
@@ -58,11 +59,13 @@ spec:
 
       containers:
       - name: coder-template-setup
-        image: alpine:latest
+        image: alpine/curl:latest
         imagePullPolicy: IfNotPresent
         command: ["/scripts/template-init.sh"]
         
         env:
+        - name: PATH
+          value: "/shared:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
         - name: CODER_URL
           value: "https://coder.xuperson.org"
         - name: TEMPLATE_NAME

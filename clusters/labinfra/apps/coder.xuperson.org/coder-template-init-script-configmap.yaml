@@ -108,7 +108,7 @@ data:
       # Set admin user credentials
       ADMIN_USERNAME="coder-admin"
       ADMIN_EMAIL="coder-admin@xuperson.org"
-      ADMIN_PASSWORD=$(openssl rand -base64 32)
+      ADMIN_PASSWORD=$(head -c 32 /dev/urandom | base64 | tr -d '+=/' | head -c 32)
       
       echo "   Creating admin user: $ADMIN_USERNAME ($ADMIN_EMAIL)"
       
