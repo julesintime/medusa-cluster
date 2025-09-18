@@ -221,7 +221,7 @@ data:
       exit 1
     fi
     
-    tar -czf /tmp/template.tar.gz .
+    tar -czf /shared/template.tar.gz .
     echo "   ✅ Template archive created"
 
     # Upload template files
@@ -229,7 +229,7 @@ data:
     UPLOAD_RESPONSE=$(curl -s -X POST "$CODER_URL/api/v2/files" \
       -H "Content-Type: application/x-tar" \
       -H "Coder-Session-Token: $ADMIN_TOKEN" \
-      --data-binary @/tmp/template.tar.gz)
+      --data-binary @/shared/template.tar.gz)
 
     FILE_ID=$(echo "$UPLOAD_RESPONSE" | grep -o '"hash":"[^"]*"' | sed 's/"hash":"//;s/"//')
     if [ -z "$FILE_ID" ]; then
