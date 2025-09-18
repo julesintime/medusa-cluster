@@ -97,127 +97,106 @@ data:
       fi
     fi
 
-    # Create admin user and token automatically if needed
+    # Create dedicated automation admin user if needed
     if [ "$TOKEN_VALID" = false ]; then
-      echo "🤖 Creating admin user and token FULLY AUTOMATICALLY..."
+      echo "🤖 BOOTSTRAP: Creating dedicated automation admin user..."
+      echo "   📋 Using bootstrap token to create permanent automation admin"
       
-      # Check if initial user already exists
-      FIRST_USER_EXISTS=$(curl -s "$CODER_URL/api/v2/users/first" | grep -q "already been created" && echo "true" || echo "false")
-      
-      if [ "$FIRST_USER_EXISTS" = "true" ]; then
-        echo "   ⚠️  Initial user already exists - requires manual API token setup"
+      # Check if we have a bootstrap token from manual setup
+      if [ -z "$K8S_TOKEN" ] || [ ${#K8S_TOKEN} -lt 20 ]; then
         echo ""
-        echo "🔑 MANUAL SETUP REQUIRED:"
-        echo "   1. Open: $CODER_URL"
-        echo "   2. Login with existing admin account"
-        echo "   3. Go to Account Settings → Tokens"
-        echo "   4. Create new token named 'template-automation' with 8760h lifetime"
-        echo "   5. Run this command to store the token:"
-        echo "      kubectl create secret generic coder-admin-api-token \\"
-        echo "        --from-literal=token='<YOUR_TOKEN_HERE>' -n coder"
+        echo "❌ BOOTSTRAP REQUIRED:"
+        echo "   1. Open: $CODER_URL (login with GitHub)"
+        echo "   2. Account Settings → Tokens → Create 'bootstrap-automation' token"
+        echo "   3. kubectl create secret generic coder-admin-api-token --from-literal=token='<TOKEN>' -n coder"
+        echo "   4. Re-run automation - it will create permanent automation admin"
         echo ""
-        echo "   Then re-run this automation job."
+        echo "   After bootstrap: 100% automated forever! 🚀"
         exit 1
       fi
       
-      # Get database URL from secrets  
-      DB_URL=$(kubectl get secret coder-database-secrets -n coder -o jsonpath='{.data.database-url}' | base64 -d)
-      echo "   Using database: ${DB_URL%%@*}@***"
+      echo "   🔧 Using bootstrap token to create automation admin..."
       
-      # Generate new admin credentials for initial setup
-      ADMIN_USERNAME="coder-admin"
-      ADMIN_EMAIL="coder-admin@xuperson.org"
-      ADMIN_PASSWORD=$(head -c 32 /dev/urandom | base64 | tr -d '+=/' | head -c 32)
-      echo "   🔧 Generated new admin credentials: $ADMIN_USERNAME"
+      # Create dedicated automation admin user via API
+      AUTOMATION_USERNAME="coder-automation" 
+      AUTOMATION_EMAIL="coder-automation@xuperson.org"
+      AUTOMATION_PASSWORD=$(head -c 32 /dev/urandom | base64 | tr -d '+=/' | head -c 32)
       
-      echo "   Creating admin user: $ADMIN_USERNAME ($ADMIN_EMAIL)"
+      echo "   Creating automation admin: $AUTOMATION_USERNAME"
       
-      # Use coder server create-admin-user command to create initial admin
-      echo "   Running: coder server create-admin-user..."
-      export CODER_USERNAME="$ADMIN_USERNAME"
-      export CODER_EMAIL="$ADMIN_EMAIL" 
-      export CODER_PASSWORD="$ADMIN_PASSWORD"
-      
-      if coder server create-admin-user --postgres-url="$DB_URL" 2>/dev/null; then
-        echo "   ✅ Admin user created successfully"
-      else
-        echo "   ❌ Failed to create admin user"
-        exit 1
-      fi
-      
-      # Now login via REST API to get a session token
-      echo "   Logging in via REST API..."
-      LOGIN_RESPONSE=$(curl -s -X POST "$CODER_URL/api/v2/users/login" \
+      # Create the automation admin user via API
+      USER_RESPONSE=$(curl -s -X POST "$CODER_URL/api/v2/organizations/coder/members" \
         -H "Content-Type: application/json" \
+        -H "Coder-Session-Token: $K8S_TOKEN" \
         -d "{
-          \"email\": \"$ADMIN_EMAIL\",
-          \"password\": \"$ADMIN_PASSWORD\"
+          \"email\": \"$AUTOMATION_EMAIL\",
+          \"username\": \"$AUTOMATION_USERNAME\",
+          \"password\": \"$AUTOMATION_PASSWORD\",
+          \"user_login_type\": \"password\",
+          \"organization_roles\": [{\"name\": \"owner\"}]
         }")
       
-      SESSION_TOKEN=$(echo "$LOGIN_RESPONSE" | grep -o '"session_token":"[^"]*"' | sed 's/"session_token":"//;s/"//')
+      USER_ID=$(echo "$USER_RESPONSE" | grep -o '"id":"[^"]*"' | head -1 | sed 's/"id":"//;s/"//')
       
-      if [ -n "$SESSION_TOKEN" ] && [ ${#SESSION_TOKEN} -gt 20 ]; then
-        echo "   ✅ Login successful via REST API"
+      if [ -n "$USER_ID" ]; then
+        echo "   ✅ Automation admin created: $USER_ID"
         
-        # Create API token using REST API
-        echo "   Creating API token via REST API..."
-        TOKEN_RESPONSE=$(curl -s -X POST "$CODER_URL/api/v2/tokens" \
+        # Login as automation admin to get dedicated session
+        echo "   🔑 Creating permanent automation token..."
+        LOGIN_RESPONSE=$(curl -s -X POST "$CODER_URL/api/v2/users/login" \
           -H "Content-Type: application/json" \
-          -H "Coder-Session-Token: $SESSION_TOKEN" \
           -d "{
-            \"name\": \"$TOKEN_NAME\",
-            \"lifetime\": \"8760h\"
+            \"email\": \"$AUTOMATION_EMAIL\",
+            \"password\": \"$AUTOMATION_PASSWORD\"
           }")
         
-        ADMIN_TOKEN=$(echo "$TOKEN_RESPONSE" | grep -o '"key":"[^"]*"' | sed 's/"key":"//;s/"//')
+        AUTOMATION_SESSION=$(echo "$LOGIN_RESPONSE" | grep -o '"session_token":"[^"]*"' | sed 's/"session_token":"//;s/"//')
         
-        if [ -n "$ADMIN_TOKEN" ] && [ ${#ADMIN_TOKEN} -gt 20 ]; then
-          echo "   ✅ API token created via REST API (length: ${#ADMIN_TOKEN})"
+        if [ -n "$AUTOMATION_SESSION" ]; then
+          # Create permanent API token for automation
+          TOKEN_RESPONSE=$(curl -s -X POST "$CODER_URL/api/v2/tokens" \
+            -H "Content-Type: application/json" \
+            -H "Coder-Session-Token: $AUTOMATION_SESSION" \
+            -d "{
+              \"name\": \"$TOKEN_NAME\",
+              \"lifetime\": \"8760h\"
+            }")
           
-          # Store admin credentials if they weren't already stored
-          if [ "$CREDENTIALS_EXIST" = false ]; then
-            echo "   💾 Storing admin credentials for future use..."
-            kubectl create secret generic coder-admin-credentials \
-              --from-literal=username="$ADMIN_USERNAME" \
-              --from-literal=email="$ADMIN_EMAIL" \
-              --from-literal=password="$ADMIN_PASSWORD" \
-              -n coder >/dev/null 2>&1
+          ADMIN_TOKEN=$(echo "$TOKEN_RESPONSE" | grep -o '"key":"[^"]*"' | sed 's/"key":"//;s/"//')
+          
+          if [ -n "$ADMIN_TOKEN" ]; then
+            echo "   ✅ Permanent automation token created"
             
-            if [ $? -eq 0 ]; then
-              echo "   ✅ Admin credentials stored successfully"
-            else
-              echo "   ⚠️  Failed to store admin credentials, but continuing..."
-            fi
+            # Store automation credentials for future runs
+            kubectl create secret generic coder-automation-credentials \
+              --from-literal=username="$AUTOMATION_USERNAME" \
+              --from-literal=email="$AUTOMATION_EMAIL" \
+              --from-literal=password="$AUTOMATION_PASSWORD" \
+              --from-literal=user_id="$USER_ID" \
+              -n coder --dry-run=client -o yaml | kubectl apply -f - >/dev/null 2>&1
+            
+            echo "   💾 Automation credentials stored for future runs"
+            echo "   🎉 BOOTSTRAP COMPLETE - Future runs will be 100% automated!"
+          else
+            echo "   ❌ Failed to create automation token"
+            exit 1
           fi
         else
-          echo "   ❌ Failed to create API token via REST API"
-          echo "   Response: $TOKEN_RESPONSE"
+          echo "   ❌ Failed to login as automation admin"
           exit 1
         fi
       else
-        echo "   ❌ Failed to login via REST API"
-        echo "   Response: $LOGIN_RESPONSE"
+        echo "   ❌ Failed to create automation admin user"
+        echo "   Response: $USER_RESPONSE"
         exit 1
       fi
 
-      # Store token and credentials in k8s secret
-      echo "   Storing credentials in k8s secret..."
+      # Update the API token secret with permanent automation token
       kubectl create secret generic coder-admin-api-token \
         --from-literal=token="$ADMIN_TOKEN" \
-        --from-literal=username="$ADMIN_USERNAME" \
-        --from-literal=email="$ADMIN_EMAIL" \
-        --from-literal=password="$ADMIN_PASSWORD" \
-        -n coder \
-        --dry-run=client -o yaml | kubectl apply -f - >/dev/null 2>&1
+        -n coder --dry-run=client -o yaml | kubectl apply -f - >/dev/null 2>&1
 
-      if [ $? -eq 0 ]; then
-        echo "   ✅ Credentials stored successfully"
-      else
-        echo "   ❌ Failed to store credentials"
-        exit 1
-      fi
-
-      echo "✅ FULLY AUTOMATIC admin user and token creation complete!"
+      echo "✅ DEDICATED AUTOMATION ADMIN SETUP COMPLETE!"
     fi
 
     echo "🎯 Using admin token ending with: ${ADMIN_TOKEN: -8}"
