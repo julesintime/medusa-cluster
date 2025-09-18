@@ -214,13 +214,26 @@ data:
           rpm: 30
           tpm: 15000
     
-    # Router settings for key pool rotation
+    # Router settings for quota rotation and rate limit handling
     router_settings:
       routing_strategy: simple-shuffle          # Rotate through all deployments
-      num_retries: 3                           # Try 3 times per model group
+      num_retries: 5                           # Try multiple deployments for rate limits
       timeout: 60                              # Timeout per request
-      cooldown_time: 30                        # Cool down failed deployments  
-      allowed_fails: 1                         # Try next deployment after 1 failure
+      retry_after: 1                           # Min 1s delay before retrying (helps with rate limits)
+      cooldown_time: 10                        # Short cooldown for quota rotation (10s)
+      allowed_fails: 3                         # Allow more fails before cooldown (rate limits are common)
+      
+      # Specific retry policies for different error types
+      retry_policy:
+        "RateLimitErrorRetries": 5             # Retry rate limit errors across deployments
+        "BadRequestErrorRetries": 2            # Fewer retries for bad requests
+        "AuthenticationErrorRetries": 1        # Don't retry auth errors
+        
+      # Specific cooldown policies for different error types  
+      allowed_fails_policy:
+        "RateLimitErrorAllowedFails": 50       # Allow many rate limit errors before cooldown
+        "BadRequestErrorAllowedFails": 2       # Cooldown quickly for bad requests
+        "AuthenticationErrorAllowedFails": 1   # Cooldown immediately for auth errors
     
     # Advanced fallback configuration
     litellm_settings:
