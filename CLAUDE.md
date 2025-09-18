@@ -7,6 +7,7 @@ Claude Code guidance for GitOps application deployment on the K3s cluster. For d
 **ALWAYS** make changes via git `commit` **AND THEN** `push` to GitHub for Flux reconciliation.
 **NEVER** make changes with `kubectl`, read-only commands are allowed.
 **INFISICAL ONLY** All secrets must be managed through Infisical - never hardcode in manifests.
+**NO BITNAMI** Avoid Bitnami images - use official images from original maintainers only.
 
 Export your kubeconfig and use kubectl only for monitoring
 ```

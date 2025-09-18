@@ -2,13 +2,13 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: pinologger
-  namespace: pinologger
+  name: redis-client
+  namespace: redis
   labels:
-    app: pinologger
+    app: redis-client
 spec:
   selector:
-    app: pinologger
+    app: redis-client
   ports:
   - name: http
     port: 80

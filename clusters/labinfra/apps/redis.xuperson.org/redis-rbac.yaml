@@ -2,16 +2,16 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: pinologger
-  namespace: pinologger
+  name: redis-client
+  namespace: redis
   labels:
-    app: pinologger
+    app: redis-client
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: pinologger
-  namespace: pinologger
+  name: redis-client
+  namespace: redis
 rules:
 - apiGroups: [""]
   resources: ["secrets"]
@@ -23,13 +23,13 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: pinologger
-  namespace: pinologger
+  name: redis-client
+  namespace: redis
 subjects:
 - kind: ServiceAccount
-  name: pinologger
-  namespace: pinologger
+  name: redis-client
+  namespace: redis
 roleRef:
   kind: Role
-  name: pinologger
+  name: redis-client
   apiGroup: rbac.authorization.k8s.io
