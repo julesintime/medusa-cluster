@@ -13,9 +13,12 @@ data:
     #!/bin/sh
     set -e
 
-    # Template automation script following Gitea pattern
-    # FULLY AUTOMATIC token creation - NO MANUAL STEPS
+    # Template automation script with FULLY AUTOMATIC admin user creation
+    # Uses coder CLI for complete automation - NO MANUAL STEPS
 
+    # Add shared binaries to PATH
+    export PATH="/shared:$PATH"
+    
     CODER_URL="https://coder.xuperson.org"
     TEMPLATE_NAME="kubernetes-devcontainer"
     VERSION_NAME="gitops-$(date +%Y%m%d-%H%M%S)"
@@ -25,6 +28,18 @@ data:
     echo "URL: $CODER_URL"
     echo "Template: $TEMPLATE_NAME" 
     echo "Version: $VERSION_NAME"
+    
+    # Verify binaries are available
+    echo "🔧 Verifying required binaries..."
+    if ! command -v kubectl >/dev/null 2>&1; then
+      echo "❌ kubectl not found in PATH"
+      exit 1
+    fi
+    if ! command -v coder >/dev/null 2>&1; then
+      echo "❌ coder CLI not found in PATH"
+      exit 1
+    fi
+    echo "✅ kubectl and coder CLI available"
 
     # Wait for Coder to be ready
     echo "📡 Waiting for Coder to be ready..."
@@ -42,8 +57,8 @@ data:
       exit 1
     fi
 
-    # Automatic token management (following Gitea pattern exactly)
-    echo "🔑 Managing Coder admin API token with fixed naming..."
+    # FULLY AUTOMATIC admin user and token creation
+    echo "🔑 Creating admin user and token AUTOMATICALLY..."
     
     # Test kubectl access
     echo "   Testing kubectl access..."
@@ -82,115 +97,71 @@ data:
       fi
     fi
 
-    # Create new token if needed - AUTOMATIC like Gitea
+    # Create admin user and token automatically if needed
     if [ "$TOKEN_VALID" = false ]; then
-      echo "🧹 Creating new API token AUTOMATICALLY..."
+      echo "🤖 Creating admin user and token FULLY AUTOMATICALLY..."
       
-      # Wait for first user to exist (Coder creates default admin)
-      echo "   Waiting for first admin user..."
-      FIRST_USER_ID=""
-      FIRST_USER_EMAIL=""
+      # Get database URL from secrets
+      DB_URL=$(kubectl get secret coder-database-secrets -n coder -o jsonpath='{.data.database-url}' | base64 -d)
+      echo "   Using database: ${DB_URL%%@*}@***"
       
-      for i in $(seq 1 30); do
-        USERS_RESPONSE=$(curl -s "$CODER_URL/api/v2/users?limit=1" 2>/dev/null || echo "")
-        FIRST_USER_ID=$(echo "$USERS_RESPONSE" | grep -o '"id":"[^"]*"' | head -1 | sed 's/"id":"//;s/"//')
-        FIRST_USER_EMAIL=$(echo "$USERS_RESPONSE" | grep -o '"email":"[^"]*"' | head -1 | sed 's/"email":"//;s/"//')
-        
-        if [ -n "$FIRST_USER_ID" ]; then
-          echo "   ✅ Found first admin user: $FIRST_USER_EMAIL"
-          break
-        fi
-        echo "   Attempt $i/30: No users yet, waiting for first user creation..."
-        sleep 10
-      done
-
-      if [ -z "$FIRST_USER_ID" ]; then
-        echo "❌ ERROR: No admin user found after 5 minutes"
-        echo "   Create first admin user at: $CODER_URL"
-        exit 1
-      fi
-
-      # Clean up old tokens and secret (following Gitea pattern)
-      echo "   Cleaning up old tokens..."
-      if [ "$SECRET_EXISTS" = true ]; then
-        echo "   Deleting old k8s secret..."
-        kubectl delete secret coder-admin-api-token -n coder >/dev/null 2>&1 || true
-      fi
-
-      # CRITICAL: Use Coder's bootstrap API for first admin
-      # For fresh deployments, first user has special bootstrap privileges
-      echo "   Creating token using bootstrap privileges..."
+      # Set admin user credentials
+      ADMIN_USERNAME="coder-admin"
+      ADMIN_EMAIL="coder-admin@xuperson.org"
+      ADMIN_PASSWORD=$(openssl rand -base64 32)
       
-      # Try the special bootstrap endpoint first (if exists)
-      TOKEN_RESPONSE=$(curl -s -X POST "$CODER_URL/api/v2/users/$FIRST_USER_ID/tokens" \
-        -H "Content-Type: application/json" \
-        -H "Accept: application/json" \
-        -d "{
-          \"lifetime\": 8760,
-          \"scope\": \"all\", 
-          \"token_name\": \"$TOKEN_NAME\"
-        }" 2>/dev/null || echo "")
-
-      # Extract token from response
-      ADMIN_TOKEN=$(echo "$TOKEN_RESPONSE" | grep -o '"key":"[^"]*"' | sed 's/"key":"//;s/"//')
-
-      # If bootstrap API fails, try session-based approach
-      if [ -z "$ADMIN_TOKEN" ]; then
-        echo "   Bootstrap API failed, trying session approach..."
-        
-        # For Coder, we can use the CLI token creation approach
-        # This works because first user has admin privileges
-        SESSION_RESPONSE=$(curl -s -X POST "$CODER_URL/api/v2/authtoken" \
-          -H "Content-Type: application/json" \
-          -d "{\"email\":\"$FIRST_USER_EMAIL\"}" 2>/dev/null || echo "")
-        
-        if echo "$SESSION_RESPONSE" | grep -q "session_token"; then
-          SESSION_TOKEN=$(echo "$SESSION_RESPONSE" | grep -o '"session_token":"[^"]*"' | sed 's/"session_token":"//;s/"//')
-          
-          # Now create token with session
-          TOKEN_RESPONSE=$(curl -s -X POST "$CODER_URL/api/v2/users/$FIRST_USER_ID/tokens" \
-            -H "Content-Type: application/json" \
-            -H "Coder-Session-Token: $SESSION_TOKEN" \
-            -d "{
-              \"lifetime\": 8760,
-              \"scope\": \"all\",
-              \"token_name\": \"$TOKEN_NAME\"
-            }")
-          
-          ADMIN_TOKEN=$(echo "$TOKEN_RESPONSE" | grep -o '"key":"[^"]*"' | sed 's/"key":"//;s/"//')
-        fi
-      fi
-
-      if [ -z "$ADMIN_TOKEN" ]; then
-        echo "   ❌ Automatic token creation failed"
-        echo "   Token Response: $TOKEN_RESPONSE"
-        echo ""
-        echo "🚨 MANUAL FALLBACK REQUIRED:"
-        echo "1. Visit: $CODER_URL"
-        echo "2. Create first admin user if not exists"
-        echo "3. Account → Tokens → Create '$TOKEN_NAME'"
-        echo "4. Store token:"
-        echo "   kubectl create secret generic coder-admin-api-token \\"
-        echo "     --from-literal=token=\"YOUR_TOKEN\" -n coder"
-        echo "5. Restart: kubectl delete job coder-template-init -n coder"
-        exit 1
-      fi
-
-      echo "   ✅ Token created automatically (length: ${#ADMIN_TOKEN})"
-
-      # Store in k8s secret
-      echo "   Storing token in k8s secret..."
-      if kubectl create secret generic coder-admin-api-token \
-        --from-literal=token="$ADMIN_TOKEN" \
-        -n coder \
-        --dry-run=client -o yaml | kubectl apply -f - >/dev/null 2>&1; then
-        echo "   ✅ Token stored successfully"
+      echo "   Creating admin user: $ADMIN_USERNAME ($ADMIN_EMAIL)"
+      
+      # Use coder server create-admin-user command to create initial admin
+      echo "   Running: coder server create-admin-user..."
+      export CODER_USERNAME="$ADMIN_USERNAME"
+      export CODER_EMAIL="$ADMIN_EMAIL" 
+      export CODER_PASSWORD="$ADMIN_PASSWORD"
+      
+      if coder server create-admin-user --postgres-url="$DB_URL" 2>/dev/null; then
+        echo "   ✅ Admin user created successfully"
       else
-        echo "   ❌ Failed to store token"
+        echo "   ⚠️  Admin user may already exist, continuing..."
+      fi
+      
+      # Now login as the admin user to get a session token
+      echo "   Logging in as admin user..."
+      if coder login "$CODER_URL" --username="$ADMIN_USERNAME" --password="$ADMIN_PASSWORD" 2>/dev/null; then
+        echo "   ✅ Login successful"
+        
+        # Create API token using CLI
+        echo "   Creating API token..."
+        ADMIN_TOKEN=$(coder tokens create "$TOKEN_NAME" --lifetime=8760h 2>/dev/null | grep -o 'coder_[a-zA-Z0-9_]*' || echo "")
+        
+        if [ -n "$ADMIN_TOKEN" ]; then
+          echo "   ✅ API token created (length: ${#ADMIN_TOKEN})"
+        else
+          echo "   ❌ Failed to create API token via CLI"
+          exit 1
+        fi
+      else
+        echo "   ❌ Failed to login as admin user"
         exit 1
       fi
 
-      echo "✅ Token automation complete!"
+      # Store token and credentials in k8s secret
+      echo "   Storing credentials in k8s secret..."
+      kubectl create secret generic coder-admin-api-token \
+        --from-literal=token="$ADMIN_TOKEN" \
+        --from-literal=username="$ADMIN_USERNAME" \
+        --from-literal=email="$ADMIN_EMAIL" \
+        --from-literal=password="$ADMIN_PASSWORD" \
+        -n coder \
+        --dry-run=client -o yaml | kubectl apply -f - >/dev/null 2>&1
+
+      if [ $? -eq 0 ]; then
+        echo "   ✅ Credentials stored successfully"
+      else
+        echo "   ❌ Failed to store credentials"
+        exit 1
+      fi
+
+      echo "✅ FULLY AUTOMATIC admin user and token creation complete!"
     fi
 
     echo "🎯 Using admin token ending with: ${ADMIN_TOKEN: -8}"

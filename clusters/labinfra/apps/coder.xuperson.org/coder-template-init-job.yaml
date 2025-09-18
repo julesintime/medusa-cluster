@@ -23,31 +23,42 @@ spec:
       serviceAccountName: coder-template-automation
       restartPolicy: OnFailure
       
-      # Install kubectl binary in shared volume
+      # Install kubectl and coder CLI binaries in shared volume
       initContainers:
-      - name: install-kubectl
-        image: bitnami/kubectl:latest
+      - name: install-binaries
+        image: alpine:latest
         imagePullPolicy: IfNotPresent
         command:
         - sh
         - -c
         - |
-          echo "Installing kubectl binary..."
-          cp /opt/bitnami/kubectl/bin/kubectl /shared/kubectl
+          set -e
+          echo "Installing kubectl and coder CLI binaries..."
+          
+          # Install kubectl
+          curl -L "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" -o /shared/kubectl
           chmod +x /shared/kubectl
           echo "kubectl installed successfully"
+          
+          # Install coder CLI
+          curl -fsSL https://coder.com/install.sh | sh -s -- --method=standalone --prefix=/shared
+          chmod +x /shared/coder
+          echo "coder CLI installed successfully"
+          
+          # Verify installations
+          /shared/kubectl version --client=true
+          /shared/coder version
         volumeMounts:
-        - name: kubectl-binary
+        - name: shared-binaries
           mountPath: /shared
         securityContext:
-          runAsNonRoot: true
-          runAsUser: 1001
+          runAsNonRoot: false
+          runAsUser: 0
           allowPrivilegeEscalation: false
-          readOnlyRootFilesystem: true
 
       containers:
       - name: coder-template-setup
-        image: alpine/curl:latest
+        image: alpine:latest
         imagePullPolicy: IfNotPresent
         command: ["/scripts/template-init.sh"]
         
@@ -66,9 +77,8 @@ spec:
           mountPath: /scripts
         - name: template-files
           mountPath: /template-files
-        - name: kubectl-binary
-          mountPath: /usr/local/bin/kubectl
-          subPath: kubectl
+        - name: shared-binaries
+          mountPath: /shared
         
         securityContext:
           runAsNonRoot: true
@@ -95,7 +105,7 @@ spec:
       - name: template-files
         configMap:
           name: coder-template-files
-      - name: kubectl-binary
+      - name: shared-binaries
         emptyDir: {}
 
 ---
