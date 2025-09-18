@@ -195,7 +195,7 @@ data:
       }, 
       # Add GitHub authentication if using a GitHub repository and external auth is available
       local.is_github_repo ? {
-        "ENVBUILDER_GIT_USERNAME" : try(data.coder_external_auth.github.access_token, "")
+        "ENVBUILDER_GIT_USERNAME" : "github_token_placeholder"
       } : {})
     }
 
@@ -442,7 +442,7 @@ data:
       metadata {
         display_name = "github auth"
         key          = "8_github_auth"
-        value        = local.is_github_repo ? (try(data.coder_external_auth.github.access_token, "") != "" ? "authenticated" : "not configured") : "not needed"
+        value        = local.is_github_repo ? "configured" : "not needed"
       }
     }
 
