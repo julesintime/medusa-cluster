@@ -71,55 +71,10 @@ spec:
             memory: "2Gi"
             cpu: "1000m"
             
-      # Post-bootstrap job to setup key pool
-      - name: key-pool-setup
-        image: python:3.11-slim
-        command: ["/bin/bash"]
-        args:
-          - "-c"
-          - |
-            echo "⏳ Waiting for LiteLLM to be fully ready..."
-            sleep 60
-            
-            echo "🚀 Installing dependencies..."
-            pip install requests --quiet
-            
-            echo "🔧 Running Key Pool Setup..."
-            python3 /config/litellm-bootstrap.py
-            
-            echo "✅ Key Pool Setup Completed!"
-            
-            # Keep container running to prevent restart
-            tail -f /dev/null
-        env:
-        - name: LITELLM_BASE_URL
-          value: "http://localhost:4000"
-        - name: KEY_POOL_CONFIG_PATH
-          value: "/config/key-pool-config.json"
-        envFrom:
-        - secretRef:
-            name: litellm-secrets
-        volumeMounts:
-        - name: key-pool-config-volume
-          mountPath: /config
-        - name: shared-data
-          mountPath: /tmp
-        
-        resources:
-          requests:
-            memory: "128Mi"
-            cpu: "100m"
-          limits:
-            memory: "256Mi"
-            cpu: "200m"
       
       volumes:
         - name: config-volume
           configMap:
             name: litellm-config-file
-        - name: key-pool-config-volume
-          configMap:
-            name: litellm-key-pool-config
-            defaultMode: 0755
         - name: shared-data
           emptyDir: {}

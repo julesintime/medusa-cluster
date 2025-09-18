@@ -5,13 +5,28 @@ metadata:
   namespace: litellm
 data:
   config.yaml: |
-    # Dynamic model list - populated by bootstrap script via API
+    # Single model with key rotation for load balancing
     model_list: 
-      # Wildcard routing for OpenAI compatibility
+      # Primary model with key rotation
+      - model_name: "gemini-2.0-flash-key-1"
+        litellm_params:
+          model: "gemini/gemini-2.0-flash"
+          api_key: "env:GEMINI_KEY_1"
+          rpm: 15
+          tpm: 1000000
+          
+      - model_name: "gemini-2.0-flash-key-2"
+        litellm_params:
+          model: "gemini/gemini-2.0-flash"
+          api_key: "env:GEMINI_KEY_2"
+          rpm: 15
+          tpm: 1000000
+          
+      # Wildcard routing for OpenAI compatibility - routes to above models
       - model_name: "*"
         litellm_params:
-          model: "gemini/*"
-          api_key: "placeholder"  # Will be managed dynamically
+          model: "gemini/gemini-2.0-flash"
+          api_key: "env:GEMINI_KEY_1"  # Default fallback
     
     # Enterprise routing configuration
     router_settings:

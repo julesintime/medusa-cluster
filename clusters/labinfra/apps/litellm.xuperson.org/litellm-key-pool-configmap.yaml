@@ -188,39 +188,43 @@ data:
                 logger.warning(f"Error clearing existing models: {e}")
                 return True  # Continue even if clearing fails
         
-        def add_model_deployment(self, model_name: str, model_config: Dict[str, Any], api_key: str, key_id: str) -> bool:
-            """Add a model deployment to LiteLLM"""
-            deployment_name = f"{key_id}-{model_config['model']}"
+        def add_model_with_key_rotation(self, model_name: str, all_keys: List[Dict[str, Any]]) -> bool:
+            """Add a single model deployment with multiple keys for rotation"""
             
-            payload = {
-                "model_name": deployment_name,
-                "litellm_params": {
-                    "model": f"gemini/{model_config['model']}",
-                    "api_key": api_key,
-                    "rpm": model_config.get('rpm', 15),
-                    "tpm": model_config.get('tpm', 1000000),
-                    "weight": model_config.get('weight', 1)
-                },
-                "model_info": {
-                    "id": deployment_name,
-                    "priority": model_config.get('priority', 1),
-                    "key_id": key_id
-                }
-            }
-            
-            try:
-                response = self.session.post(f"{self.config.base_url}/model/new", json=payload, timeout=self.config.timeout)
+            # Create model deployments for each key - LiteLLM will rotate between them
+            deployment_names = []
+            for key_config in all_keys:
+                deployment_name = f"{model_name}-{key_config['key_id']}"
                 
-                if response.status_code == 200:
-                    logger.info(f"✅ Added model deployment: {deployment_name}")
-                    return True
-                else:
-                    logger.error(f"❌ Failed to add model {deployment_name}: {response.text}")
-                    return False
+                payload = {
+                    "model_name": deployment_name,
+                    "litellm_params": {
+                        "model": f"gemini/{model_name}",
+                        "api_key": key_config['api_key'],
+                        "rpm": key_config.get('rpm_limit', 15),
+                        "tpm": key_config.get('tpm_limit', 1000000)
+                    },
+                    "model_info": {
+                        "id": deployment_name,
+                        "key_id": key_config['key_id']
+                    }
+                }
+                
+                try:
+                    response = self.session.post(f"{self.config.base_url}/model/new", json=payload, timeout=self.config.timeout)
                     
-            except requests.RequestException as e:
-                logger.error(f"❌ Request failed for model {deployment_name}: {e}")
-                return False
+                    if response.status_code == 200:
+                        logger.info(f"✅ Added key deployment for {model_name}: {deployment_name}")
+                        deployment_names.append(deployment_name)
+                    else:
+                        logger.error(f"❌ Failed to add key deployment {deployment_name}: {response.text}")
+                        return False
+                        
+                except requests.RequestException as e:
+                    logger.error(f"❌ Request failed for deployment {deployment_name}: {e}")
+                    return False
+            
+            return len(deployment_names) > 0
         
         def create_virtual_key(self, models: List[str], alias: str = "enterprise-key-pool") -> str:
             """Create a single virtual key for accessing all models"""
@@ -270,48 +274,40 @@ data:
                 "total_deployments": 0
             }
             
-            all_model_names = []
-            
-            # Process each provider and key
+            # Process each provider to collect all keys
+            all_keys = []
             for provider_name, provider_config in key_pool_config.get('providers', {}).items():
                 logger.info(f"📦 Processing provider: {provider_name}")
                 
                 for key_config in provider_config.get('keys', []):
-                    key_id = key_config['key_id']
-                    api_key = key_config['api_key']
-                    
-                    logger.info(f"🔐 Processing key: {key_id}")
-                    
-                    # Add each model for this key
-                    for model_config in key_config.get('priority_models', []):
-                        success = self.add_model_deployment(
-                            model_name=model_config['model'],
-                            model_config=model_config,
-                            api_key=api_key,
-                            key_id=key_id
-                        )
-                        
-                        deployment_name = f"{key_id}-{model_config['model']}"
-                        all_model_names.append(deployment_name)
-                        
-                        if success:
-                            results["models_added"].append(deployment_name)
-                        else:
-                            results["models_failed"].append(deployment_name)
-                        
-                        results["total_deployments"] += 1
+                    all_keys.append(key_config)
+                    logger.info(f"🔐 Added key: {key_config['key_id']}")
+            
+            # Create ONE model with key rotation
+            model_name = "gemini-2.0-flash"  # Single primary model
+            logger.info(f"🎯 Setting up single model with key rotation: {model_name}")
+            
+            if all_keys:
+                success = self.add_model_with_key_rotation(model_name, all_keys)
+                
+                if success:
+                    results["models_added"].append(model_name)
+                    results["total_deployments"] = len(all_keys)
+                    logger.info(f"✅ Created {model_name} with {len(all_keys)} key rotations")
+                else:
+                    results["models_failed"].append(model_name)
+                    logger.error(f"❌ Failed to create {model_name} with key rotation")
             
             # Create single virtual key with wildcard access for model aliasing
-            if all_model_names:
-                # Use wildcard to enable model aliasing (gpt-4 -> gemini models)
-                virtual_key = self.create_virtual_key(["*"])
-                results["virtual_key"] = virtual_key
+            virtual_key = self.create_virtual_key(["*"])
+            results["virtual_key"] = virtual_key
             
             # Log summary
             logger.info(f"📊 Setup Summary:")
-            logger.info(f"   ✅ Models Added: {len(results['models_added'])}")
-            logger.info(f"   ❌ Models Failed: {len(results['models_failed'])}")
-            logger.info(f"   🔑 Virtual Key: {results['virtual_key']}")
+            logger.info(f"   🎯 Single Model: {model_name}")
+            logger.info(f"   🔑 Keys Available: {len(all_keys)}")
+            logger.info(f"   🔄 Key Rotation: Enabled")
+            logger.info(f"   🚀 Virtual Key: {results['virtual_key']}")
             logger.info(f"   📈 Total Deployments: {results['total_deployments']}")
             
             return results
