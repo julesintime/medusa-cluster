@@ -442,7 +442,7 @@ data:
       metadata {
         display_name = "github auth"
         key          = "8_github_auth"
-        value        = local.is_github_repo && data.coder_external_auth.github.access_token != "" ? "authenticated" : (local.is_github_repo ? "not configured" : "not needed")
+        value        = local.is_github_repo ? (try(data.coder_external_auth.github.access_token, "") != "" ? "authenticated" : "not configured") : "not needed"
       }
     }
 
