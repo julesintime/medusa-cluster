@@ -256,7 +256,9 @@ data:
           \"file_id\": \"$FILE_ID\",
           \"name\": \"$VERSION_NAME\",
           \"template_id\": \"$TEMPLATE_ID\",
-          \"message\": \"GitOps automated update with GitHub external auth\"
+          \"message\": \"GitOps automated update with GitHub external auth\",
+          \"storage_method\": \"file\",
+          \"provisioner\": \"terraform\"
         }")
     else
       echo "   🆕 Creating new template..."
@@ -268,7 +270,9 @@ data:
         -d "{
           \"file_id\": \"$FILE_ID\",
           \"name\": \"$VERSION_NAME\",
-          \"message\": \"GitOps template with GitHub external auth\"
+          \"message\": \"GitOps template with GitHub external auth\",
+          \"storage_method\": \"file\",
+          \"provisioner\": \"terraform\"
         }")
       
       VERSION_ID=$(echo "$VERSION_RESPONSE" | grep -o '"id":"[^"]*"' | head -1 | sed 's/"id":"//;s/"//')
