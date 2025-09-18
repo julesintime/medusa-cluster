@@ -443,7 +443,9 @@ data:
       metadata {
         display_name = "github auth"
         key          = "8_github_auth"
-        value        = local.is_github_repo ? "configured" : "not needed"
+        script       = "echo configured"
+        interval     = 60
+        timeout      = 1
       }
     }
 
