@@ -67,18 +67,18 @@ data:
           rpm: 15
           tpm: 1000000
           
-      # Gemini 2.0 Flash-Lite - Higher rate limits  
+      # Gemini 2.0 Flash Experimental - Higher rate limits (correct model ID)
       - model_name: "gemini-2.0-flash-lite"
         litellm_params:
-          model: "gemini/gemini-2.0-flash-lite"
+          model: "gemini/gemini-2.0-flash-exp"
           api_key: "os.environ/GEMINI_KEY_1"
-          rpm: 30
+          rpm: 15
           tpm: 1000000
       - model_name: "gemini-2.0-flash-lite"
         litellm_params:
-          model: "gemini/gemini-2.0-flash-lite"
+          model: "gemini/gemini-2.0-flash-exp"
           api_key: "os.environ/GEMINI_KEY_2"
-          rpm: 30
+          rpm: 15
           tpm: 1000000
           
       # Gemma 3n E2B - Efficient 2B model
@@ -191,15 +191,15 @@ data:
           
       - model_name: "gpt-4"
         litellm_params:
-          model: "gemini/gemini-2.0-flash-lite"
+          model: "gemini/gemini-2.0-flash-exp"
           api_key: "os.environ/GEMINI_KEY_1"
-          rpm: 30
+          rpm: 15
           tpm: 1000000
       - model_name: "gpt-4"
         litellm_params:
-          model: "gemini/gemini-2.0-flash-lite"
+          model: "gemini/gemini-2.0-flash-exp"
           api_key: "os.environ/GEMINI_KEY_2"
-          rpm: 30
+          rpm: 15
           tpm: 1000000
           
       - model_name: "gpt-4"
@@ -244,21 +244,29 @@ data:
     # Router settings for quota rotation and rate limit handling
     router_settings:
       routing_strategy: simple-shuffle          # Rotate through all deployments
-      num_retries: 5                           # Try multiple deployments for rate limits
+      num_retries: 8                           # More retries for rate limits/quota
       timeout: 60                              # Timeout per request
-      retry_after: 1                           # Min 1s delay before retrying (helps with rate limits)
-      cooldown_time: 10                        # Short cooldown for quota rotation (10s)
-      allowed_fails: 3                         # Allow more fails before cooldown (rate limits are common)
+      retry_after: 0.5                         # Faster retry for quota rotation
+      cooldown_time: 5                         # Shorter cooldown for faster recovery
+      allowed_fails: 5                         # More lenient for rate limits
+      
+      # Enable fallbacks on quota/rate limit errors
+      enable_pre_call_checks: true             # Check deployment health before routing
+      disable_spend_logs: false                # Keep spend tracking
       
       # Specific retry policies for different error types
       retry_policy:
-        "RateLimitErrorRetries": 5             # Retry rate limit errors across deployments
+        "RateLimitErrorRetries": 8             # More retries for rate limits
+        "ResourceExhaustedErrorRetries": 8     # Handle quota exhaustion
+        "ServiceUnavailableErrorRetries": 8    # Handle service unavailable
         "BadRequestErrorRetries": 2            # Fewer retries for bad requests
         "AuthenticationErrorRetries": 1        # Don't retry auth errors
         
       # Specific cooldown policies for different error types  
       allowed_fails_policy:
-        "RateLimitErrorAllowedFails": 50       # Allow many rate limit errors before cooldown
+        "RateLimitErrorAllowedFails": 100      # Very lenient for rate limits
+        "ResourceExhaustedErrorAllowedFails": 100  # Very lenient for quota exhaustion
+        "ServiceUnavailableErrorAllowedFails": 100 # Very lenient for service issues
         "BadRequestErrorAllowedFails": 2       # Cooldown quickly for bad requests
         "AuthenticationErrorAllowedFails": 1   # Cooldown immediately for auth errors
     
@@ -279,8 +287,22 @@ data:
       # Default fallback for any unrecognized model
       default_fallbacks: ["gpt-4"]
       
+      # Fallback error conditions - trigger fallbacks on quota/rate limit errors
+      context_window_fallbacks: [
+        {"RateLimitError": ["gpt-4"]},
+        {"ResourceExhaustedError": ["gpt-4"]}, 
+        {"ServiceUnavailableError": ["gpt-4"]},
+        {"QuotaExceededError": ["gpt-4"]}
+      ]
+      
       # General settings
       success_callback: ["langfuse"]           # Optional: track successful requests
       failure_callback: ["langfuse"]           # Optional: track failed requests
       drop_params: true                        # Drop unsupported parameters
       set_verbose: false                       # Reduce logging noise
+      
+      # Enable detailed error handling
+      request_timeout: 60                      # Request timeout
+      max_retries: 8                           # Max retries before fallback
+      fallback_immediately_on_429: true       # Immediate fallback on rate limits
+      fallback_immediately_on_503: true       # Immediate fallback on service unavailable
