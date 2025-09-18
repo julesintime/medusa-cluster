@@ -22,12 +22,10 @@ spec:
       env:
         # Database connection from SOPS-encrypted secret
         - name: CODER_PG_CONNECTION_URL
-          value: "postgresql://coder:$(POSTGRES_PASSWORD)@postgres:5432/coder?sslmode=disable"
-        - name: POSTGRES_PASSWORD
           valueFrom:
             secretKeyRef:
               name: coder-database-secrets
-              key: coder-user-password
+              key: database-url
         
         # Access URLs for dashboard and wildcard subdomains  
         - name: CODER_ACCESS_URL
