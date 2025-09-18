@@ -300,7 +300,7 @@ spec:
         command:
         - sh
         - -c
-        - cp /usr/local/bin/kubectl /shared/kubectl && chmod +x /shared/kubectl
+        - cp /usr/bin/kubectl /shared/kubectl && chmod +x /shared/kubectl
         volumeMounts:
         - name: kubectl-binary
           mountPath: /shared
