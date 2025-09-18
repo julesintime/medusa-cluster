@@ -5,45 +5,44 @@ metadata:
   namespace: litellm
 data:
   config.yaml: |
-    # Single model with key rotation for load balancing
+    # Key pool with maximum rate limit rotation
     model_list: 
-      # Primary model with key rotation
-      - model_name: "gemini-2.0-flash-key-1"
+      # All deployments use same model name "gpt-4" - LiteLLM rotates through them
+      - model_name: "gpt-4"
         litellm_params:
           model: "gemini/gemini-2.0-flash"
           api_key: "os.environ/GEMINI_KEY_1"
           rpm: 15
           tpm: 1000000
           
-      - model_name: "gemini-2.0-flash-key-2"
+      - model_name: "gpt-4"  
+        litellm_params:
+          model: "gemini/gemini-1.5-pro"
+          api_key: "os.environ/GEMINI_KEY_1"
+          rpm: 10
+          tpm: 600000
+          
+      - model_name: "gpt-4"
         litellm_params:
           model: "gemini/gemini-2.0-flash"
           api_key: "os.environ/GEMINI_KEY_2"
           rpm: 15
           tpm: 1000000
           
-      # Wildcard routing for OpenAI compatibility - routes to above models
-      - model_name: "*"
+      - model_name: "gpt-4"
         litellm_params:
-          model: "gemini/gemini-2.0-flash"
-          api_key: "os.environ/GEMINI_KEY_1"  # Default fallback
+          model: "gemini/gemini-1.5-pro"
+          api_key: "os.environ/GEMINI_KEY_2"
+          rpm: 10
+          tpm: 600000
     
-    # Enterprise routing configuration
+    # Router settings for key pool rotation
     router_settings:
-      routing_strategy: simple-shuffle          # Load balance across deployments
-      num_retries: 3                           # Retry failed requests
-      timeout: 60                              # Extended timeout for rate limits
-      cooldown_time: 60                        # Cool down failed deployments
-      allowed_fails: 2                         # Allow 2 failures before cooldown
-      
-      # Model aliases for OpenAI compatibility
-      model_group_alias:
-        "gpt-4": "*"                          # Route GPT-4 requests to available models
-        "gpt-4o": "*"                         # Route GPT-4o requests to available models  
-        "gpt-3.5-turbo": "*"                  # Route GPT-3.5 requests to available models
-        "claude-3-opus": "*"                  # Route Claude requests to available models
-        "claude-3-sonnet": "*"                # Route Claude requests to available models
-        "text-davinci-003": "*"               # Route legacy OpenAI to available models
+      routing_strategy: simple-shuffle          # Rotate through all deployments
+      num_retries: 4                           # Try all 4 combinations before failing
+      timeout: 60                              # Timeout per request
+      cooldown_time: 30                        # Cool down failed deployments  
+      allowed_fails: 1                         # Try next deployment after 1 failure
     
     # Fallback configuration for rate limit handling
     litellm_settings:

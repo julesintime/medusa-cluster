@@ -6,7 +6,6 @@ resources:
   - litellm-rbac.yaml
   - litellm-infisical-secrets.yaml
   - litellm-configmap.yaml
-  - litellm-key-pool-configmap.yaml
   - litellm-postgresql.yaml
   - litellm-deployment.yaml
   - litellm-service.yaml
