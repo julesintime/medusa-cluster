@@ -1,0 +1,403 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: litellm-key-pool-config
+  namespace: litellm
+data:
+  key-pool-config.json: |
+    {
+      "meta": {
+        "description": "LiteLLM Enterprise Key Pool Configuration",
+        "version": "1.0",
+        "total_keys": 2,
+        "scaling_target": 100
+      },
+      "providers": {
+        "gemini": {
+          "base_model": "gemini",
+          "keys": [
+            {
+              "api_key": "GEMINI_KEY_1_PLACEHOLDER",
+              "key_id": "gemini-key-1", 
+              "rpm_limit": 15,
+              "tpm_limit": 1000000,
+              "daily_quota": 1500,
+              "priority_models": [
+                {
+                  "model": "gemini-2.0-flash",
+                  "rpm": 15,
+                  "tpm": 1000000,
+                  "weight": 10,
+                  "priority": 1,
+                  "cooldown_time": 60
+                },
+                {
+                  "model": "gemini-2.0-flash-exp", 
+                  "rpm": 12,
+                  "tpm": 800000,
+                  "weight": 8,
+                  "priority": 2,
+                  "cooldown_time": 60
+                },
+                {
+                  "model": "gemini-1.5-pro-latest",
+                  "rpm": 10,
+                  "tpm": 600000,
+                  "weight": 5,
+                  "priority": 3,
+                  "cooldown_time": 90
+                }
+              ]
+            },
+            {
+              "api_key": "GEMINI_KEY_2_PLACEHOLDER",
+              "key_id": "gemini-key-2",
+              "rpm_limit": 15, 
+              "tpm_limit": 1000000,
+              "daily_quota": 1500,
+              "priority_models": [
+                {
+                  "model": "gemini-2.0-flash",
+                  "rpm": 15,
+                  "tpm": 1000000,
+                  "weight": 10,
+                  "priority": 1,
+                  "cooldown_time": 60
+                },
+                {
+                  "model": "gemini-2.0-flash-exp",
+                  "rpm": 12, 
+                  "tpm": 800000,
+                  "weight": 8,
+                  "priority": 2,
+                  "cooldown_time": 60
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "routing_strategy": {
+        "strategy": "simple-shuffle",
+        "wildcard_models": [
+          "*",
+          "gpt-4",
+          "gpt-4o", 
+          "gpt-3.5-turbo",
+          "claude-3-opus",
+          "claude-3-sonnet"
+        ],
+        "default_fallback_chain": [
+          "gemini-2.0-flash",
+          "gemini-2.0-flash-exp", 
+          "gemini-1.5-pro-latest"
+        ],
+        "load_balancing": {
+          "method": "weighted_round_robin",
+          "health_check_interval": 30,
+          "retry_attempts": 3,
+          "backoff_multiplier": 2
+        }
+      },
+      "rate_limit_handling": {
+        "detection_keywords": [
+          "rate limit",
+          "quota exceeded", 
+          "too many requests",
+          "resource exhausted"
+        ],
+        "fallback_delay": 5,
+        "circuit_breaker": {
+          "failure_threshold": 3,
+          "recovery_timeout": 300
+        }
+      }
+    }
+  
+  litellm-bootstrap.py: |
+    #!/usr/bin/env python3
+    """
+    LiteLLM Enterprise Key Pool Bootstrap Script
+    Configures LiteLLM with dynamic key pools and intelligent routing
+    """
+
+    import json
+    import requests
+    import time
+    import os
+    import sys
+    import logging
+    from typing import Dict, List, Any
+    from dataclasses import dataclass
+
+    # Configure logging
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+    logger = logging.getLogger(__name__)
+
+    @dataclass
+    class LiteLLMConfig:
+        base_url: str
+        master_key: str
+        timeout: int = 30
+        max_retries: int = 5
+
+    class LiteLLMKeyPoolManager:
+        def __init__(self, config: LiteLLMConfig):
+            self.config = config
+            self.session = requests.Session()
+            self.session.headers.update({
+                'Authorization': f'Bearer {config.master_key}',
+                'Content-Type': 'application/json'
+            })
+        
+        def wait_for_litellm_ready(self) -> bool:
+            """Wait for LiteLLM to be ready before configuration"""
+            logger.info("Waiting for LiteLLM to be ready...")
+            for attempt in range(self.config.max_retries):
+                try:
+                    response = self.session.get(f"{self.config.base_url}/health", timeout=self.config.timeout)
+                    if response.status_code == 200:
+                        logger.info("LiteLLM is ready!")
+                        return True
+                except requests.RequestException as e:
+                    logger.warning(f"LiteLLM not ready (attempt {attempt + 1}/{self.config.max_retries}): {e}")
+                    time.sleep(10)
+            
+            logger.error("LiteLLM failed to become ready")
+            return False
+        
+        def clear_existing_models(self) -> bool:
+            """Clear existing models to start fresh"""
+            try:
+                logger.info("Clearing existing models...")
+                response = self.session.get(f"{self.config.base_url}/model/info")
+                
+                if response.status_code == 200:
+                    existing_models = response.json().get('data', [])
+                    for model in existing_models:
+                        model_id = model.get('id')
+                        if model_id and not model_id.startswith('*'):  # Don't delete wildcard models
+                            delete_response = self.session.delete(f"{self.config.base_url}/model/{model_id}")
+                            if delete_response.status_code == 200:
+                                logger.info(f"Deleted existing model: {model_id}")
+                            else:
+                                logger.warning(f"Failed to delete model {model_id}: {delete_response.text}")
+                
+                return True
+            except Exception as e:
+                logger.warning(f"Error clearing existing models: {e}")
+                return True  # Continue even if clearing fails
+        
+        def add_model_deployment(self, model_name: str, model_config: Dict[str, Any], api_key: str, key_id: str) -> bool:
+            """Add a model deployment to LiteLLM"""
+            deployment_name = f"{key_id}-{model_config['model']}"
+            
+            payload = {
+                "model_name": deployment_name,
+                "litellm_params": {
+                    "model": f"gemini/{model_config['model']}",
+                    "api_key": api_key,
+                    "rpm": model_config.get('rpm', 15),
+                    "tpm": model_config.get('tpm', 1000000),
+                    "weight": model_config.get('weight', 1)
+                },
+                "model_info": {
+                    "id": deployment_name,
+                    "priority": model_config.get('priority', 1),
+                    "key_id": key_id
+                }
+            }
+            
+            try:
+                response = self.session.post(f"{self.config.base_url}/model/new", json=payload, timeout=self.config.timeout)
+                
+                if response.status_code == 200:
+                    logger.info(f"✅ Added model deployment: {deployment_name}")
+                    return True
+                else:
+                    logger.error(f"❌ Failed to add model {deployment_name}: {response.text}")
+                    return False
+                    
+            except requests.RequestException as e:
+                logger.error(f"❌ Request failed for model {deployment_name}: {e}")
+                return False
+        
+        def create_virtual_key(self, models: List[str], alias: str = "enterprise-key-pool") -> str:
+            """Create a single virtual key for accessing all models"""
+            payload = {
+                "models": models,
+                "key_alias": alias,
+                "duration": None,  # No expiration
+                "metadata": {
+                    "type": "enterprise_key_pool",
+                    "description": "Single key for load-balanced access to all provider keys",
+                    "auto_generated": True
+                }
+            }
+            
+            try:
+                response = self.session.post(f"{self.config.base_url}/key/generate", json=payload, timeout=self.config.timeout)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    virtual_key = data.get('key')
+                    logger.info(f"🔑 Created virtual key: {virtual_key}")
+                    return virtual_key
+                else:
+                    logger.error(f"❌ Failed to create virtual key: {response.text}")
+                    return ""
+                    
+            except requests.RequestException as e:
+                logger.error(f"❌ Request failed for virtual key creation: {e}")
+                return ""
+        
+        def setup_key_pool(self, key_pool_config: Dict[str, Any]) -> Dict[str, Any]:
+            """Setup the complete key pool configuration"""
+            logger.info("🚀 Starting LiteLLM Key Pool Setup...")
+            
+            # Wait for LiteLLM to be ready
+            if not self.wait_for_litellm_ready():
+                return {"success": False, "error": "LiteLLM not ready"}
+            
+            # Clear existing models
+            self.clear_existing_models()
+            
+            results = {
+                "success": True,
+                "models_added": [],
+                "models_failed": [],
+                "virtual_key": "",
+                "total_deployments": 0
+            }
+            
+            all_model_names = []
+            
+            # Process each provider and key
+            for provider_name, provider_config in key_pool_config.get('providers', {}).items():
+                logger.info(f"📦 Processing provider: {provider_name}")
+                
+                for key_config in provider_config.get('keys', []):
+                    key_id = key_config['key_id']
+                    api_key = key_config['api_key']
+                    
+                    logger.info(f"🔐 Processing key: {key_id}")
+                    
+                    # Add each model for this key
+                    for model_config in key_config.get('priority_models', []):
+                        success = self.add_model_deployment(
+                            model_name=model_config['model'],
+                            model_config=model_config,
+                            api_key=api_key,
+                            key_id=key_id
+                        )
+                        
+                        deployment_name = f"{key_id}-{model_config['model']}"
+                        all_model_names.append(deployment_name)
+                        
+                        if success:
+                            results["models_added"].append(deployment_name)
+                        else:
+                            results["models_failed"].append(deployment_name)
+                        
+                        results["total_deployments"] += 1
+            
+            # Create single virtual key with wildcard access for model aliasing
+            if all_model_names:
+                # Use wildcard to enable model aliasing (gpt-4 -> gemini models)
+                virtual_key = self.create_virtual_key(["*"])
+                results["virtual_key"] = virtual_key
+            
+            # Log summary
+            logger.info(f"📊 Setup Summary:")
+            logger.info(f"   ✅ Models Added: {len(results['models_added'])}")
+            logger.info(f"   ❌ Models Failed: {len(results['models_failed'])}")
+            logger.info(f"   🔑 Virtual Key: {results['virtual_key']}")
+            logger.info(f"   📈 Total Deployments: {results['total_deployments']}")
+            
+            return results
+
+    def load_key_pool_config(config_path: str) -> Dict[str, Any]:
+        """Load key pool configuration from JSON file"""
+        try:
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+            
+            # Replace placeholder API keys with actual values from environment
+            for provider_name, provider_config in config.get('providers', {}).items():
+                for i, key_config in enumerate(provider_config.get('keys', [])):
+                    api_key = key_config['api_key']
+                    if api_key.endswith('_PLACEHOLDER'):
+                        env_var = api_key.replace('_PLACEHOLDER', '')
+                        actual_key = os.getenv(env_var)
+                        if actual_key:
+                            config['providers'][provider_name]['keys'][i]['api_key'] = actual_key
+                            logger.info(f"🔧 Loaded {env_var} from environment")
+                        else:
+                            logger.warning(f"⚠️ Environment variable {env_var} not found")
+            
+            return config
+        except Exception as e:
+            logger.error(f"❌ Failed to load config from {config_path}: {e}")
+            return {}
+
+    def save_virtual_key(virtual_key: str, output_path: str = "/tmp/litellm-virtual-key.txt"):
+        """Save the virtual key for external access"""
+        try:
+            with open(output_path, 'w') as f:
+                f.write(virtual_key)
+            logger.info(f"💾 Virtual key saved to: {output_path}")
+        except Exception as e:
+            logger.error(f"❌ Failed to save virtual key: {e}")
+
+    def main():
+        """Main execution function"""
+        logger.info("🌟 LiteLLM Enterprise Key Pool Bootstrap Starting...")
+        
+        # Configuration
+        litellm_config = LiteLLMConfig(
+            base_url=os.getenv('LITELLM_BASE_URL', 'http://localhost:4000'),
+            master_key=os.getenv('LITELLM_MASTER_KEY', 'lo2v6ewnDLY2JXapRNTqdYZGs6Up2kHmzGfGbw5STr8='),
+            timeout=30,
+            max_retries=10
+        )
+        
+        config_path = os.getenv('KEY_POOL_CONFIG_PATH', '/config/key-pool-config.json')
+        
+        # Load configuration
+        key_pool_config = load_key_pool_config(config_path)
+        if not key_pool_config:
+            logger.error("❌ Failed to load key pool configuration")
+            sys.exit(1)
+        
+        # Initialize manager and setup key pool
+        manager = LiteLLMKeyPoolManager(litellm_config)
+        results = manager.setup_key_pool(key_pool_config)
+        
+        if results["success"]:
+            logger.info("🎉 Key pool setup completed successfully!")
+            
+            # Save virtual key for external access
+            if results["virtual_key"]:
+                save_virtual_key(results["virtual_key"])
+                
+            # Print final summary
+            print("\n" + "="*60)
+            print("🚀 LITELLM ENTERPRISE KEY POOL READY")
+            print("="*60)
+            print(f"🔑 Virtual Key: {results['virtual_key']}")
+            print(f"📊 Total Models: {len(results['models_added'])}")
+            print(f"🌐 API Endpoint: {litellm_config.base_url}")
+            print("="*60)
+            print("\n💡 Usage:")
+            print(f"   curl -X POST '{litellm_config.base_url}/v1/chat/completions' \\")
+            print(f"     -H 'Authorization: Bearer {results['virtual_key']}' \\")
+            print(f"     -H 'Content-Type: application/json' \\")
+            print(f"     -d '{{\"model\": \"gpt-4\", \"messages\": [{{\"role\": \"user\", \"content\": \"Hello!\"}}]}}'")
+            print("\n")
+            
+        else:
+            logger.error("❌ Key pool setup failed")
+            sys.exit(1)
+
+    if __name__ == "__main__":
+        main()

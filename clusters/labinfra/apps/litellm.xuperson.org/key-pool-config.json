@@ -1,0 +1,108 @@
+{
+  "meta": {
+    "description": "LiteLLM Enterprise Key Pool Configuration",
+    "version": "1.0",
+    "total_keys": 2,
+    "scaling_target": 100
+  },
+  "providers": {
+    "gemini": {
+      "base_model": "gemini",
+      "keys": [
+        {
+          "api_key": "GEMINI_KEY_1_PLACEHOLDER",
+          "key_id": "gemini-key-1", 
+          "rpm_limit": 15,
+          "tpm_limit": 1000000,
+          "daily_quota": 1500,
+          "priority_models": [
+            {
+              "model": "gemini-2.0-flash",
+              "rpm": 15,
+              "tpm": 1000000,
+              "weight": 10,
+              "priority": 1,
+              "cooldown_time": 60
+            },
+            {
+              "model": "gemini-2.0-flash-exp", 
+              "rpm": 12,
+              "tpm": 800000,
+              "weight": 8,
+              "priority": 2,
+              "cooldown_time": 60
+            },
+            {
+              "model": "gemini-1.5-pro-latest",
+              "rpm": 10,
+              "tpm": 600000,
+              "weight": 5,
+              "priority": 3,
+              "cooldown_time": 90
+            }
+          ]
+        },
+        {
+          "api_key": "GEMINI_KEY_2_PLACEHOLDER",
+          "key_id": "gemini-key-2",
+          "rpm_limit": 15, 
+          "tpm_limit": 1000000,
+          "daily_quota": 1500,
+          "priority_models": [
+            {
+              "model": "gemini-2.0-flash",
+              "rpm": 15,
+              "tpm": 1000000,
+              "weight": 10,
+              "priority": 1,
+              "cooldown_time": 60
+            },
+            {
+              "model": "gemini-2.0-flash-exp",
+              "rpm": 12, 
+              "tpm": 800000,
+              "weight": 8,
+              "priority": 2,
+              "cooldown_time": 60
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "routing_strategy": {
+    "strategy": "simple-shuffle",
+    "wildcard_models": [
+      "*",
+      "gpt-4",
+      "gpt-4o", 
+      "gpt-3.5-turbo",
+      "claude-3-opus",
+      "claude-3-sonnet"
+    ],
+    "default_fallback_chain": [
+      "gemini-2.0-flash",
+      "gemini-2.0-flash-exp", 
+      "gemini-1.5-pro-latest"
+    ],
+    "load_balancing": {
+      "method": "weighted_round_robin",
+      "health_check_interval": 30,
+      "retry_attempts": 3,
+      "backoff_multiplier": 2
+    }
+  },
+  "rate_limit_handling": {
+    "detection_keywords": [
+      "rate limit",
+      "quota exceeded", 
+      "too many requests",
+      "resource exhausted"
+    ],
+    "fallback_delay": 5,
+    "circuit_breaker": {
+      "failure_threshold": 3,
+      "recovery_timeout": 300
+    }
+  }
+}

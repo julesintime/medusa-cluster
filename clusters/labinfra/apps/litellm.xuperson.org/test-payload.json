@@ -1,0 +1,10 @@
+{
+  "model": "gpt-4",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Hello! This is a test of the LiteLLM Enterprise Key Pool. Please respond with just: Key pool working!"
+    }
+  ],
+  "max_tokens": 50
+}

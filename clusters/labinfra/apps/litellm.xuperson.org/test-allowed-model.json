@@ -1,0 +1,10 @@
+{
+  "model": "gemini-key-1-gemini-2.0-flash",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Hello! This is a test of the LiteLLM Enterprise Key Pool with direct model name. Please respond with: Direct model working!"
+    }
+  ],
+  "max_tokens": 50
+}

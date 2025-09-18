@@ -5,23 +5,34 @@ metadata:
   namespace: litellm
 data:
   config.yaml: |
+    # Dynamic model list - populated by bootstrap script via API
     model_list: 
-      - model_name: gemini-2.0-flash
+      # Wildcard routing for OpenAI compatibility
+      - model_name: "*"
         litellm_params:
-          model: gemini/gemini-2.0-flash
-          api_key: os.environ/GEMINI_API_KEY
-      - model_name: gemini-2.0-flash-exp
-        litellm_params:
-          model: gemini/gemini-2.0-flash-exp
-          api_key: os.environ/GEMINI_API_KEY
-      - model_name: gemini-1.5-pro-latest
-        litellm_params:
-          model: gemini/gemini-1.5-pro-latest
-          api_key: os.environ/GEMINI_API_KEY
-
+          model: "gemini/*"
+          api_key: "placeholder"  # Will be managed dynamically
+    
+    # Enterprise routing configuration
     router_settings:
-      routing_strategy: simple-shuffle
-      num_retries: 1
-      timeout: 30
-      cooldown_time: 30
-      allowed_fails: 1
+      routing_strategy: simple-shuffle          # Load balance across deployments
+      num_retries: 3                           # Retry failed requests
+      timeout: 60                              # Extended timeout for rate limits
+      cooldown_time: 60                        # Cool down failed deployments
+      allowed_fails: 2                         # Allow 2 failures before cooldown
+      
+      # Model aliases for OpenAI compatibility
+      model_group_alias:
+        "gpt-4": "*"                          # Route GPT-4 requests to available models
+        "gpt-4o": "*"                         # Route GPT-4o requests to available models  
+        "gpt-3.5-turbo": "*"                  # Route GPT-3.5 requests to available models
+        "claude-3-opus": "*"                  # Route Claude requests to available models
+        "claude-3-sonnet": "*"                # Route Claude requests to available models
+        "text-davinci-003": "*"               # Route legacy OpenAI to available models
+    
+    # Fallback configuration for rate limit handling
+    litellm_settings:
+      success_callback: ["langfuse"]           # Optional: track successful requests
+      failure_callback: ["langfuse"]           # Optional: track failed requests
+      drop_params: true                        # Drop unsupported parameters
+      set_verbose: false                       # Reduce logging noise

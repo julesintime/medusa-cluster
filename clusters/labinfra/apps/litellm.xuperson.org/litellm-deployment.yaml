@@ -20,19 +20,106 @@ spec:
         args:
           - "--config"
           - "/app/proxy_server_config.yaml"
+          - "--port"
+          - "4000"
+          - "--num_workers"
+          - "1"
         ports:
         - containerPort: 4000
+          name: http
         volumeMounts:
         - name: config-volume
           mountPath: /app/proxy_server_config.yaml
           subPath: config.yaml
+        - name: shared-data
+          mountPath: /tmp
         env:
         - name: STORE_MODEL_IN_DB
           value: "True"
+        # Add startup probe for better bootstrap coordination  
+        - name: LITELLM_LOG_LEVEL
+          value: "INFO"
+        - name: WORKERS
+          value: "1"
         envFrom:
         - secretRef:
             name: litellm-secrets
+        
+        # Health checks
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 4000
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          
+        readinessProbe:
+          httpGet:
+            path: /health  
+            port: 4000
+          initialDelaySeconds: 45
+          periodSeconds: 15
+          timeoutSeconds: 5
+        
+        # Resource limits for stability
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+            
+      # Post-bootstrap job to setup key pool
+      - name: key-pool-setup
+        image: python:3.11-slim
+        command: ["/bin/bash"]
+        args:
+          - "-c"
+          - |
+            echo "⏳ Waiting for LiteLLM to be fully ready..."
+            sleep 60
+            
+            echo "🚀 Installing dependencies..."
+            pip install requests --quiet
+            
+            echo "🔧 Running Key Pool Setup..."
+            python3 /config/litellm-bootstrap.py
+            
+            echo "✅ Key Pool Setup Completed!"
+            
+            # Keep container running to prevent restart
+            tail -f /dev/null
+        env:
+        - name: LITELLM_BASE_URL
+          value: "http://localhost:4000"
+        - name: KEY_POOL_CONFIG_PATH
+          value: "/config/key-pool-config.json"
+        envFrom:
+        - secretRef:
+            name: litellm-secrets
+        volumeMounts:
+        - name: key-pool-config-volume
+          mountPath: /config
+        - name: shared-data
+          mountPath: /tmp
+        
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+      
       volumes:
         - name: config-volume
           configMap:
             name: litellm-config-file
+        - name: key-pool-config-volume
+          configMap:
+            name: litellm-key-pool-config
+            defaultMode: 0755
+        - name: shared-data
+          emptyDir: {}
