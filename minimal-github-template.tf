@@ -159,12 +159,11 @@ data "kubernetes_secret" "cache_repo_dockerconfig_secret" {
 locals {
   repo_url = data.coder_parameter.repo.value
   # The envbuilder provider requires a key-value map of environment variables.
-  envbuilder_env = {
+  # Base environment variables for envbuilder
+  base_envbuilder_env = {
     "CODER_AGENT_TOKEN" : coder_agent.main.token,
     # Use the docker gateway if the access URL is 127.0.0.1
     "CODER_AGENT_URL" : replace(data.coder_workspace.me.access_url, "/localhost|127\\.0\\.0\\.1/", "host.docker.internal"),
-    # GitHub authentication for private repositories
-    "ENVBUILDER_GIT_USERNAME" : data.coder_external_auth.github.access_token,
     # ENVBUILDER_GIT_URL and ENVBUILDER_CACHE_REPO will be overridden by the provider
     # if the cache repo is enabled.
     "ENVBUILDER_GIT_URL" : var.cache_repo == "" ? local.repo_url : "",
@@ -178,6 +177,14 @@ locals {
     # addition to `/var/run`.
     # "ENVBUILDER_IGNORE_PATHS": "/product_name,/product_uuid,/var/run",
   }
+  
+  # Add GitHub authentication if available
+  github_env = data.coder_external_auth.github.access_token != "" ? {
+    "ENVBUILDER_GIT_USERNAME" : data.coder_external_auth.github.access_token
+  } : {}
+  
+  # Merge base environment with GitHub auth
+  envbuilder_env = merge(local.base_envbuilder_env, local.github_env)
 }
 
 locals {

@@ -296,7 +296,7 @@ spec:
       serviceAccountName: gitea-runner-init  # Reuse existing service account
       initContainers:
       - name: install-kubectl
-        image: rancher/kubectl:v1.30.0
+        image: alpine/k8s:1.30.3
         command:
         - sh
         - -c
