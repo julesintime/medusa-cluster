@@ -99,27 +99,27 @@ data:
       echo "   ✅ Admin user created successfully"
     fi
 
-    # Check for existing API token first
-    echo "   🔑 Checking for existing API token..."
+    # Check for existing session token first
+    echo "   🔑 Checking for existing session token..."
     
-    if kubectl get secret coder-admin-api-token -n coder >/dev/null 2>&1; then
-      ADMIN_TOKEN=$(kubectl get secret coder-admin-api-token -n coder -o jsonpath='{.data.token}' | base64 -d)
+    if kubectl get secret coder-admin-session-token -n coder >/dev/null 2>&1; then
+      ADMIN_TOKEN=$(kubectl get secret coder-admin-session-token -n coder -o jsonpath='{.data.token}' | base64 -d)
       
       # Test if the token works
       if curl -s -f -H "Coder-Session-Token: $ADMIN_TOKEN" "$CODER_URL/api/v2/users/me" >/dev/null 2>&1; then
-        echo "   ✅ Found working API token"
+        echo "   ✅ Found working session token"
       else
         echo "   ❌ Existing token is invalid, need to create new one"
         ADMIN_TOKEN=""
       fi
     else
-      echo "   ❌ No API token found, need to create one"
+      echo "   ❌ No session token found, need to create one"
       ADMIN_TOKEN=""
     fi
     
-    # Create new token only if needed
+    # Create new session token only if needed
     if [ -z "$ADMIN_TOKEN" ]; then
-      echo "   🔧 Creating new API token via API..."
+      echo "   🔧 Creating new session token via login..."
       
       # Login via API to get session token
       LOGIN_RESPONSE=$(curl -s -X POST "$CODER_URL/api/v2/users/login" \
@@ -132,31 +132,15 @@ data:
       SESSION_TOKEN=$(echo "$LOGIN_RESPONSE" | grep -o '"session_token":"[^"]*"' | sed 's/"session_token":"//;s/"//')
       
       if [ -n "$SESSION_TOKEN" ]; then
-        # Create permanent API token
-        TOKEN_RESPONSE=$(curl -s -X POST "$CODER_URL/api/v2/tokens" \
-          -H "Content-Type: application/json" \
-          -H "Coder-Session-Token: $SESSION_TOKEN" \
-          -d "{
-            \"name\": \"$TOKEN_NAME\",
-            \"lifetime\": \"8760h\"
-          }")
+        ADMIN_TOKEN="$SESSION_TOKEN"
+        echo "   ✅ Session token created successfully"
         
-        ADMIN_TOKEN=$(echo "$TOKEN_RESPONSE" | grep -o '"key":"[^"]*"' | sed 's/"key":"//;s/"//')
+        # Store the token in Kubernetes secret
+        kubectl create secret generic coder-admin-session-token \
+          --from-literal=token="$ADMIN_TOKEN" \
+          -n coder --dry-run=client -o yaml | kubectl apply -f - >/dev/null 2>&1
         
-        if [ -n "$ADMIN_TOKEN" ]; then
-          echo "   ✅ API token created successfully"
-          
-          # Store the token in Kubernetes secret
-          kubectl create secret generic coder-admin-api-token \
-            --from-literal=token="$ADMIN_TOKEN" \
-            -n coder --dry-run=client -o yaml | kubectl apply -f - >/dev/null 2>&1
-          
-          echo "   💾 Token stored in Kubernetes secret"
-        else
-          echo "   ❌ Failed to create API token"
-          echo "   Token response: $TOKEN_RESPONSE"
-          exit 1
-        fi
+        echo "   💾 Token stored in Kubernetes secret"
       else
         echo "   ❌ Failed to login and get session token"
         echo "   Login response: $LOGIN_RESPONSE"
