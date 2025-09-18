@@ -503,7 +503,12 @@ data:
     icon: ../../../site/static/icon/k8s.png
     maintainer_github: coder
     verified: true
-    tags: [container, kubernetes, devcontainer, github, gitops]
+    tags:
+      - container
+      - kubernetes
+      - devcontainer
+      - github
+      - gitops
     ---
 
     # Kubernetes Devcontainer Template
