@@ -146,10 +146,10 @@ data:
     }
 
     # External authentication for private GitHub repositories
-    data "coder_external_auth" "github" {
-      id       = "github"
-      optional = true
-    }
+    # data "coder_external_auth" "github" {
+    #   id       = "github"
+    #   optional = true
+    # }
 
     variable "cache_repo_secret_name" {
       default     = ""
