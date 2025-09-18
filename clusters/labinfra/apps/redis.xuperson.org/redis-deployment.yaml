@@ -2,72 +2,53 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: redis-client
+  name: redis-server
   namespace: redis
   labels:
-    app: redis-client
+    app: redis-server
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: redis-client
+      app: redis-server
   template:
     metadata:
       labels:
-        app: redis-client
+        app: redis-server
     spec:
       containers:
-      - name: redis-client
+      - name: redis-server
         image: redis:7.2-alpine
-        command: ["/bin/sh"]
+        command: ["redis-server"]
         args:
-          - -c
-          - |
-            echo "Starting Redis client with Upstash connection..."
-            echo "Redis Host: $REDIS_HOST"
-            echo "Redis Port: $REDIS_PORT"
-            echo "Testing connection to Upstash Redis..."
-            
-            # Test Redis connection using redis-cli
-            redis-cli -h $REDIS_HOST -p $REDIS_PORT -a $REDIS_PASSWORD ping
-            
-            # Run redis-cli in monitoring mode for logging
-            while true; do
-              echo "$(date): Redis client running - testing Upstash connection"
-              redis-cli -h $REDIS_HOST -p $REDIS_PORT -a $REDIS_PASSWORD set "redis:heartbeat:$(date +%s)" "$(date)"
-              redis-cli -h $REDIS_HOST -p $REDIS_PORT -a $REDIS_PASSWORD get "redis:heartbeat:$(date +%s)"
-              sleep 30
-            done
+          - --requirepass
+          - $(REDIS_PASSWORD)
+          - --appendonly
+          - "yes"
+        ports:
+        - containerPort: 6379
+          name: redis
         env:
-        - name: REDIS_HOST
-          valueFrom:
-            secretKeyRef:
-              name: redis-upstash-secrets
-              key: redis-host
-        - name: REDIS_PORT
-          valueFrom:
-            secretKeyRef:
-              name: redis-upstash-secrets
-              key: redis-port
         - name: REDIS_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: redis-upstash-secrets
+              name: redis-secrets
               key: redis-password
-        - name: REDIS_URL
-          valueFrom:
-            secretKeyRef:
-              name: redis-upstash-secrets
-              key: redis-url
         resources:
           requests:
-            memory: "32Mi"
-            cpu: "25m"
-          limits:
             memory: "64Mi"
             cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
         securityContext:
           runAsNonRoot: true
           runAsUser: 999
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: false
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data
+      volumes:
+      - name: redis-data
+        emptyDir: {}
