@@ -1,0 +1,8 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pinologger
+  labels:
+    app.kubernetes.io/name: pinologger
+    app.kubernetes.io/managed-by: flux

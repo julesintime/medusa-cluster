@@ -1,0 +1,22 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pinologger
+  namespace: pinologger
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: "pinologger.xuperson.org"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: pinologger.xuperson.org
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: pinologger
+            port:
+              number: 80

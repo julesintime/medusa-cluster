@@ -8,3 +8,4 @@ resources:
   - hello.yaml
   - litellm.xuperson.org
   - n8n.yaml
+  - pinologger.xuperson.org

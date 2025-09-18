@@ -1,0 +1,73 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pinologger
+  namespace: pinologger
+  labels:
+    app: pinologger
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pinologger
+  template:
+    metadata:
+      labels:
+        app: pinologger
+    spec:
+      containers:
+      - name: pinologger
+        image: bitnami/redis:7.2
+        command: ["/bin/bash"]
+        args:
+          - -c
+          - |
+            echo "Starting pinologger with Upstash Redis connection..."
+            echo "Redis Host: $REDIS_HOST"
+            echo "Redis Port: $REDIS_PORT"
+            echo "Testing connection to Upstash Redis..."
+            
+            # Test Redis connection using redis-cli
+            redis-cli -h $REDIS_HOST -p $REDIS_PORT -a $REDIS_PASSWORD ping
+            
+            # Run redis-cli in interactive mode for log monitoring
+            while true; do
+              echo "$(date): Pinologger running - testing Redis connection"
+              redis-cli -h $REDIS_HOST -p $REDIS_PORT -a $REDIS_PASSWORD set "pinologger:heartbeat:$(date +%s)" "$(date)"
+              redis-cli -h $REDIS_HOST -p $REDIS_PORT -a $REDIS_PASSWORD get "pinologger:heartbeat:$(date +%s)"
+              sleep 30
+            done
+        env:
+        - name: REDIS_HOST
+          valueFrom:
+            secretKeyRef:
+              name: pinologger-secrets
+              key: redis-host
+        - name: REDIS_PORT
+          valueFrom:
+            secretKeyRef:
+              name: pinologger-secrets
+              key: redis-port
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: pinologger-secrets
+              key: redis-password
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: pinologger-secrets
+              key: redis-url
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1001
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
