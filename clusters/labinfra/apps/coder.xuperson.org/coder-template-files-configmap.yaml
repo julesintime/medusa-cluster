@@ -146,10 +146,10 @@ data:
     }
 
     # External authentication for private GitHub repositories
-    # data "coder_external_auth" "github" {
-    #   id       = "github"
-    #   optional = true
-    # }
+    data "coder_external_auth" "github" {
+      id       = "github"
+      optional = true
+    }
 
     variable "cache_repo_secret_name" {
       default     = ""
@@ -195,7 +195,7 @@ data:
       }, 
       # Add GitHub authentication if using a GitHub repository and external auth is available
       local.is_github_repo ? {
-        "ENVBUILDER_GIT_USERNAME" : "github_token_placeholder"
+        "ENVBUILDER_GIT_USERNAME" : data.coder_external_auth.github.access_token
       } : {})
     }
 
