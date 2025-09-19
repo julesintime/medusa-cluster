@@ -75,7 +75,7 @@ spec:
               key: cookie-secret
       containers:
       - name: medusa
-        image: gitea-http.gitea.svc.cluster.local:3000/helloroot/medusa-app:latest
+        image: git.xuperson.org/helloroot/medusa-app:latest
         imagePullPolicy: Always
         ports:
         - name: http

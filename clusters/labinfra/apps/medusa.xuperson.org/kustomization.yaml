@@ -8,6 +8,7 @@ resources:
   - medusa-rbac.yaml
   - medusa-infisical-secrets.yaml
   - medusa-registry-secret.yaml
+  - medusa-imagerepository.yaml
   - medusa-postgresql.yaml
   - medusa-redis.yaml
   - medusa-deployment.yaml

@@ -1,0 +1,26 @@
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageRepository
+metadata:
+  name: medusa-app
+  namespace: medusa
+spec:
+  image: git.xuperson.org/helloroot/medusa-app
+  interval: 2m
+  secretRef:
+    name: gitea-registry-secret
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: medusa-app
+  namespace: medusa
+spec:
+  imageRepositoryRef:
+    name: medusa-app
+  policy:
+    alphabetical:
+      order: asc
+  filterTags:
+    pattern: '^main-[a-f0-9]+$'
+    extract: '$0'
