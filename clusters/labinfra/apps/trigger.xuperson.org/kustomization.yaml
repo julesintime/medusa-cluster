@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - trigger-namespace.yaml
+  - trigger-rbac.yaml
+  - trigger-infisical-secrets.yaml
+  - trigger-helmrepository.yaml
+  - trigger-postgresql.yaml
+  - trigger-redis.yaml
+  - trigger-minio.yaml
+  - trigger-helmrelease.yaml
+  - trigger-ingress.yaml

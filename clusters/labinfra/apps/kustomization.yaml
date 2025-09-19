@@ -10,3 +10,4 @@ resources:
   - medusa.xuperson.org
   - n8n.yaml
   - redis.xuperson.org
+  - trigger.xuperson.org
