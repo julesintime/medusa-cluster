@@ -5,9 +5,8 @@ resources:
   - trigger-namespace.yaml
   - trigger-rbac.yaml
   - trigger-infisical-secrets.yaml
-  - trigger-helmrepository.yaml
   - trigger-postgresql.yaml
   - trigger-redis.yaml
   - trigger-minio.yaml
-  - trigger-helmrelease.yaml
+  - trigger-manifests.yaml
   - trigger-ingress.yaml
