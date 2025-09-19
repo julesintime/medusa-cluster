@@ -46,9 +46,9 @@ spec:
           done
           echo "Redis is ready!"
       - name: run-migrations
-        image: node:20-alpine
+        image: git.xuperson.org/helloroot/medusa-app:latest
         imagePullPolicy: Always
-        command: ["sh", "-c", "echo 'Skipping migrations for now'"]
+        command: ["sh", "-c", "npx medusa migrations run"]
         envFrom:
         - configMapRef:
             name: medusa-app-config
