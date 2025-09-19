@@ -234,6 +234,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: trigger-webapp-token-syncer
+  namespace: trigger
   labels:
     helm.sh/chart: trigger-4.0.0
     app.kubernetes.io/name: trigger
@@ -273,6 +274,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: trigger-webapp-token-syncer
+  namespace: trigger
   labels:
     helm.sh/chart: trigger-4.0.0
     app.kubernetes.io/name: trigger
