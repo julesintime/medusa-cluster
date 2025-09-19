@@ -78,6 +78,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: trigger-supervisor
+  namespace: trigger
   labels:
     helm.sh/chart: trigger-4.0.0
     app.kubernetes.io/name: trigger
@@ -91,6 +92,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: trigger-webapp
+  namespace: trigger
   labels:
     helm.sh/chart: trigger-4.0.0
     app.kubernetes.io/name: trigger
