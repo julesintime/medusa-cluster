@@ -1,0 +1,49 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-rest-api
+  namespace: redis
+  labels:
+    app: redis-rest-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis-rest-api
+  template:
+    metadata:
+      labels:
+        app: redis-rest-api
+    spec:
+      containers:
+      - name: redis-rest-api
+        image: hiett/serverless-redis-http:latest
+        ports:
+        - containerPort: 80
+          name: http
+        env:
+        - name: SRH_MODE
+          value: "env"
+        - name: SRH_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: redis-secrets
+              key: redis-password
+        - name: SRH_CONNECTION_STRING
+          valueFrom:
+            secretKeyRef:
+              name: redis-secrets
+              key: redis-url
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "25m"
+          limits:
+            memory: "64Mi"
+            cpu: "50m"
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false

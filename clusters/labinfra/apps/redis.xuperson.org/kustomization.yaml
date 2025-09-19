@@ -7,3 +7,6 @@ resources:
   - redis-infisical-secrets.yaml
   - redis-deployment.yaml
   - redis-service.yaml
+  - rest-api/redis-rest-api-deployment.yaml
+  - rest-api/redis-rest-api-service.yaml
+  - rest-api/redis-rest-api-ingress.yaml
