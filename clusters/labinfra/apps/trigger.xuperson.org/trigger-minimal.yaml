@@ -19,10 +19,8 @@ data:
   REDIS_PORT: "6379"
   DEPLOY_REGISTRY_HOST: "localhost:5001"
   COORDINATOR_HOST: "localhost"
-  CLICKHOUSE_URL: "http://clickhouse:8123"
-  CLICKHOUSE_USERNAME: "default"
-  CLICKHOUSE_PASSWORD: ""
-  SKIP_CLICKHOUSE_MIGRATIONS: "false"
+  CLICKHOUSE_URL: "http://localhost:8123"
+  SKIP_CLICKHOUSE_MIGRATIONS: "true"
   SKIP_COORDINATOR_SETUP: "true"
 ---
 apiVersion: apps/v1
@@ -149,22 +147,8 @@ spec:
         envFrom:
         - configMapRef:
             name: trigger-env
-        env:
-        - name: SESSION_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: trigger-secrets
-              key: session-secret
-        - name: MAGIC_LINK_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: trigger-secrets
-              key: magic-link-secret
-        - name: ENCRYPTION_KEY
-          valueFrom:
-            secretKeyRef:
-              name: trigger-secrets
-              key: encryption-key
+        - secretRef:
+            name: trigger-secrets
 ---
 apiVersion: v1
 kind: Service

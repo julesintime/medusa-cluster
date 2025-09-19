@@ -3,4 +3,4 @@ kind: Kustomization
 
 resources:
   - trigger-infisical-secrets.yaml
-  - trigger-simple.yaml
+  - trigger-minimal.yaml

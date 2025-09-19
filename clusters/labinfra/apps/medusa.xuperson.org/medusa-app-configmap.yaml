@@ -155,14 +155,86 @@ data:
     npx medusa start
 
   seed.ts: |
-    import { MedusaApp } from "@medusajs/framework"
+    import { CreateInventoryLevelInput, ExecArgs } from "@medusajs/framework/types";
+    import {
+      ContainerRegistrationKeys,
+      Modules,
+      ProductStatus,
+    } from "@medusajs/framework/utils";
+    import {
+      createApiKeysWorkflow,
+      createInventoryLevelsWorkflow,
+      createProductCategoriesWorkflow,
+      createProductsWorkflow,
+      createRegionsWorkflow,
+      createSalesChannelsWorkflow,
+      createShippingOptionsWorkflow,
+      createShippingProfilesWorkflow,
+      createStockLocationsWorkflow,
+      createTaxRegionsWorkflow,
+      linkSalesChannelsToApiKeyWorkflow,
+      linkSalesChannelsToStockLocationWorkflow,
+      updateStoresWorkflow,
+    } from "@medusajs/medusa/core-flows";
 
-    async function seed() {
-      const app = await MedusaApp()
-      const { execute } = app
+    export default async function seedDemoData({ container }: ExecArgs) {
+      const logger = container.resolve(ContainerRegistrationKeys.LOGGER);
+      const salesChannelModuleService = container.resolve(Modules.SALES_CHANNEL);
+      const storeModuleService = container.resolve(Modules.STORE);
 
-      // Create sample data - basic seed
-      console.log("Seeding completed")
+      logger.info("Seeding store data...");
+      const [store] = await storeModuleService.listStores();
+      let defaultSalesChannel = await salesChannelModuleService.listSalesChannels({
+        name: "Default Sales Channel",
+      });
+
+      if (!defaultSalesChannel.length) {
+        const { result: salesChannelResult } = await createSalesChannelsWorkflow(
+          container
+        ).run({
+          input: {
+            salesChannelsData: [
+              {
+                name: "Default Sales Channel",
+              },
+            ],
+          },
+        });
+        defaultSalesChannel = salesChannelResult;
+      }
+
+      await updateStoresWorkflow(container).run({
+        input: {
+          selector: { id: store.id },
+          update: {
+            supported_currencies: [
+              {
+                currency_code: "eur",
+                is_default: true,
+              },
+              {
+                currency_code: "usd",
+              },
+            ],
+            default_sales_channel_id: defaultSalesChannel[0].id,
+          },
+        },
+      });
+
+      logger.info("Basic seeding completed");
     }
 
-    seed().catch(console.error)
+  route.ts: |
+    import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
+
+    export const GET = (
+      req: MedusaRequest,
+      res: MedusaResponse
+    ) => {
+      res.json({
+        message: "Welcome to Medusa! 🚀",
+        admin: "/app",
+        store_api: "/store",
+        admin_api: "/admin"
+      })
+    }

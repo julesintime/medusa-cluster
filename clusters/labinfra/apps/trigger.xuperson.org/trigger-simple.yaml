@@ -111,7 +111,7 @@ spec:
         - name: DEPLOY_REGISTRY_HOST
           value: "localhost:5001"
         - name: CLICKHOUSE_URL
-          value: ""
+          value: "http://clickhouse:8123"
         - name: REDIS_HOST
           value: "localhost"
         - name: REDIS_PORT

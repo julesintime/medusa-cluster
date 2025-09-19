@@ -48,6 +48,11 @@ spec:
           cp /app-files/* .
           chmod +x start.sh
           
+          # Create proper directory structure
+          mkdir -p src/scripts src/api/store/custom src/api/admin/custom
+          cp /app-files/seed.ts src/scripts/
+          cp /app-files/route.ts src/api/store/custom/
+          
           echo "Installing dependencies..."
           yarn install
           
