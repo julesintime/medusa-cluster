@@ -7,5 +7,6 @@ resources:
   - gitea.yaml
   - hello.yaml
   - litellm.xuperson.org
+  - medusa.xuperson.org
   - n8n.yaml
   - redis.xuperson.org
