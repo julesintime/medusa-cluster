@@ -78,8 +78,6 @@ spec:
         volumeMounts:
         - name: script-volume
           mountPath: /scripts
-        - name: template-files
-          mountPath: /template-files
         - name: shared-binaries
           mountPath: /shared
         
@@ -105,9 +103,6 @@ spec:
         configMap:
           name: coder-template-init-script
           defaultMode: 0755
-      - name: template-files
-        configMap:
-          name: coder-template-files
       - name: shared-binaries
         emptyDir: {}
 

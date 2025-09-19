@@ -20,7 +20,7 @@ data:
     export PATH="/shared:$PATH"
     
     CODER_URL="https://coder.xuperson.org"
-    TEMPLATE_NAME="kubernetes-devcontainer"
+    TEMPLATE_NAME="kubernetes-simple"
     VERSION_NAME="gitops-$(date +%Y%m%d-%H%M%S)"
     TOKEN_NAME="template-automation"
 
@@ -163,131 +163,64 @@ data:
       exit 1
     fi
 
-    # Create template tar from ConfigMap files
-    echo "📦 Preparing template files..."
-    cd /template-files
+    # Create additional user: julesintime@gmail.com with GitHub auth
+    echo "👤 Creating user: julesintime@gmail.com..."
     
-    if [ ! -f "main.tf" ] || [ ! -f "README.md" ]; then
-      echo "❌ Template files missing in ConfigMap"
-      exit 1
-    fi
+    # Check if user already exists
+    EXISTING_USER=$(curl -s -H "Coder-Session-Token: $ADMIN_TOKEN" "$CODER_URL/api/v2/users" | grep -o '"email":"julesintime@gmail.com"' || true)
     
-    tar -czf /shared/template.tar.gz .
-    echo "   ✅ Template archive created"
-
-    # Upload template files
-    echo "📤 Uploading template files..."
-    UPLOAD_RESPONSE=$(curl -s -X POST "$CODER_URL/api/v2/files" \
-      -H "Content-Type: application/x-tar" \
-      -H "Coder-Session-Token: $ADMIN_TOKEN" \
-      --data-binary @/shared/template.tar.gz)
-
-    FILE_ID=$(echo "$UPLOAD_RESPONSE" | grep -o '"hash":"[^"]*"' | sed 's/"hash":"//;s/"//')
-    if [ -z "$FILE_ID" ]; then
-      echo "❌ Failed to upload template"
-      echo "Response: $UPLOAD_RESPONSE"
-      exit 1
-    fi
-
-    echo "   ✅ Files uploaded (ID: $FILE_ID)"
-
-    # Check for existing template
-    echo "🔍 Checking for existing template..."
-    TEMPLATES_RESPONSE=$(curl -s -H "Coder-Session-Token: $ADMIN_TOKEN" "$CODER_URL/api/v2/organizations/coder/templates")
-    TEMPLATE_ID=$(echo "$TEMPLATES_RESPONSE" | grep -o "\"id\":\"[^\"]*\",\"created_at\":[^,]*,\"updated_at\":[^,]*,\"organization_id\":\"[^\"]*\",\"name\":\"$TEMPLATE_NAME\"" | sed 's/"id":"//;s/",.*$//')
-
-    if [ -n "$TEMPLATE_ID" ]; then
-      echo "   ✅ Found existing template: $TEMPLATE_ID"
-      
-      # Create new version
-      VERSION_RESPONSE=$(curl -s -X POST "$CODER_URL/api/v2/organizations/coder/templateversions" \
-        -H "Content-Type: application/json" \
-        -H "Coder-Session-Token: $ADMIN_TOKEN" \
-        -d "{
-          \"file_id\": \"$FILE_ID\",
-          \"name\": \"$VERSION_NAME\",
-          \"template_id\": \"$TEMPLATE_ID\",
-          \"message\": \"GitOps automated update with GitHub external auth\",
-          \"storage_method\": \"file\",
-          \"provisioner\": \"terraform\"
-        }")
+    if [ -n "$EXISTING_USER" ]; then
+      echo "   ✅ User julesintime@gmail.com already exists"
     else
-      echo "   🆕 Creating new template..."
+      # Get organization ID first
+      echo "   🔍 Getting organization ID..."
+      ORG_RESPONSE=$(curl -s -H "Coder-Session-Token: $ADMIN_TOKEN" "$CODER_URL/api/v2/organizations")
+      ORG_ID=$(echo "$ORG_RESPONSE" | grep -o '"id":"[^"]*"' | head -1 | sed 's/"id":"//;s/"//')
       
-      # Create template version first (without template association)
-      VERSION_RESPONSE=$(curl -s -X POST "$CODER_URL/api/v2/organizations/coder/templateversions" \
-        -H "Content-Type: application/json" \
-        -H "Coder-Session-Token: $ADMIN_TOKEN" \
-        -d "{
-          \"file_id\": \"$FILE_ID\",
-          \"name\": \"$VERSION_NAME\",
-          \"message\": \"GitOps template with GitHub external auth\",
-          \"storage_method\": \"file\",
-          \"provisioner\": \"terraform\"
-        }")
-      
-      VERSION_ID=$(echo "$VERSION_RESPONSE" | grep -o '"id":"[^"]*"' | head -1 | sed 's/"id":"//;s/"//')
-      
-      if [ -z "$VERSION_ID" ]; then
-        echo "   ❌ Failed to create template version"
-        echo "   Response: $VERSION_RESPONSE"
-        exit 1
+      if [ -n "$ORG_ID" ]; then
+        echo "   ✅ Found organization ID: $ORG_ID"
+        
+        # Create user via Coder CLI with GitHub authentication 
+        USER_CREATE_CMD=$(kubectl exec -n coder $CODER_POD -- coder users create \
+          --email "julesintime@gmail.com" \
+          --username "julesintime" \
+          --login-type "github" 2>&1 || echo "USER_CREATE_ERROR")
+        
+        if echo "$USER_CREATE_CMD" | grep -q "USER_CREATE_ERROR"; then
+          echo "   ❌ Failed to create user via CLI, trying API method..."
+          
+          # Try creating user via API with organization ID
+          USER_API_RESPONSE=$(curl -s -X POST "$CODER_URL/api/v2/users" \
+            -H "Content-Type: application/json" \
+            -H "Coder-Session-Token: $ADMIN_TOKEN" \
+            -d "{
+              \"email\": \"julesintime@gmail.com\",
+              \"username\": \"julesintime\",
+              \"login_type\": \"github\",
+              \"organization_ids\": [\"$ORG_ID\"]
+            }")
+          
+          if echo "$USER_API_RESPONSE" | grep -q '"id"'; then
+            echo "   ✅ User created successfully via API"
+          else
+            echo "   ❌ Failed to create user via API"
+            echo "   Response: $USER_API_RESPONSE"
+          fi
+        else
+          echo "   ✅ User created successfully via CLI"
+          echo "   Details: $USER_CREATE_CMD"
+        fi
+      else
+        echo "   ❌ Failed to get organization ID"
+        echo "   Response: $ORG_RESPONSE"
       fi
-      
-      echo "   ✅ Template version created: $VERSION_ID"
-      
-      # Now create template with the version
-      TEMPLATE_RESPONSE=$(curl -s -X POST "$CODER_URL/api/v2/organizations/coder/templates" \
-        -H "Content-Type: application/json" \
-        -H "Coder-Session-Token: $ADMIN_TOKEN" \
-        -d "{
-          \"name\": \"$TEMPLATE_NAME\",
-          \"display_name\": \"Kubernetes (Devcontainer) - GitOps\",
-          \"description\": \"Devcontainer workspaces with GitHub external auth\",
-          \"template_version_id\": \"$VERSION_ID\"
-        }")
-      
-      TEMPLATE_ID=$(echo "$TEMPLATE_RESPONSE" | grep -o '"id":"[^"]*"' | head -1 | sed 's/"id":"//;s/"//')
     fi
-
-    # Extract version ID and set as active
-    VERSION_ID=$(echo "$VERSION_RESPONSE" | grep -o '"id":"[^"]*"' | head -1 | sed 's/"id":"//;s/"//')
-    if [ -z "$VERSION_ID" ]; then
-      echo "❌ Failed to create template version"
-      echo "Response: $VERSION_RESPONSE"
-      exit 1
-    fi
-
-    echo "   ✅ Template version created: $VERSION_ID"
-
-    # Set as active version
-    echo "🚀 Setting template as active..."
-    curl -s -X PATCH "$CODER_URL/api/v2/templates/$TEMPLATE_ID/versions" \
-      -H "Content-Type: application/json" \
-      -H "Coder-Session-Token: $ADMIN_TOKEN" \
-      -d "{\"id\": \"$VERSION_ID\"}" >/dev/null
-
-    # Trigger build for statistics
-    echo "📊 Generating build statistics..."
-    curl -s -X POST "$CODER_URL/api/v2/templateversions/$VERSION_ID/dry-run" \
-      -H "Content-Type: application/json" \
-      -H "Coder-Session-Token: $ADMIN_TOKEN" \
-      -d '{
-        "workspace_name": "build-test",
-        "rich_parameter_values": [
-          {"name": "cpu", "value": "2"},
-          {"name": "memory", "value": "2"},
-          {"name": "workspaces_volume_size", "value": "10"},
-          {"name": "repo", "value": "https://github.com/coder/envbuilder-starter-devcontainer"}
-        ]
-      }' >/dev/null
 
     echo ""
-    echo "🎉 Template automation complete!"
-    echo "✅ Template: $TEMPLATE_NAME"
-    echo "✅ Version: $VERSION_NAME"
-    echo "✅ GitHub external auth enabled"
-    echo "✅ Ready for workspace creation!"
+    echo "🎉 Coder setup complete!"
+    echo "✅ Admin user: admin@xuperson.org"
+    echo "✅ User created: julesintime@gmail.com (GitHub auth)"
+    echo "✅ Ready for manual template creation!"
     echo ""
     echo "🌐 Access: $CODER_URL"
-    echo "📋 Next: Create workspace → Select template → Provide repository URL"
+    echo "📋 Next: Login and create templates manually"
