@@ -1,0 +1,37 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: medusa-build-job
+  namespace: medusa
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: build-and-push
+        image: moby/buildkit:master
+        env:
+        - name: BUILDKITD_FLAGS
+          value: "--oci-worker-no-process-sandbox"
+        command:
+        - sh
+        - -c
+        - |
+          # Start buildkitd in background
+          buildkitd --oci-worker-no-process-sandbox &
+          sleep 5
+          
+          # Clone repository
+          apk add --no-cache git
+          git clone https://git.xuperson.org/helloroot/medusa-app.git /workspace
+          cd /workspace
+          
+          # Build and push image
+          buildctl build \
+            --frontend dockerfile.v0 \
+            --local context=. \
+            --local dockerfile=. \
+            --output type=image,name=git.xuperson.org/helloroot/medusa-app:latest,push=true,registry.insecure=true
+        securityContext:
+          privileged: true

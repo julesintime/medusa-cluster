@@ -44,9 +44,9 @@ spec:
           done
           echo "Redis is ready!"
       - name: run-migrations
-        image: git.xuperson.org/helloroot/medusa-app:latest
+        image: medusajs/medusa:latest
         imagePullPolicy: Always
-        command: ["sh", "-c", "npx medusa migrations run"]
+        command: ["sh", "-c", "npx medusa migrations run || true"]
         envFrom:
         - configMapRef:
             name: medusa-app-config
@@ -73,7 +73,7 @@ spec:
               key: cookie-secret
       containers:
       - name: medusa
-        image: git.xuperson.org/helloroot/medusa-app:latest
+        image: medusajs/medusa:latest
         imagePullPolicy: Always
         ports:
         - name: http
