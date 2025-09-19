@@ -10,7 +10,7 @@ spec:
   chart:
     spec:
       chart: coder
-      version: "2.25.2"
+      version: "2.26.0"
       sourceRef:
         kind: HelmRepository
         name: coder-v2
@@ -95,9 +95,9 @@ spec:
         # - name: CODER_DISABLE_DIRECT_CONNECTIONS  
         #   value: "true"
         
-        # Remove template directory - templates should be pushed via CLI
-      
-      # No workspace configuration needed - templates deployed via CLI
+        # Enable starter templates
+        - name: CODER_EXAMPLES
+          value: "true"
     
     # Service account configuration - use existing one from RBAC
     serviceAccount:
