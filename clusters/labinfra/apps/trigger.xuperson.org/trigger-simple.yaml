@@ -7,6 +7,58 @@ metadata:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  name: postgres
+  namespace: trigger
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:16
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_DB
+          value: "trigger"
+        - name: POSTGRES_USER
+          value: "trigger"
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: trigger-secrets
+              key: database-password
+        - name: PGDATA
+          value: "/var/lib/postgresql/data/pgdata"
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+      volumes:
+      - name: postgres-storage
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: trigger
+spec:
+  selector:
+    app: postgres
+  ports:
+  - port: 5432
+    targetPort: 5432
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
   name: trigger-webapp
   namespace: trigger
 spec:
@@ -32,11 +84,14 @@ spec:
         - name: WHITELISTED_EMAILS
           value: "trigger@xuperson.org"
         - name: DATABASE_URL
-          value: "sqlite:///tmp/trigger.db"
-        - name: REDIS_HOST
-          value: "localhost"
-        - name: REDIS_PORT
-          value: "6379"
+          value: "postgresql://trigger:$(POSTGRES_PASSWORD)@postgres:5432/trigger"
+        - name: DIRECT_URL
+          value: "postgresql://trigger:$(POSTGRES_PASSWORD)@postgres:5432/trigger"
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: trigger-secrets
+              key: database-password
         - name: SESSION_SECRET
           valueFrom:
             secretKeyRef:
@@ -52,12 +107,6 @@ spec:
             secretKeyRef:
               name: trigger-secrets
               key: encryption-key
-        volumeMounts:
-        - name: sqlite-storage
-          mountPath: /tmp
-      volumes:
-      - name: sqlite-storage
-        emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
