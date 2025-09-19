@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: cronicle
-        image: jhuckaby/cronicle:latest
+        image: soulteary/cronicle:latest
         ports:
         - containerPort: 3012
           name: http
