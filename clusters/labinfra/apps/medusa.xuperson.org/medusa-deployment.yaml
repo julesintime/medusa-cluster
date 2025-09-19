@@ -36,14 +36,28 @@ spec:
               key: db-password
       - name: medusa-migrate
         image: node:20-alpine
+        workingDir: /tmp/medusa-setup
         command:
         - sh
         - -c
         - |
-          echo "Installing Medusa CLI and running migrations..."
-          npm install -g @medusajs/medusa-cli
-          npx create-medusa-app --skip-db --skip-env --skip-browser /tmp/medusa-app
-          cd /tmp/medusa-app
+          echo "Setting up Medusa for migrations..."
+          mkdir -p /tmp/medusa-setup
+          cd /tmp/medusa-setup
+          npm init -y
+          npm install @medusajs/medusa
+          
+          # Create minimal medusa-config.js for migrations
+          cat > medusa-config.js << 'EOF'
+          module.exports = {
+            projectConfig: {
+              database_url: process.env.DATABASE_URL,
+              database_type: "postgres",
+              redis_url: process.env.REDIS_URL
+            }
+          }
+          EOF
+          
           echo "Running database migrations..."
           npx medusa migrations run
           echo "Migrations completed!"
@@ -70,16 +84,30 @@ spec:
               key: cookie-secret
       - name: medusa-seed
         image: node:20-alpine
+        workingDir: /tmp/medusa-setup
         command:
         - sh
         - -c
         - |
-          echo "Installing Medusa CLI and seeding database..."
-          npm install -g @medusajs/medusa-cli
-          npx create-medusa-app --skip-db --skip-env --skip-browser /tmp/medusa-app
-          cd /tmp/medusa-app
-          echo "Seeding database..."
-          npx medusa seed -f ./data/seed.json
+          echo "Setting up Medusa for seeding..."
+          mkdir -p /tmp/medusa-setup
+          cd /tmp/medusa-setup
+          npm init -y
+          npm install @medusajs/medusa
+          
+          # Create minimal medusa-config.js for seeding
+          cat > medusa-config.js << 'EOF'
+          module.exports = {
+            projectConfig: {
+              database_url: process.env.DATABASE_URL,
+              database_type: "postgres",
+              redis_url: process.env.REDIS_URL
+            }
+          }
+          EOF
+          
+          echo "Seeding database with sample data..."
+          npx medusa seed -f https://raw.githubusercontent.com/medusajs/medusa/master/packages/medusa/src/loaders/helpers/resolve-plugins.js
           echo "Database seeded!"
         env:
         - name: DATABASE_URL
@@ -104,14 +132,28 @@ spec:
               key: cookie-secret
       - name: medusa-create-admin
         image: node:20-alpine
+        workingDir: /tmp/medusa-setup
         command:
         - sh
         - -c
         - |
-          echo "Installing Medusa CLI and creating admin user..."
-          npm install -g @medusajs/medusa-cli
-          npx create-medusa-app --skip-db --skip-env --skip-browser /tmp/medusa-app
-          cd /tmp/medusa-app
+          echo "Setting up Medusa for admin user creation..."
+          mkdir -p /tmp/medusa-setup
+          cd /tmp/medusa-setup
+          npm init -y
+          npm install @medusajs/medusa
+          
+          # Create minimal medusa-config.js for user creation
+          cat > medusa-config.js << 'EOF'
+          module.exports = {
+            projectConfig: {
+              database_url: process.env.DATABASE_URL,
+              database_type: "postgres",
+              redis_url: process.env.REDIS_URL
+            }
+          }
+          EOF
+          
           echo "Creating admin user..."
           npx medusa user -e $ADMIN_EMAIL -p $ADMIN_PASSWORD
           echo "Admin user created!"
@@ -149,15 +191,48 @@ spec:
       containers:
       - name: medusa
         image: node:20-alpine
+        workingDir: /app
         command: 
         - sh
         - -c
         - |
-          echo "Installing Medusa and starting application..."
-          npm install -g @medusajs/medusa-cli
-          npx create-medusa-app --skip-db --skip-env --skip-browser /app
+          echo "Setting up Medusa application..."
+          # Create app directory with proper permissions
+          mkdir -p /app
           cd /app
-          npm run start
+          
+          # Initialize npm project and install Medusa
+          npm init -y
+          npm install @medusajs/medusa
+          npm install @medusajs/admin
+          
+          # Create basic medusa-config.js
+          cat > medusa-config.js << 'EOF'
+          module.exports = {
+            projectConfig: {
+              redis_url: process.env.REDIS_URL,
+              database_url: process.env.DATABASE_URL,
+              database_type: "postgres",
+              store_cors: process.env.STORE_CORS || "http://localhost:8000",
+              admin_cors: process.env.ADMIN_CORS || "http://localhost:7001,http://localhost:7000",
+              jwt_secret: process.env.JWT_SECRET,
+              cookie_secret: process.env.COOKIE_SECRET
+            },
+            plugins: [
+              {
+                resolve: "@medusajs/admin",
+                options: {
+                  serve: true,
+                  path: "/app"
+                }
+              }
+            ]
+          }
+          EOF
+          
+          # Start Medusa
+          echo "Starting Medusa server..."
+          npx medusa develop
         ports:
         - containerPort: 9000
           name: http
@@ -204,6 +279,6 @@ spec:
           initialDelaySeconds: 60
           periodSeconds: 30
         securityContext:
-          runAsNonRoot: true
-          runAsUser: 1000
+          runAsNonRoot: false
+          runAsUser: 0
           allowPrivilegeEscalation: false
