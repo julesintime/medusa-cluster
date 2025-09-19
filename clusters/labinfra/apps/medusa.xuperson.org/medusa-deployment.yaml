@@ -49,10 +49,10 @@ spec:
           chmod +x start.sh
           
           echo "Installing dependencies..."
-          yarn install --frozen-lockfile
+          yarn install
           
           echo "Building application..."
-          yarn build
+          npx medusa build
           
           echo "Starting application..."
           ./start.sh
@@ -87,11 +87,11 @@ spec:
           value: "development"
         resources:
           requests:
-            memory: "512Mi"
-            cpu: "250m"
-          limits:
             memory: "1Gi"
             cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
         readinessProbe:
           httpGet:
             path: /health

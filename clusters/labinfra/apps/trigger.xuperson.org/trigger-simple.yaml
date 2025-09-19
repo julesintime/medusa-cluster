@@ -80,18 +80,19 @@ spec:
         - name: LOGIN_ORIGIN
           value: "https://trigger.xuperson.org"
         - name: APP_ORIGIN
-          value: "https://trigger.xuperson.org"
+          value: "https://trigger.xuperson.org"  
         - name: WHITELISTED_EMAILS
           value: "trigger@xuperson.org"
         - name: DATABASE_URL
-          value: "postgresql://trigger:$(POSTGRES_PASSWORD)@postgres:5432/trigger"
-        - name: DIRECT_URL
-          value: "postgresql://trigger:$(POSTGRES_PASSWORD)@postgres:5432/trigger"
-        - name: POSTGRES_PASSWORD
           valueFrom:
             secretKeyRef:
               name: trigger-secrets
-              key: database-password
+              key: database-url-full
+        - name: DIRECT_URL
+          valueFrom:
+            secretKeyRef:
+              name: trigger-secrets
+              key: database-url-full
         - name: SESSION_SECRET
           valueFrom:
             secretKeyRef:
@@ -107,6 +108,14 @@ spec:
             secretKeyRef:
               name: trigger-secrets
               key: encryption-key
+        - name: V4_DEPLOY_REGISTRY_HOST
+          value: "localhost:5001"
+        - name: CLICKHOUSE_URL
+          value: "http://localhost:8123"
+        - name: REDIS_HOST
+          value: "localhost"
+        - name: REDIS_PORT
+          value: "6379"
 ---
 apiVersion: v1
 kind: Service

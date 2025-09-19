@@ -153,10 +153,10 @@ data:
     npx medusa db:migrate
     
     echo "Seeding database..."
-    yarn seed || echo "Seeding failed, continuing..."
+    npx medusa exec ./src/scripts/seed.ts || echo "Seeding failed, continuing..."
     
     echo "Starting Medusa server..."
-    yarn start
+    npx medusa start
 
   seed.ts: |
     import { MedusaApp } from "@medusajs/framework"
