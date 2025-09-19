@@ -35,11 +35,15 @@ spec:
               name: medusa-secrets
               key: db-password
       - name: medusa-migrate
-        image: medusajs/medusa:latest
+        image: node:20-alpine
         command:
         - sh
         - -c
         - |
+          echo "Installing Medusa CLI and running migrations..."
+          npm install -g @medusajs/medusa-cli
+          npx create-medusa-app --skip-db --skip-env --skip-browser /tmp/medusa-app
+          cd /tmp/medusa-app
           echo "Running database migrations..."
           npx medusa migrations run
           echo "Migrations completed!"
@@ -65,11 +69,15 @@ spec:
               name: medusa-secrets
               key: cookie-secret
       - name: medusa-seed
-        image: medusajs/medusa:latest
+        image: node:20-alpine
         command:
         - sh
         - -c
         - |
+          echo "Installing Medusa CLI and seeding database..."
+          npm install -g @medusajs/medusa-cli
+          npx create-medusa-app --skip-db --skip-env --skip-browser /tmp/medusa-app
+          cd /tmp/medusa-app
           echo "Seeding database..."
           npx medusa seed -f ./data/seed.json
           echo "Database seeded!"
@@ -95,11 +103,15 @@ spec:
               name: medusa-secrets
               key: cookie-secret
       - name: medusa-create-admin
-        image: medusajs/medusa:latest
+        image: node:20-alpine
         command:
         - sh
         - -c
         - |
+          echo "Installing Medusa CLI and creating admin user..."
+          npm install -g @medusajs/medusa-cli
+          npx create-medusa-app --skip-db --skip-env --skip-browser /tmp/medusa-app
+          cd /tmp/medusa-app
           echo "Creating admin user..."
           npx medusa user -e $ADMIN_EMAIL -p $ADMIN_PASSWORD
           echo "Admin user created!"
@@ -136,8 +148,16 @@ spec:
               key: admin-password
       containers:
       - name: medusa
-        image: medusajs/medusa:latest
-        command: ["npm", "run", "start"]
+        image: node:20-alpine
+        command: 
+        - sh
+        - -c
+        - |
+          echo "Installing Medusa and starting application..."
+          npm install -g @medusajs/medusa-cli
+          npx create-medusa-app --skip-db --skip-env --skip-browser /app
+          cd /app
+          npm run start
         ports:
         - containerPort: 9000
           name: http
