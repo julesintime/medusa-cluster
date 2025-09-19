@@ -10,6 +10,5 @@ resources:
   - n8n.yaml
   - redis.xuperson.org
   - trigger.xuperson.org
-  - medusa.xuperson.org
   - cronicle.xuperson.org
   - dkron.xuperson.org
