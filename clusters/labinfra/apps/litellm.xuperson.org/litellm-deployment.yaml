@@ -6,6 +6,7 @@ metadata:
   labels:
     app: litellm
 spec:
+  replicas: 0  # Temporarily disabled due to deployment failures
   selector:
     matchLabels:
       app: litellm
