@@ -1,22 +1,15 @@
+---
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
+namespace: medusa
 
 resources:
-  # Core infrastructure
   - medusa-namespace.yaml
   - medusa-rbac.yaml
-  
-  # Database and cache
+  - medusa-infisical-secrets.yaml
   - medusa-postgresql.yaml
   - medusa-redis.yaml
-  
-  # Secrets management (Infisical)
-  - medusa-infisical-secrets.yaml
-  
-  # Application files
-  - medusa-app-configmap.yaml
-  
-  # Application
   - medusa-deployment.yaml
   - medusa-service.yaml
   - medusa-ingress.yaml
+  - medusa-app-configmap.yaml

@@ -1,72 +1,55 @@
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: medusa
   namespace: medusa
   labels:
-    app: medusa
+    app.kubernetes.io/name: medusa
+    app.kubernetes.io/component: backend
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: medusa
+      app.kubernetes.io/name: medusa
+      app.kubernetes.io/component: backend
   template:
     metadata:
       labels:
-        app: medusa
+        app.kubernetes.io/name: medusa
+        app.kubernetes.io/component: backend
     spec:
       serviceAccountName: medusa
       initContainers:
       - name: wait-for-db
-        image: postgres:15-alpine
-        command: 
-        - sh
-        - -c
-        - |
-          until pg_isready -h medusa-postgresql -p 5432 -U medusa; do
-            echo "Waiting for PostgreSQL..."
-            sleep 2
-          done
-          echo "PostgreSQL is ready!"
-        env:
-        - name: PGPASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: medusa-secrets
-              key: db-password
-      containers:
-      - name: medusa
-        image: node:20-alpine
-        workingDir: /app
+        image: busybox:1.36
         command:
         - sh
         - -c
         - |
-          echo "Setting up Medusa from official starter..."
-          
-          # Copy application files from ConfigMap
-          cp /app-files/* .
-          chmod +x start.sh
-          
-          # Create proper directory structure
-          mkdir -p src/scripts src/api/store/custom src/api/admin/custom
-          cp /app-files/seed.ts src/scripts/
-          cp /app-files/route.ts src/api/store/custom/
-          
-          echo "Installing dependencies..."
-          yarn install
-          
-          echo "Building application..."
-          npx medusa build
-          
-          echo "Starting application..."
-          ./start.sh
-        volumeMounts:
-        - name: app-files
-          mountPath: /app-files
-        ports:
-        - containerPort: 9000
-          name: http
+          echo "Waiting for PostgreSQL..."
+          while ! nc -z medusa-postgresql 5432; do
+            sleep 1
+          done
+          echo "PostgreSQL is ready!"
+      - name: wait-for-redis
+        image: busybox:1.36
+        command:
+        - sh
+        - -c
+        - |
+          echo "Waiting for Redis..."
+          while ! nc -z medusa-redis 6379; do
+            sleep 1
+          done
+          echo "Redis is ready!"
+      - name: run-migrations
+        image: git.xuperson.org/helloroot/medusa-app:latest
+        imagePullPolicy: Always
+        command: ["sh", "-c", "npx medusa migrations run"]
+        envFrom:
+        - configMapRef:
+            name: medusa-app-config
         env:
         - name: DATABASE_URL
           valueFrom:
@@ -88,37 +71,68 @@ spec:
             secretKeyRef:
               name: medusa-secrets
               key: cookie-secret
-        - name: NODE_ENV
-          value: "development"
+      containers:
+      - name: medusa
+        image: git.xuperson.org/helloroot/medusa-app:latest
+        imagePullPolicy: Always
+        ports:
+        - name: http
+          containerPort: 9000
+          protocol: TCP
+        envFrom:
+        - configMapRef:
+            name: medusa-app-config
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: medusa-secrets
+              key: database-url
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: medusa-secrets
+              key: redis-url
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: medusa-secrets
+              key: jwt-secret
+        - name: COOKIE_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: medusa-secrets
+              key: cookie-secret
+        - name: MEDUSA_ADMIN_EMAIL
+          valueFrom:
+            secretKeyRef:
+              name: medusa-secrets
+              key: admin-email
+        - name: MEDUSA_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: medusa-secrets
+              key: admin-password
         resources:
           requests:
-            memory: "1Gi"
-            cpu: "500m"
+            memory: "256Mi"
+            cpu: "100m"
           limits:
-            memory: "2Gi"
-            cpu: "1000m"
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 9000
-          initialDelaySeconds: 300
-          periodSeconds: 30
-          timeoutSeconds: 5
-          failureThreshold: 10
+            memory: "512Mi"
+            cpu: "500m"
         livenessProbe:
           httpGet:
             path: /health
             port: 9000
-          initialDelaySeconds: 600
-          periodSeconds: 60
+          initialDelaySeconds: 60
+          periodSeconds: 10
           timeoutSeconds: 5
-          failureThreshold: 5
-        securityContext:
-          runAsNonRoot: false
-          runAsUser: 0
-          allowPrivilegeEscalation: false
-      volumes:
-      - name: app-files
-        configMap:
-          name: medusa-app-files
-          defaultMode: 0755
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 9000
+          initialDelaySeconds: 30
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3

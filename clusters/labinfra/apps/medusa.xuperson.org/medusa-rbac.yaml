@@ -6,23 +6,23 @@ metadata:
   namespace: medusa
   labels:
     app.kubernetes.io/name: medusa
-    app.kubernetes.io/component: service-account
+    app.kubernetes.io/component: rbac
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  namespace: medusa
   name: medusa
+  namespace: medusa
   labels:
     app.kubernetes.io/name: medusa
     app.kubernetes.io/component: rbac
 rules:
   - apiGroups: [""]
-    resources: ["secrets", "configmaps"]
-    verbs: ["get", "list"]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch"]
   - apiGroups: [""]
-    resources: ["services"]
-    verbs: ["get", "list"]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -32,11 +32,11 @@ metadata:
   labels:
     app.kubernetes.io/name: medusa
     app.kubernetes.io/component: rbac
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: medusa
 subjects:
   - kind: ServiceAccount
     name: medusa
     namespace: medusa
-roleRef:
-  kind: Role
-  name: medusa
-  apiGroup: rbac.authorization.k8s.io

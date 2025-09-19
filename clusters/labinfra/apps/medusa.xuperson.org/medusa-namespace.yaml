@@ -5,4 +5,4 @@ metadata:
   name: medusa
   labels:
     app.kubernetes.io/name: medusa
-    app.kubernetes.io/component: e-commerce
+    app.kubernetes.io/component: namespace
