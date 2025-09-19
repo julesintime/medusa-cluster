@@ -34,40 +34,31 @@ spec:
             secretKeyRef:
               name: medusa-secrets
               key: db-password
-      - name: medusa-migrate
-        image: ayushs5/medusa-backend:latest
+      containers:
+      - name: medusa
+        image: node:20-alpine
+        workingDir: /app
         command:
         - sh
         - -c
         - |
-          echo "Running database migrations..."
-          npx medusa db:migrate
-          echo "Migrations completed!"
-        env:
-        - name: DATABASE_URL
-          valueFrom:
-            secretKeyRef:
-              name: medusa-secrets
-              key: database-url
-        - name: REDIS_URL
-          valueFrom:
-            secretKeyRef:
-              name: medusa-secrets
-              key: redis-url
-        - name: JWT_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: medusa-secrets
-              key: jwt-secret
-        - name: COOKIE_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: medusa-secrets
-              key: cookie-secret
-      containers:
-      - name: medusa
-        image: ayushs5/medusa-backend:latest
-        command: ["npm", "run", "start"]
+          echo "Setting up Medusa from official starter..."
+          
+          # Copy application files from ConfigMap
+          cp /app-files/* .
+          chmod +x start.sh
+          
+          echo "Installing dependencies..."
+          yarn install --frozen-lockfile
+          
+          echo "Building application..."
+          yarn build
+          
+          echo "Starting application..."
+          ./start.sh
+        volumeMounts:
+        - name: app-files
+          mountPath: /app-files
         ports:
         - containerPort: 9000
           name: http
@@ -117,3 +108,8 @@ spec:
           runAsNonRoot: false
           runAsUser: 0
           allowPrivilegeEscalation: false
+      volumes:
+      - name: app-files
+        configMap:
+          name: medusa-app-files
+          defaultMode: 0755

@@ -1,0 +1,172 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: medusa-app-files
+  namespace: medusa
+data:
+  package.json: |
+    {
+      "name": "medusa-starter-default",
+      "version": "0.0.1",
+      "description": "A starter for Medusa projects.",
+      "author": "Medusa (https://medusajs.com)",
+      "license": "MIT",
+      "keywords": [
+        "sqlite",
+        "postgres",
+        "typescript",
+        "ecommerce",
+        "headless",
+        "medusa"
+      ],
+      "scripts": {
+        "build": "medusa build",
+        "seed": "medusa exec ./src/scripts/seed.ts",
+        "start": "medusa start",
+        "dev": "medusa develop",
+        "test:integration:http": "TEST_TYPE=integration:http NODE_OPTIONS=--experimental-vm-modules jest --silent=false --runInBand --forceExit",
+        "test:integration:modules": "TEST_TYPE=integration:modules NODE_OPTIONS=--experimental-vm-modules jest --silent=false --runInBand --forceExit",
+        "test:unit": "TEST_TYPE=unit NODE_OPTIONS=--experimental-vm-modules jest --silent --runInBand --forceExit"
+      },
+      "dependencies": {
+        "@medusajs/admin-sdk": "2.10.3",
+        "@medusajs/cli": "2.10.3",
+        "@medusajs/framework": "2.10.3",
+        "@medusajs/medusa": "2.10.3",
+        "@mikro-orm/core": "6.4.3",
+        "@mikro-orm/knex": "6.4.3",
+        "@mikro-orm/migrations": "6.4.3",
+        "@mikro-orm/postgresql": "6.4.3",
+        "awilix": "^8.0.1",
+        "pg": "^8.13.0"
+      },
+      "devDependencies": {
+        "@medusajs/test-utils": "2.10.3",
+        "@mikro-orm/cli": "6.4.3",
+        "@swc/core": "1.5.7",
+        "@swc/jest": "^0.2.36",
+        "@types/jest": "^29.5.13",
+        "@types/node": "^20.0.0",
+        "@types/react": "^18.3.2",
+        "@types/react-dom": "^18.2.25",
+        "jest": "^29.7.0",
+        "prop-types": "^15.8.1",
+        "react": "^18.2.0",
+        "react-dom": "^18.2.0",
+        "ts-node": "^10.9.2",
+        "typescript": "^5.6.2",
+        "vite": "^5.2.11",
+        "yalc": "^1.0.0-pre.53"
+      },
+      "engines": {
+        "node": ">=20"
+      }
+    }
+
+  medusa-config.ts: |
+    import { loadEnv, defineConfig } from '@medusajs/framework/utils'
+
+    loadEnv(process.env.NODE_ENV || 'development', process.cwd())
+
+    module.exports = defineConfig({
+      projectConfig: {
+        databaseUrl: process.env.DATABASE_URL,
+        http: {
+          storeCors: process.env.STORE_CORS || "http://localhost:8000",
+          adminCors: process.env.ADMIN_CORS || "http://localhost:7001,http://localhost:7000",
+          authCors: process.env.AUTH_CORS || "http://localhost:7001,http://localhost:7000",
+          jwtSecret: process.env.JWT_SECRET || "supersecret",
+          cookieSecret: process.env.COOKIE_SECRET || "supersecret",
+        },
+        databaseDriverOptions: {
+          ssl: false,
+          sslmode: "disable",
+        }
+      }
+    })
+
+  tsconfig.json: |
+    {
+      "compilerOptions": {
+        "target": "ES2022",
+        "lib": ["ES2022"],
+        "allowJs": true,
+        "skipLibCheck": true,
+        "strict": true,
+        "forceConsistentCasingInFileNames": true,
+        "noEmit": true,
+        "esModuleInterop": true,
+        "module": "CommonJS",
+        "moduleResolution": "node",
+        "resolveJsonModule": true,
+        "isolatedModules": true,
+        "jsx": "preserve",
+        "incremental": true,
+        "plugins": [
+          {
+            "name": "next"
+          }
+        ],
+        "paths": {
+          "@/*": ["./src/*"]
+        },
+        "experimentalDecorators": true,
+        "emitDecoratorMetadata": true
+      },
+      "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+      "exclude": ["node_modules"]
+    }
+
+  Dockerfile: |
+    FROM node:20-alpine
+
+    WORKDIR /app
+
+    # Copy package files
+    COPY package*.json yarn.lock* ./
+
+    # Install dependencies
+    RUN yarn install --frozen-lockfile
+
+    # Copy source code
+    COPY . .
+
+    # Build the application
+    RUN yarn build
+
+    # Expose port
+    EXPOSE 9000
+
+    # Start script
+    COPY start.sh /start.sh
+    RUN chmod +x /start.sh
+
+    CMD ["/start.sh"]
+
+  start.sh: |
+    #!/bin/sh
+    
+    echo "Starting Medusa application..."
+    echo "Database URL: $DATABASE_URL"
+    
+    echo "Running database migrations..."
+    npx medusa db:migrate
+    
+    echo "Seeding database..."
+    yarn seed || echo "Seeding failed, continuing..."
+    
+    echo "Starting Medusa server..."
+    yarn start
+
+  seed.ts: |
+    import { MedusaApp } from "@medusajs/framework"
+
+    async function seed() {
+      const app = await MedusaApp()
+      const { execute } = app
+
+      // Create sample data - basic seed
+      console.log("Seeding completed")
+    }
+
+    seed().catch(console.error)

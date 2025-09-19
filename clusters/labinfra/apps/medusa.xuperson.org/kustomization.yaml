@@ -13,6 +13,9 @@ resources:
   # Secrets management (Infisical)
   - medusa-infisical-secrets.yaml
   
+  # Application files
+  - medusa-app-configmap.yaml
+  
   # Application
   - medusa-deployment.yaml
   - medusa-service.yaml
