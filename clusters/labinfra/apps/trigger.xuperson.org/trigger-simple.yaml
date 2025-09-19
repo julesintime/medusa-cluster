@@ -1,0 +1,95 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: trigger
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trigger-webapp
+  namespace: trigger
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: trigger-webapp
+  template:
+    metadata:
+      labels:
+        app: trigger-webapp
+    spec:
+      containers:
+      - name: webapp
+        image: ghcr.io/triggerdotdev/trigger.dev:v4.0.0
+        ports:
+        - containerPort: 3000
+        env:
+        - name: LOGIN_ORIGIN
+          value: "https://trigger.xuperson.org"
+        - name: APP_ORIGIN
+          value: "https://trigger.xuperson.org"
+        - name: WHITELISTED_EMAILS
+          value: "trigger@xuperson.org"
+        - name: DATABASE_URL
+          value: "sqlite:///tmp/trigger.db"
+        - name: REDIS_HOST
+          value: "localhost"
+        - name: REDIS_PORT
+          value: "6379"
+        - name: SESSION_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: trigger-secrets
+              key: session-secret
+        - name: MAGIC_LINK_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: trigger-secrets
+              key: magic-link-secret
+        - name: ENCRYPTION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: trigger-secrets
+              key: encryption-key
+        volumeMounts:
+        - name: sqlite-storage
+          mountPath: /tmp
+      volumes:
+      - name: sqlite-storage
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: trigger
+  namespace: trigger
+spec:
+  selector:
+    app: trigger-webapp
+  ports:
+  - port: 80
+    targetPort: 3000
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: trigger
+  namespace: trigger
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: "trigger.xuperson.org"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: trigger.xuperson.org
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: trigger
+            port:
+              number: 80

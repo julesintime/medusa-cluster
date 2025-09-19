@@ -34,6 +34,36 @@ spec:
             secretKeyRef:
               name: medusa-secrets
               key: db-password
+      - name: medusa-migrate
+        image: ayushs5/medusa-backend:latest
+        command:
+        - sh
+        - -c
+        - |
+          echo "Running database migrations..."
+          npx medusa db:migrate
+          echo "Migrations completed!"
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: medusa-secrets
+              key: database-url
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: medusa-secrets
+              key: redis-url
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: medusa-secrets
+              key: jwt-secret
+        - name: COOKIE_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: medusa-secrets
+              key: cookie-secret
       containers:
       - name: medusa
         image: ayushs5/medusa-backend:latest
