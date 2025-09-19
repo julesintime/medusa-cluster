@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cronicle
+  namespace: cronicle
+  labels:
+    app: cronicle
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cronicle
+  template:
+    metadata:
+      labels:
+        app: cronicle
+    spec:
+      containers:
+      - name: cronicle
+        image: jhuckaby/cronicle:latest
+        ports:
+        - containerPort: 3012
+          name: http
+        env:
+        - name: CRONICLE_base_app_url
+          value: "https://cronicle.xuperson.org"
+        - name: CRONICLE_web_server_port
+          value: "3012"
+        - name: CRONICLE_web_server_ip
+          value: "0.0.0.0"
+        volumeMounts:
+        - name: cronicle-data
+          mountPath: /opt/cronicle/data
+        - name: cronicle-logs
+          mountPath: /opt/cronicle/logs
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /api/app/ping
+            port: 3012
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /api/app/ping
+            port: 3012
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 5
+      volumes:
+      - name: cronicle-data
+        persistentVolumeClaim:
+          claimName: cronicle-data-pvc
+      - name: cronicle-logs
+        persistentVolumeClaim:
+          claimName: cronicle-logs-pvc

@@ -1,0 +1,8 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dkron
+  labels:
+    app.kubernetes.io/name: dkron
+    app.kubernetes.io/managed-by: flux

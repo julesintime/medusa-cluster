@@ -1,0 +1,22 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dkron
+  namespace: dkron
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: "dkron.xuperson.org"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: dkron.xuperson.org
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: dkron
+            port:
+              number: 80

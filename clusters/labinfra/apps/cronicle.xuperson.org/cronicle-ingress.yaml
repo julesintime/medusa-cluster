@@ -1,0 +1,22 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cronicle
+  namespace: cronicle
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: "cronicle.xuperson.org"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: cronicle.xuperson.org
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: cronicle
+            port:
+              number: 80

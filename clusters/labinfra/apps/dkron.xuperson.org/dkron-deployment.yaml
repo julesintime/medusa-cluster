@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dkron
+  namespace: dkron
+  labels:
+    app: dkron
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dkron
+  template:
+    metadata:
+      labels:
+        app: dkron
+    spec:
+      containers:
+      - name: dkron
+        image: dkron/dkron:latest
+        args:
+          - "agent"
+          - "--server"
+          - "--bootstrap-expect=1"
+          - "--node-name=dkron-0"
+          - "--log-level=info"
+          - "--join=dkron-0"
+          - "--ui=true"
+        ports:
+        - containerPort: 8080
+          name: http
+        - containerPort: 8946
+          name: serf-lan
+        - containerPort: 6868
+          name: grpc
+        env:
+        - name: DKRON_LOG_LEVEL
+          value: "INFO"
+        - name: DKRON_DATACENTER
+          value: "dc1"
+        - name: DKRON_REGION
+          value: "global"
+        volumeMounts:
+        - name: dkron-data
+          mountPath: /dkron.data
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+        livenessProbe:
+          httpGet:
+            path: /v1/status
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /v1/status
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 5
+      volumes:
+      - name: dkron-data
+        persistentVolumeClaim:
+          claimName: dkron-data-pvc
