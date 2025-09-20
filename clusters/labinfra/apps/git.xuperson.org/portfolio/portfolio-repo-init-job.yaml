@@ -1,0 +1,362 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: portfolio-repo-init
+  namespace: gitea
+  labels:
+    app.kubernetes.io/name: portfolio-app
+    app.kubernetes.io/component: repo-initialization
+    app.kubernetes.io/managed-by: flux
+  annotations:
+    flux.weave.works/automated: "false"
+spec:
+  ttlSecondsAfterFinished: 3600  # Clean up after 1 hour
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: portfolio-repo-init
+    spec:
+      serviceAccountName: gitea-admin-sa
+      restartPolicy: Never
+      initContainers:
+      - name: wait-for-gitea
+        image: alpine/curl:8.4.0
+        command: ["/bin/sh"]
+        args:
+        - -c
+        - |
+          echo "🔍 Waiting for Gitea to be ready..."
+          until curl -f -s http://gitea-http.gitea.svc.cluster.local:3000/api/v1/version; do
+            echo "⏳ Gitea not ready, waiting 10 seconds..."
+            sleep 10
+          done
+          echo "✅ Gitea is ready!"
+      - name: setup-admin-credentials
+        image: bitnami/kubectl:1.28
+        command: ["/bin/bash"]
+        args:
+        - -c
+        - |
+          set -e
+
+          echo "🔑 Setting up Gitea admin credentials for portfolio CI/CD..."
+
+          # Get admin credentials from Infisical-synced secrets
+          if kubectl get secret gitea-admin-credentials -n gitea >/dev/null 2>&1; then
+            ADMIN_USER=$(kubectl get secret gitea-admin-credentials -n gitea -o jsonpath='{.data.username}' | base64 -d)
+            ADMIN_PASS=$(kubectl get secret gitea-admin-credentials -n gitea -o jsonpath='{.data.password}' | base64 -d)
+            echo "✅ Using existing admin credentials"
+          else
+            echo "❌ gitea-admin-credentials secret not found in gitea namespace"
+            echo "🔧 Please ensure Infisical secret is synced with GITEA_ADMIN_USERNAME and GITEA_ADMIN_PASSWORD"
+            exit 1
+          fi
+
+          # Create repository secrets for CI/CD
+          kubectl create secret generic portfolio-cicd-secrets \
+            --from-literal=GITEA_ADMIN_USERNAME="$ADMIN_USER" \
+            --from-literal=GITEA_ADMIN_PASSWORD="$ADMIN_PASS" \
+            --namespace=gitea \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          echo "✅ Portfolio CI/CD secrets configured"
+      containers:
+      - name: repo-setup
+        image: alpine/curl:8.4.0
+        env:
+        - name: GITEA_URL
+          value: "http://gitea-http.gitea.svc.cluster.local:3000"
+        - name: REPO_NAME
+          value: "portfolio-app"
+        - name: REPO_DESCRIPTION
+          value: "WordPress + Avada Portfolio with GitOps CI/CD"
+        command: ["/bin/sh"]
+        args:
+        - -c
+        - |
+          set -e
+
+          echo "🚀 Initializing portfolio-app repository in Gitea..."
+
+          # Get admin credentials
+          ADMIN_USER=$(cat /secrets/GITEA_ADMIN_USERNAME)
+          ADMIN_PASS=$(cat /secrets/GITEA_ADMIN_PASSWORD)
+
+          if [ -z "$ADMIN_USER" ] || [ -z "$ADMIN_PASS" ]; then
+            echo "❌ Missing admin credentials"
+            exit 1
+          fi
+
+          # Test API connectivity
+          echo "🔍 Testing Gitea API connectivity..."
+          if ! curl -f -s "${GITEA_URL}/api/v1/version"; then
+            echo "❌ Cannot connect to Gitea API"
+            exit 1
+          fi
+
+          # Check if repository already exists
+          echo "🔍 Checking if repository exists..."
+          if curl -f -s -u "${ADMIN_USER}:${ADMIN_PASS}" \
+               "${GITEA_URL}/api/v1/repos/helloroot/${REPO_NAME}" >/dev/null 2>&1; then
+            echo "✅ Repository already exists, updating content..."
+            REPO_EXISTS=true
+          else
+            echo "📝 Creating new repository..."
+            REPO_EXISTS=false
+          fi
+
+          # Create repository if it doesn't exist
+          if [ "$REPO_EXISTS" = "false" ]; then
+            curl -X POST \
+              -u "${ADMIN_USER}:${ADMIN_PASS}" \
+              -H "Content-Type: application/json" \
+              -d "{
+                \"name\": \"${REPO_NAME}\",
+                \"description\": \"${REPO_DESCRIPTION}\",
+                \"private\": false,
+                \"auto_init\": true,
+                \"default_branch\": \"main\",
+                \"gitignores\": \"Node\",
+                \"license\": \"MIT\",
+                \"readme\": \"Default\"
+              }" \
+              "${GITEA_URL}/api/v1/user/repos" || {
+              echo "❌ Failed to create repository"
+              exit 1
+            }
+            echo "✅ Repository created successfully"
+          fi
+
+          # Clone repository to temporary location
+          echo "📥 Cloning repository..."
+          cd /tmp
+          git config --global user.name "GitOps Admin"
+          git config --global user.email "admin@xuperson.org"
+          git config --global init.defaultBranch main
+
+          # Clone with credentials
+          git clone "http://${ADMIN_USER}:${ADMIN_PASS}@gitea-http.gitea.svc.cluster.local:3000/helloroot/${REPO_NAME}.git" || {
+            echo "❌ Failed to clone repository"
+            exit 1
+          }
+
+          cd "${REPO_NAME}"
+
+          # Create .gitea/workflows directory
+          mkdir -p .gitea/workflows
+
+          # Add workflow file
+          cat > .gitea/workflows/build.yml << 'EOF'
+          name: Build and Push WordPress + Avada with BuildKit
+          on:
+            push:
+              branches: [main, master]
+
+          jobs:
+            build:
+              runs-on: ubuntu-latest
+              steps:
+              - name: Build and push WordPress + Avada with buildctl
+                run: |
+                  set -e
+
+                  echo "🚀 Starting WordPress + Avada build with BuildKit"
+
+                  # Configuration
+                  IMAGE_BASE="portfolio-app"
+                  REGISTRY_URL="git.xuperson.org"
+                  GITEA_URL="http://gitea-http.gitea.svc.cluster.local:3000"
+                  BUILDKIT_HOST="tcp://buildkit.buildkit.svc.cluster.local:1234"
+
+                  # Get commit SHA for tagging
+                  COMMIT_SHA=$(echo $GITHUB_SHA | cut -c1-7)
+                  IMAGE_TAG="main-${COMMIT_SHA}"
+                  FULL_IMAGE="${REGISTRY_URL}/helloroot/${IMAGE_BASE}:${IMAGE_TAG}"
+
+                  echo "📦 Building image: ${FULL_IMAGE}"
+                  echo "🏗️  Using BuildKit: ${BUILDKIT_HOST}"
+
+                  # Test BuildKit connectivity
+                  echo "🔍 Testing BuildKit connectivity..."
+                  buildctl --addr ${BUILDKIT_HOST} debug workers || {
+                      echo "❌ BuildKit connection failed"
+                      exit 1
+                  }
+
+                  # Get Gitea credentials from secrets
+                  echo "🔑 Getting Gitea admin credentials..."
+                  ADMIN_USER="${{ secrets.GITEA_ADMIN_USERNAME }}"
+                  ADMIN_PASS="${{ secrets.GITEA_ADMIN_PASSWORD }}"
+
+                  if [ -z "$ADMIN_USER" ] || [ -z "$ADMIN_PASS" ]; then
+                      echo "❌ Missing Gitea admin credentials"
+                      exit 1
+                  fi
+
+                  # Create minimal build context
+                  echo "📝 Preparing WordPress + Avada build context..."
+                  mkdir -p wp-content/themes/Avada
+                  mkdir -p wp-content/plugins
+                  mkdir -p wp-content/uploads
+
+                  # Create minimal Avada theme files
+                  cat > wp-content/themes/Avada/style.css << 'THEME_EOF'
+                  /*
+                  Theme Name: Avada
+                  Description: Premium WordPress theme for portfolio
+                  Version: 7.11.0
+                  */
+                  THEME_EOF
+
+                  cat > wp-content/themes/Avada/index.php << 'THEME_EOF'
+                  <?php get_header(); ?>
+                  <div class="main-content">
+                      <h1>Avada Portfolio</h1>
+                      <p>Welcome to the Avada-powered portfolio site!</p>
+                      <p>Build: <?php echo getenv('BUILD_REF') ?: 'development'; ?></p>
+                  </div>
+                  <?php get_footer(); ?>
+                  THEME_EOF
+
+                  # Build with BuildKit
+                  echo "🏗️  Building WordPress + Avada image..."
+                  buildctl --addr ${BUILDKIT_HOST} build \
+                      --frontend dockerfile.v0 \
+                      --local context=. \
+                      --local dockerfile=. \
+                      --output type=image,name=${FULL_IMAGE},push=true,registry.insecure=true \
+                      --export-cache type=registry,ref=${REGISTRY_URL}/helloroot/${IMAGE_BASE}:cache \
+                      --import-cache type=registry,ref=${REGISTRY_URL}/helloroot/${IMAGE_BASE}:cache \
+                      --opt build-arg:BUILD_REF=${COMMIT_SHA} \
+                      --opt build-arg:BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ) || {
+                      echo "❌ BuildKit build failed"
+                      exit 1
+                  }
+
+                  echo "✅ WordPress + Avada build completed!"
+                  echo "🔄 Flux will automatically deploy this image"
+          EOF
+
+          # Add Dockerfile
+          cat > Dockerfile << 'EOF'
+          FROM wordpress:6.4-php8.1-apache
+
+          # Install required tools
+          RUN apt-get update && apt-get install -y \
+              unzip \
+              wget \
+              curl \
+              && rm -rf /var/lib/apt/lists/*
+
+          # Copy WordPress content
+          COPY wp-content/ /var/www/html/wp-content/
+
+          # Set proper permissions
+          RUN chown -R www-data:www-data /var/www/html/wp-content/ \
+              && chmod -R 755 /var/www/html/wp-content/
+
+          # Health check
+          HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+              CMD curl -f http://localhost/ || exit 1
+
+          EXPOSE 80
+          EOF
+
+          # Add README
+          cat > README.md << 'EOF'
+          # Portfolio WordPress + Avada
+
+          Automated CI/CD pipeline for WordPress with Avada theme.
+
+          ## Features
+          - WordPress 6.4 + PHP 8.1
+          - Avada Premium Theme
+          - GitOps CI/CD with BuildKit
+          - Kubernetes deployment ready
+
+          ## Build Process
+          1. Push to main branch triggers build
+          2. BuildKit creates WordPress + Avada image
+          3. Image pushed to git.xuperson.org registry
+          4. Flux CD automatically deploys to Kubernetes
+
+          ## Architecture
+          - **Source**: Gitea repository
+          - **Build**: BuildKit remote building
+          - **Registry**: Internal Gitea registry
+          - **Deploy**: Flux CD + Kubernetes
+          EOF
+
+          # Add .gitignore
+          cat > .gitignore << 'EOF'
+          .DS_Store
+          Thumbs.db
+          .env*
+          *.log
+          node_modules/
+          .vscode/
+          .idea/
+          wp-config-local.php
+          EOF
+
+          # Commit and push
+          echo "📤 Committing and pushing WordPress + Avada application..."
+          git add .
+          git commit -m "🚀 Initial WordPress + Avada application with GitOps CI/CD
+
+          Features:
+          - WordPress 6.4 with Avada theme
+          - BuildKit-based CI/CD pipeline
+          - Kubernetes deployment ready
+          - Automatic image building and registry push
+
+          🤖 Generated by GitOps automation"
+
+          git push origin main || {
+            echo "❌ Failed to push to repository"
+            exit 1
+          }
+
+          echo "✅ Portfolio repository initialized successfully!"
+          echo "🔄 CI/CD pipeline will activate on next push"
+        volumeMounts:
+        - name: admin-secrets
+          mountPath: /secrets
+          readOnly: true
+      volumes:
+      - name: admin-secrets
+        secret:
+          secretName: portfolio-cicd-secrets
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gitea-admin-sa
+  namespace: gitea
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: gitea
+  name: gitea-admin-role
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "create", "patch", "update", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: gitea-admin-binding
+  namespace: gitea
+subjects:
+- kind: ServiceAccount
+  name: gitea-admin-sa
+  namespace: gitea
+roleRef:
+  kind: Role
+  name: gitea-admin-role
+  apiGroup: rbac.authorization.k8s.io

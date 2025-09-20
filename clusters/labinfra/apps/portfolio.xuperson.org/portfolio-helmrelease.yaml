@@ -1,0 +1,207 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: portfolio-wordpress
+  namespace: portfolio
+  labels:
+    app.kubernetes.io/name: portfolio
+    app.kubernetes.io/component: wordpress
+    app.kubernetes.io/managed-by: flux
+spec:
+  interval: 15m
+  chart:
+    spec:
+      chart: wordpress
+      version: "19.x.x"  # Use latest 19.x version
+      sourceRef:
+        kind: HelmRepository
+        name: bitnami
+        namespace: flux-system
+  values:
+    # WordPress Configuration
+    wordpressUsername: admin
+    wordpressPassword: ""  # Will be auto-generated
+    wordpressEmail: admin@xuperson.org
+    wordpressFirstName: Portfolio
+    wordpressLastName: Admin
+    wordpressBlogName: "Avada Portfolio"
+    wordpressTablePrefix: wp_
+
+    # Custom WordPress Image (our CI/CD built image)
+    image:
+      registry: git.xuperson.org
+      repository: helloroot/portfolio-app
+      tag: main-abc123  # {"$imagepolicy": "portfolio:portfolio-app"}
+      pullPolicy: Always
+      pullSecrets:
+        - gitea-registry-secret
+
+    # WordPress Security Configuration
+    existingSecret: portfolio-wordpress-secrets
+
+    # WordPress Persistence
+    persistence:
+      enabled: true
+      storageClass: "longhorn"
+      size: 10Gi
+      accessModes:
+        - ReadWriteOnce
+
+    # WordPress Resources
+    resources:
+      requests:
+        memory: 512Mi
+        cpu: 250m
+      limits:
+        memory: 1Gi
+        cpu: 500m
+
+    # WordPress Service
+    service:
+      type: ClusterIP
+      port: 80
+      httpsPort: 443
+
+    # Health Checks
+    livenessProbe:
+      enabled: true
+      httpGet:
+        path: /wp-admin/install.php
+        port: http
+      initialDelaySeconds: 120
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 6
+      successThreshold: 1
+
+    readinessProbe:
+      enabled: true
+      httpGet:
+        path: /wp-login.php
+        port: http
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 6
+      successThreshold: 1
+
+    # MySQL Configuration
+    mysql:
+      enabled: true
+      auth:
+        rootPassword: ""  # Will use existing secret
+        username: wordpress
+        password: ""  # Will use existing secret
+        database: wordpress
+        existingSecret: portfolio-mysql-secrets
+        secretKeys:
+          adminPasswordKey: mysql-root-password
+          userPasswordKey: mysql-password
+
+      primary:
+        persistence:
+          enabled: true
+          storageClass: "longhorn"
+          size: 20Gi
+
+        resources:
+          requests:
+            memory: 256Mi
+            cpu: 100m
+          limits:
+            memory: 512Mi
+            cpu: 250m
+
+    # MariaDB alternative (if MySQL issues)
+    mariadb:
+      enabled: false
+
+    # External Database (disabled since using internal MySQL)
+    externalDatabase:
+      host: ""
+      port: 3306
+      user: ""
+      password: ""
+      database: ""
+      existingSecret: ""
+
+    # WordPress Configuration Overrides
+    wordpressConfigureCache: false
+    wordpressPlugins: "akismet"
+    wordpressExtraConfigContent: |
+      // Avada theme optimizations
+      define('WP_MEMORY_LIMIT', '512M');
+      define('WP_MAX_MEMORY_LIMIT', '512M');
+
+      // Security headers
+      define('FORCE_SSL_ADMIN', true);
+      define('DISALLOW_FILE_EDIT', true);
+
+      // Avada theme configuration
+      define('AVADA_VERSION', '7.11.0');
+
+    # Ingress (disabled - using separate ingress resource)
+    ingress:
+      enabled: false
+
+    # Metrics and monitoring
+    metrics:
+      enabled: false
+
+    # WordPress multisite
+    wordpressMultisite:
+      enabled: false
+
+    # Apache/HTTPD configuration
+    htaccessPersistenceEnabled: true
+    customHTAccessCM: ""
+
+    # WordPress auto-updates
+    wordpressAutoUpdateLevel: none
+
+    # Init containers for theme setup
+    initContainers:
+      - name: setup-permissions
+        image: busybox:1.35
+        command:
+          - /bin/sh
+          - -c
+          - |
+            echo "🔧 Setting up WordPress permissions for Avada theme..."
+            # Ensure proper permissions for wp-content
+            chown -R 1001:1001 /var/www/html/wp-content || true
+            chmod -R 755 /var/www/html/wp-content || true
+            echo "✅ Permissions setup complete"
+        volumeMounts:
+          - name: wordpress-data
+            mountPath: /var/www/html
+            subPath: wordpress
+        securityContext:
+          runAsUser: 0  # Run as root for permission changes
+
+  # Health check and dependencies
+  dependsOn:
+    - name: portfolio-registry-credentials
+      namespace: portfolio
+    - name: portfolio-secrets
+      namespace: portfolio
+
+  # Post-install configuration
+  postRenderers:
+    - kustomize:
+        patches:
+          - target:
+              kind: Deployment
+              name: portfolio-wordpress
+            patch: |
+              - op: add
+                path: /spec/template/spec/containers/0/env/-
+                value:
+                  name: WORDPRESS_HOME
+                  value: "https://portfolio.xuperson.org"
+              - op: add
+                path: /spec/template/spec/containers/0/env/-
+                value:
+                  name: WORDPRESS_SITEURL
+                  value: "https://portfolio.xuperson.org"

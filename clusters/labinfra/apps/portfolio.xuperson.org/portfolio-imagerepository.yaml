@@ -1,0 +1,72 @@
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageRepository
+metadata:
+  name: portfolio-app
+  namespace: portfolio
+  labels:
+    app.kubernetes.io/name: portfolio
+    app.kubernetes.io/component: image-automation
+    app.kubernetes.io/managed-by: flux
+spec:
+  image: git.xuperson.org/helloroot/portfolio-app
+  interval: 1m
+  secretRef:
+    name: gitea-registry-secret
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: portfolio-app
+  namespace: portfolio
+  labels:
+    app.kubernetes.io/name: portfolio
+    app.kubernetes.io/component: image-automation
+    app.kubernetes.io/managed-by: flux
+spec:
+  imageRepositoryRef:
+    name: portfolio-app
+  policy:
+    alphabetical:
+      order: asc
+  filterTags:
+    pattern: '^main-[a-f0-9]+'
+    extract: '$0'
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta1
+kind: ImageUpdateAutomation
+metadata:
+  name: portfolio-app
+  namespace: portfolio
+  labels:
+    app.kubernetes.io/name: portfolio
+    app.kubernetes.io/component: image-automation
+    app.kubernetes.io/managed-by: flux
+spec:
+  interval: 30s
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+    namespace: flux-system
+  git:
+    checkout:
+      ref:
+        branch: master
+    commit:
+      author:
+        email: flux@xuperson.org
+        name: Flux Image Automation
+      messageTemplate: |
+        🚀 Update portfolio WordPress + Avada image
+
+        Images:
+        {{ range .Updated.Images -}}
+        - {{ . }}
+        {{ end }}
+
+        🤖 Automated update by Flux
+    push:
+      branch: master
+  update:
+    path: "./clusters/labinfra/apps/portfolio.xuperson.org"
+    strategy: Setters

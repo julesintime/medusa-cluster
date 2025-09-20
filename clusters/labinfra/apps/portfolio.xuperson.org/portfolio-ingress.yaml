@@ -1,0 +1,72 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: portfolio-ingress
+  namespace: portfolio
+  labels:
+    app.kubernetes.io/name: portfolio
+    app.kubernetes.io/component: ingress
+    app.kubernetes.io/managed-by: flux
+  annotations:
+    # External DNS
+    external-dns.alpha.kubernetes.io/hostname: "portfolio.xuperson.org"
+
+    # NGINX Ingress Configuration
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+
+    # WordPress specific optimizations
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    nginx.ingress.kubernetes.io/client-max-body-size: "100m"
+
+    # Performance optimizations for WordPress
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+
+    # Security headers
+    nginx.ingress.kubernetes.io/custom-http-errors: "404,503"
+
+    # Rate limiting
+    nginx.ingress.kubernetes.io/rate-limit-connections: "10"
+    nginx.ingress.kubernetes.io/rate-limit-requests-per-minute: "60"
+
+    # WordPress admin protection
+    nginx.ingress.kubernetes.io/server-snippet: |
+      # Security for WordPress admin
+      location ~* /wp-admin/includes {
+        deny all;
+      }
+      location ~* /wp-includes/[^/]+\.php$ {
+        deny all;
+      }
+      location ~ ^/wp-content/uploads/.*\.php$ {
+        deny all;
+      }
+
+      # Cache static assets
+      location ~* \.(css|js|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        add_header Vary Accept-Encoding;
+        access_log off;
+      }
+
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - portfolio.xuperson.org
+      secretName: portfolio-tls  # Cert-manager will auto-create if available
+  rules:
+    - host: portfolio.xuperson.org
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: portfolio-wordpress
+                port:
+                  number: 80
