@@ -9,6 +9,7 @@ resources:
   - medusa-infisical-secrets.yaml
   - medusa-registry-secret.yaml
   - medusa-imagerepository.yaml
+  - medusa-imageupdate.yaml
   - medusa-postgresql.yaml
   - medusa-redis.yaml
   - medusa-deployment.yaml

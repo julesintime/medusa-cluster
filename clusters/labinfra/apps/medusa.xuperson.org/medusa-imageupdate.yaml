@@ -1,0 +1,27 @@
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta1
+kind: ImageUpdateAutomation
+metadata:
+  name: medusa-app
+  namespace: medusa
+spec:
+  interval: 5m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+    namespace: flux-system
+  git:
+    checkout:
+      ref:
+        branch: master
+    commit:
+      author:
+        email: flux@xuperson.org
+        name: Flux
+      messageTemplate: |
+        Update medusa image to {{range .Updated.Images}}{{println .}}{{end}}
+    push:
+      branch: master
+  update:
+    path: "./clusters/labinfra/apps/medusa.xuperson.org"
+    strategy: Setters

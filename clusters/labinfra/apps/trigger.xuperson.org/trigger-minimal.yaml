@@ -19,6 +19,7 @@ data:
   REDIS_PORT: "6379"
   DEPLOY_REGISTRY_HOST: "localhost:5001"
   COORDINATOR_HOST: "localhost"
+  CLICKHOUSE_URL: "http://localhost:8123"
   SKIP_CLICKHOUSE_MIGRATIONS: "true"
   SKIP_COORDINATOR_SETUP: "true"
 ---
@@ -88,7 +89,7 @@ spec:
     spec:
       containers:
       - name: clickhouse
-        image: clickhouse/clickhouse-server:24.1
+        image: clickhouse/clickhouse-server:latest
         ports:
         - containerPort: 8123
         - containerPort: 9000
@@ -98,6 +99,8 @@ spec:
         - name: CLICKHOUSE_PASSWORD
           value: ""
         - name: CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT
+          value: "1"
+        - name: CLICKHOUSE_ALLOW_EXPERIMENTAL_JSON_TYPE
           value: "1"
         volumeMounts:
         - name: clickhouse-storage

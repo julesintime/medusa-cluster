@@ -22,60 +22,9 @@ spec:
       serviceAccountName: medusa
       imagePullSecrets:
       - name: gitea-registry-secret
-      initContainers:
-      - name: wait-for-db
-        image: busybox:1.36
-        command:
-        - sh
-        - -c
-        - |
-          echo "Waiting for PostgreSQL..."
-          while ! nc -z medusa-postgresql 5432; do
-            sleep 1
-          done
-          echo "PostgreSQL is ready!"
-      - name: wait-for-redis
-        image: busybox:1.36
-        command:
-        - sh
-        - -c
-        - |
-          echo "Waiting for Redis..."
-          while ! nc -z medusa-redis 6379; do
-            sleep 1
-          done
-          echo "Redis is ready!"
-      - name: run-migrations
-        image: git.xuperson.org/helloroot/medusa-app:latest
-        imagePullPolicy: Always
-        command: ["sh", "-c", "NODE_ENV=development npx medusa db:create && npx medusa db:migrate || echo 'Migration attempted'"]
-        envFrom:
-        - configMapRef:
-            name: medusa-app-config
-        env:
-        - name: DATABASE_URL
-          valueFrom:
-            secretKeyRef:
-              name: medusa-secrets
-              key: database-url
-        - name: REDIS_URL
-          valueFrom:
-            secretKeyRef:
-              name: medusa-secrets
-              key: redis-url
-        - name: JWT_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: medusa-secrets
-              key: jwt-secret
-        - name: COOKIE_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: medusa-secrets
-              key: cookie-secret
       containers:
       - name: medusa
-        image: git.xuperson.org/helloroot/medusa-app:latest
+        image: git.xuperson.org/helloroot/medusa-app:latest # {"$imagepolicy": "medusa:medusa-app"}
         imagePullPolicy: Always
         ports:
         - name: http
