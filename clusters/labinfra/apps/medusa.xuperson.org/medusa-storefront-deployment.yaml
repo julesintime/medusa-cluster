@@ -16,6 +16,8 @@ spec:
         app: medusa-storefront
     spec:
       serviceAccountName: medusa
+      imagePullSecrets:
+      - name: gitea-registry-secret
       containers:
       - name: storefront
         image: git.xuperson.org/helloroot/medusa-storefront:main-900bb8b # {"$imagepolicy": "medusa:medusa-storefront-policy"}
