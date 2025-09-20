@@ -2,7 +2,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: medusa-build-job
+  name: medusa-docker-build
   namespace: medusa
 spec:
   template:
@@ -11,37 +11,42 @@ spec:
       serviceAccountName: medusa
       containers:
       - name: build-and-push
-        image: moby/buildkit:master
+        image: docker:dind
         command:
         - sh
         - -c
         - |
-          # Start buildkitd in background
-          buildkitd &
+          # Start Docker daemon
+          dockerd &
           sleep 10
           
+          # Install git
+          apk add --no-cache git
+          
           # Clone repository
-          apk add --no-cache git curl jq
           git clone https://git.xuperson.org/helloroot/medusa-app.git /workspace
           cd /workspace
           
-          # Get admin username and password from mounted secret
+          # Get admin credentials
           GITEA_USER=$(cat /etc/gitea-admin/username)
           GITEA_PASS=$(cat /etc/gitea-admin/password)
           
           # Login to registry
-          echo "$GITEA_PASS" | buildctl login --username "$GITEA_USER" --password-stdin git.xuperson.org
+          echo "$GITEA_PASS" | docker login git.xuperson.org -u "$GITEA_USER" --password-stdin
           
           # Get commit SHA for tagging
           COMMIT_SHA=$(git rev-parse --short HEAD)
           IMAGE_TAG="main-${COMMIT_SHA}"
           
-          # Build and push image with proper tag
-          buildctl build \
-            --frontend dockerfile.v0 \
-            --local context=. \
-            --local dockerfile=. \
-            --output type=image,name=git.xuperson.org/helloroot/medusa-app:${IMAGE_TAG},push=true,registry.insecure=true
+          # Build and push image with no cache
+          docker build --no-cache -t git.xuperson.org/helloroot/medusa-app:${IMAGE_TAG} .
+          docker push git.xuperson.org/helloroot/medusa-app:${IMAGE_TAG}
+          
+          # Also tag as latest
+          docker tag git.xuperson.org/helloroot/medusa-app:${IMAGE_TAG} git.xuperson.org/helloroot/medusa-app:latest
+          docker push git.xuperson.org/helloroot/medusa-app:latest
+          
+          echo "Successfully built and pushed: git.xuperson.org/helloroot/medusa-app:${IMAGE_TAG}"
         securityContext:
           privileged: true
         volumeMounts:
