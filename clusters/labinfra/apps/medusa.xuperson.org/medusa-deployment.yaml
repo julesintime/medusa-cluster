@@ -48,35 +48,7 @@ spec:
       - name: run-migrations
         image: git.xuperson.org/helloroot/medusa-app:latest
         imagePullPolicy: Always
-        command: ["sh", "-c", "npx medusa db:migrate"]
-        envFrom:
-        - configMapRef:
-            name: medusa-app-config
-        env:
-        - name: DATABASE_URL
-          valueFrom:
-            secretKeyRef:
-              name: medusa-secrets
-              key: database-url
-        - name: REDIS_URL
-          valueFrom:
-            secretKeyRef:
-              name: medusa-secrets
-              key: redis-url
-        - name: JWT_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: medusa-secrets
-              key: jwt-secret
-        - name: COOKIE_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: medusa-secrets
-              key: cookie-secret
-      - name: seed-database
-        image: git.xuperson.org/helloroot/medusa-app:latest
-        imagePullPolicy: Always
-        command: ["sh", "-c", "yarn seed || echo 'Seeding failed, continuing...'"]
+        command: ["sh", "-c", "NODE_ENV=development npx medusa db:create && npx medusa db:migrate || echo 'Migration attempted'"]
         envFrom:
         - configMapRef:
             name: medusa-app-config
