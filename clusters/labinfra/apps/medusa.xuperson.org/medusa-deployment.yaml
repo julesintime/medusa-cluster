@@ -23,7 +23,7 @@ spec:
       - name: gitea-registry-secret
       containers:
       - name: medusa
-        image: git.xuperson.org/helloroot/medusa-app:main-98bff6d # {"$imagepolicy": "medusa:medusa-app"}
+        image: git.xuperson.org/helloroot/medusa-app:main-fa6c8a9 # {"$imagepolicy": "medusa:medusa-app"}
         imagePullPolicy: Always
         ports:
         - name: http
