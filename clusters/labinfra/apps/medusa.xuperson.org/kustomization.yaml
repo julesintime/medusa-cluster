@@ -1,18 +1,16 @@
----
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: medusa
-
 resources:
   - medusa-namespace.yaml
   - medusa-rbac.yaml
   - medusa-infisical-secrets.yaml
   - medusa-registry-secret.yaml
-  - medusa-imagerepository.yaml
-  - medusa-imageupdate.yaml
-  - medusa-postgresql.yaml
-  - medusa-redis.yaml
-  - medusa-deployment.yaml
-  - medusa-service.yaml
+  - medusa-postgres-helmrelease.yaml
+  - medusa-backend-deployment.yaml
+  - medusa-storefront-deployment.yaml
+  - medusa-backend-service.yaml
+  - medusa-storefront-service.yaml
   - medusa-ingress.yaml
-  - medusa-app-configmap.yaml
+  - medusa-imagerepository.yaml
+  - medusa-imageupdateautomation.yaml

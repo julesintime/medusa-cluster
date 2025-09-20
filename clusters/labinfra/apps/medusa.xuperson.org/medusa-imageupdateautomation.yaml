@@ -1,11 +1,10 @@
----
-apiVersion: image.toolkit.fluxcd.io/v1beta2
+apiVersion: image.toolkit.fluxcd.io/v1beta1
 kind: ImageUpdateAutomation
 metadata:
-  name: medusa-app
+  name: medusa-image-update
   namespace: medusa
 spec:
-  interval: 5m
+  interval: 1m
   sourceRef:
     kind: GitRepository
     name: flux-system
@@ -19,7 +18,12 @@ spec:
         email: flux@xuperson.org
         name: Flux
       messageTemplate: |
-        Update medusa image to {{range .Updated.Images}}{{println .}}{{end}}
+        Update Medusa images
+        
+        Backend: {{ .medusa.medusa-backend-policy.identifier }}
+        Storefront: {{ .medusa.medusa-storefront-policy.identifier }}
+        
+        🤖 Automated image update by Flux
     push:
       branch: master
   update:

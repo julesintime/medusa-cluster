@@ -1,8 +1,7 @@
----
 apiVersion: v1
 kind: Namespace
 metadata:
   name: medusa
   labels:
-    app.kubernetes.io/name: medusa
-    app.kubernetes.io/component: namespace
+    name: medusa
+    app: medusa

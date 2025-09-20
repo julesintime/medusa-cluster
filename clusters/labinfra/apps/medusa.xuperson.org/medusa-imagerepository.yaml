@@ -1,26 +1,51 @@
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageRepository
+metadata:
+  name: medusa-backend
+  namespace: medusa
+spec:
+  image: git.xuperson.org/helloroot/medusa-backend
+  interval: 1m
+  secretRef:
+    name: medusa-registry-secret
 ---
 apiVersion: image.toolkit.fluxcd.io/v1beta2
 kind: ImageRepository
 metadata:
-  name: medusa-app
+  name: medusa-storefront
   namespace: medusa
 spec:
-  image: git.xuperson.org/helloroot/medusa-app
-  interval: 2m
+  image: git.xuperson.org/helloroot/medusa-storefront
+  interval: 1m
   secretRef:
-    name: gitea-registry-secret
+    name: medusa-registry-secret
 ---
 apiVersion: image.toolkit.fluxcd.io/v1beta2
 kind: ImagePolicy
 metadata:
-  name: medusa-app
+  name: medusa-backend-policy
   namespace: medusa
 spec:
   imageRepositoryRef:
-    name: medusa-app
+    name: medusa-backend
   policy:
     alphabetical:
       order: asc
   filterTags:
-    pattern: '^main-[a-f0-9]+$'
+    pattern: '^main-[a-f0-9]+'
+    extract: '$0'
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: medusa-storefront-policy
+  namespace: medusa
+spec:
+  imageRepositoryRef:
+    name: medusa-storefront
+  policy:
+    alphabetical:
+      order: asc
+  filterTags:
+    pattern: '^main-[a-f0-9]+'
     extract: '$0'

@@ -1,0 +1,77 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: medusa-fresh-app-config
+  namespace: gitea
+data:
+  README.md: |
+    # Medusa Fresh - Complete E-commerce Platform
+    
+    A production-ready, containerized e-commerce platform built with Medusa v2 and Next.js 15.
+    
+    ## Features
+    - Complete e-commerce backend with Medusa v2
+    - Modern Next.js 15 storefront
+    - Automated CI/CD with BuildKit
+    - Production-ready deployment
+    
+    ## Architecture
+    - **Backend**: Medusa API (Port 9000)
+    - **Storefront**: Next.js App (Port 3000)
+    - **Database**: PostgreSQL
+    - **Cache**: Redis
+    
+    ## URLs
+    - Storefront: https://medusa.xuperson.org
+    - Admin: https://medusa.xuperson.org/app
+  
+  package.json: |
+    {
+      "name": "medusa-fresh",
+      "version": "1.0.0", 
+      "description": "Complete e-commerce platform with Medusa v2 and Next.js 15",
+      "scripts": {
+        "backend": "cd my-medusa-store && npm run dev",
+        "storefront": "cd my-medusa-storefront && npm run dev",
+        "build:backend": "cd my-medusa-store && npm run build",
+        "build:storefront": "cd my-medusa-storefront && npm run build"
+      },
+      "keywords": ["medusa", "nextjs", "ecommerce", "kubernetes"],
+      "author": "Medusa Fresh Team",
+      "license": "MIT"
+    }
+  
+  docker-compose.yml: |
+    version: '3.8'
+    services:
+      backend:
+        build: ./my-medusa-store
+        ports:
+          - "9000:9000"
+        environment:
+          - NODE_ENV=development
+        depends_on:
+          - postgres
+          - redis
+      
+      storefront:
+        build: ./my-medusa-storefront  
+        ports:
+          - "3000:3000"
+        environment:
+          - NODE_ENV=development
+        depends_on:
+          - backend
+      
+      postgres:
+        image: postgres:15
+        environment:
+          - POSTGRES_PASSWORD=medusa
+          - POSTGRES_DB=medusa-store
+        ports:
+          - "5432:5432"
+      
+      redis:
+        image: redis:7-alpine
+        ports:
+          - "6379:6379"

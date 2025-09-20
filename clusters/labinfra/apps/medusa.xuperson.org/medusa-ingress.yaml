@@ -1,20 +1,12 @@
----
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: medusa
   namespace: medusa
-  labels:
-    app.kubernetes.io/name: medusa
-    app.kubernetes.io/component: ingress
   annotations:
     external-dns.alpha.kubernetes.io/hostname: "medusa.xuperson.org"
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/websocket-services: "medusa"
-    nginx.ingress.kubernetes.io/proxy-set-headers: "ingress-nginx/proxy-headers"
-    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
 spec:
   ingressClassName: nginx
   rules:
@@ -25,6 +17,33 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: medusa
+            name: medusa-storefront
             port:
               number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: medusa-backend
+  namespace: medusa
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: "medusa-api.xuperson.org"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://medusa.xuperson.org"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Authorization, Content-Type"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: medusa-api.xuperson.org
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: medusa-backend
+            port:
+              number: 9000

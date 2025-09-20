@@ -1,0 +1,7 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: gitea
+resources:
+  - medusa-fresh-app-configmap.yaml
+  - medusa-fresh-cicd-configmap.yaml
+  - medusa-fresh-repo-init-job.yaml

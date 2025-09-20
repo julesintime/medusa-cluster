@@ -13,6 +13,8 @@ resources:
   - buildkit
   # Deploy hello repository setup (creates demo repo with CI/CD workflow)
   - hello
+  # Deploy medusa-fresh repository setup (creates e-commerce repo with CI/CD workflow)
+  - medusa-fresh
 
 labels:
   - includeSelectors: false
