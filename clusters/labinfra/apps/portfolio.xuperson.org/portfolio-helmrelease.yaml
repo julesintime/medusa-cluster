@@ -32,6 +32,8 @@ spec:
       repository: helloroot/portfolio-app
       tag: "git.xuperson.org/helloroot/portfolio-app:main-3316b11" # {"$imagepolicy": "portfolio:portfolio-app"}
       pullPolicy: IfNotPresent
+      pullSecrets:
+        - gitea-registry-secret
     # WordPress Security Configuration
     existingSecret: portfolio-wordpress-secrets
     # WordPress Persistence - disabled temporarily for testing
