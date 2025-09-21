@@ -51,6 +51,22 @@ spec:
         memory: 1Gi
         cpu: 500m
 
+    # Security Context - fix tar permission errors
+    podSecurityContext:
+      fsGroup: 33  # www-data group
+      runAsUser: 33  # www-data user
+      runAsGroup: 33
+      runAsNonRoot: true
+
+    containerSecurityContext:
+      runAsUser: 33
+      runAsGroup: 33
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+
     # WordPress Service
     service:
       type: ClusterIP
