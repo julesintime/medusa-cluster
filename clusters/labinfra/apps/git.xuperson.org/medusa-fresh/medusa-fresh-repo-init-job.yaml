@@ -32,7 +32,7 @@ spec:
         
       containers:
       - name: setup-medusa-fresh-repo
-        image: alpine/curl:latest
+        image: alpine:3.19
         env:
         - name: REPO_NAME
           value: "medusa-fresh"
@@ -40,7 +40,10 @@ spec:
         args:
         - |
           set -e
-          
+
+          # Install required tools
+          apk add --no-cache curl git openssh-client
+
           echo "🚀 Setting up Medusa Fresh repository in Gitea..."
           
           # Get admin credentials from Kubernetes secrets
