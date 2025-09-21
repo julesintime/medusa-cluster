@@ -64,7 +64,7 @@ spec:
           echo "✅ Portfolio CI/CD secrets configured"
       containers:
       - name: repo-setup
-        image: bitnami/git:2.40
+        image: alpine:3.18
         env:
         - name: GITEA_URL
           value: "http://gitea-http.gitea.svc.cluster.local:3000"
@@ -77,6 +77,10 @@ spec:
         - -c
         - |
           set -e
+
+          # Install required tools
+          echo "📦 Installing curl and git..."
+          apk add --no-cache curl git
 
           echo "🚀 Initializing portfolio-app repository in Gitea..."
 
