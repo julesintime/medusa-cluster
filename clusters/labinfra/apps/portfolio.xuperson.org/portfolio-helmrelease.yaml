@@ -181,11 +181,6 @@ spec:
           runAsUser: 0  # Run as root for permission changes
 
   # Health check and dependencies
-  dependsOn:
-    - name: portfolio-registry-credentials
-      namespace: portfolio
-    - name: portfolio-secrets
-      namespace: portfolio
 
   # Post-install configuration
   postRenderers:
