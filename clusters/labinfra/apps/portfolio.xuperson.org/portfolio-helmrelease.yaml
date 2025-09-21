@@ -86,8 +86,8 @@ spec:
       failureThreshold: 6
       successThreshold: 1
 
-    # MySQL Configuration
-    mysql:
+    # MariaDB Database (MySQL alternative disabled)
+    mariadb:
       enabled: true
       auth:
         rootPassword: ""  # Will use existing secret
@@ -113,8 +113,8 @@ spec:
             memory: 512Mi
             cpu: 250m
 
-    # MariaDB alternative (if MySQL issues)
-    mariadb:
+    # MySQL (disabled in favor of MariaDB)
+    mysql:
       enabled: false
 
     # External Database (disabled since using internal MySQL)
