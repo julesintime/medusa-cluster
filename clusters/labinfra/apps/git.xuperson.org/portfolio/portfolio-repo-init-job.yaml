@@ -64,7 +64,7 @@ spec:
           echo "✅ Portfolio CI/CD secrets configured"
       containers:
       - name: repo-setup
-        image: alpine/curl:8.4.0
+        image: alpine/git:2.36.2
         env:
         - name: GITEA_URL
           value: "http://gitea-http.gitea.svc.cluster.local:3000"
