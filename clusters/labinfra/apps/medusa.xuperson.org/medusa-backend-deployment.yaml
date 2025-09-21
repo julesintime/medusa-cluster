@@ -36,16 +36,46 @@ spec:
         - containerPort: 9000
           name: http
 
-        envFrom:
-        - secretRef:
-            name: medusa-backend-secrets
-
         env:
+        - name: NODE_ENV
+          value: "production"
         - name: DATABASE_URL
+          value: "postgres://postgres:$(POSTGRES_PASSWORD)@medusa-postgres-postgresql:5432/medusa"
+        - name: REDIS_URL
+          value: "redis://localhost:6379"
+        - name: POSTGRES_PASSWORD
           valueFrom:
             secretKeyRef:
               name: medusa-postgres-secrets
               key: postgres-password
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: medusa-backend-secrets
+              key: jwt-secret
+        - name: COOKIE_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: medusa-backend-secrets
+              key: cookie-secret
+        - name: ADMIN_EMAIL
+          valueFrom:
+            secretKeyRef:
+              name: medusa-backend-secrets
+              key: admin-email
+        - name: ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: medusa-backend-secrets
+              key: admin-password
+        - name: STORE_CORS
+          value: "https://medusa.xuperson.org,http://localhost:3000"
+        - name: ADMIN_CORS
+          value: "https://medusa-api.xuperson.org,http://localhost:9000"
+        - name: AUTH_CORS
+          value: "https://medusa-api.xuperson.org,http://localhost:9000"
+        - name: MEDUSA_BACKEND_URL
+          value: "https://medusa-api.xuperson.org"
 
         livenessProbe:
           httpGet:
