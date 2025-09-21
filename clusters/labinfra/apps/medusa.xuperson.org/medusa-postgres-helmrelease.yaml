@@ -21,10 +21,8 @@ spec:
         auth:
           database: medusa
           username: medusa
-          existingSecret: medusa-postgres-secret
-          secretKeys:
-            adminPasswordKey: postgres-password
-            userPasswordKey: password
+          postgresPassword: postgres123
+          password: medusa123
 
     primary:
       persistence:
