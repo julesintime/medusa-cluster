@@ -38,13 +38,9 @@ spec:
     # WordPress Security Configuration
     existingSecret: portfolio-wordpress-secrets
 
-    # WordPress Persistence
+    # WordPress Persistence - disabled temporarily for testing
     persistence:
-      enabled: true
-      storageClass: "longhorn"
-      size: 10Gi
-      accessModes:
-        - ReadWriteOnce
+      enabled: false
 
     # WordPress Resources
     resources:
