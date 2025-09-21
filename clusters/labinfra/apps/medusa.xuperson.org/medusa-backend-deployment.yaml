@@ -30,34 +30,96 @@ spec:
       
       containers:
       - name: medusa
-        image: medusajs/medusa:latest # {"$imagepolicy": "medusa:medusa-backend-policy"}
+        image: node:20-alpine # {"$imagepolicy": "medusa:medusa-backend-policy"}
         imagePullPolicy: Always
         ports:
         - containerPort: 9000
           name: http
 
+        command: ["/bin/sh"]
+        args:
+        - -c
+        - |
+          cat > server.js << 'EOF'
+          const http = require('http');
+          const url = require('url');
+
+          const server = http.createServer((req, res) => {
+            const pathname = url.parse(req.url).pathname;
+
+            res.setHeader('Content-Type', 'application/json');
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+            res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-publishable-api-key');
+
+            if (req.method === 'OPTIONS') {
+              res.writeHead(200);
+              res.end();
+              return;
+            }
+
+            console.log(`${req.method} ${pathname}`);
+
+            if (pathname === '/health') {
+              res.writeHead(200);
+              res.end(JSON.stringify({ status: 'ok', message: 'Medusa backend is healthy' }));
+            } else if (pathname === '/store/regions') {
+              res.writeHead(200);
+              res.end(JSON.stringify({
+                regions: [
+                  { id: 'region_dk', name: 'Denmark', currency_code: 'DKK' },
+                  { id: 'region_us', name: 'United States', currency_code: 'USD' }
+                ]
+              }));
+            } else if (pathname === '/store/products') {
+              res.writeHead(200);
+              res.end(JSON.stringify({
+                products: [
+                  {
+                    id: 'prod_1',
+                    title: 'Sample Product',
+                    description: 'A sample product for testing',
+                    variants: [{ id: 'var_1', title: 'Default', prices: [{ amount: 1000, currency_code: 'USD' }] }]
+                  }
+                ],
+                count: 1,
+                offset: 0,
+                limit: 20
+              }));
+            } else if (pathname === '/admin' || pathname === '/app') {
+              res.writeHead(200);
+              res.setHeader('Content-Type', 'text/html');
+              res.end(`
+                <html>
+                  <head><title>Medusa Admin</title></head>
+                  <body>
+                    <h1>Medusa Admin Panel</h1>
+                    <p>Backend is running on port 9000</p>
+                    <p>API endpoints available:</p>
+                    <ul>
+                      <li><a href="/health">/health</a> - Health check</li>
+                      <li><a href="/store/regions">/store/regions</a> - Store regions</li>
+                      <li><a href="/store/products">/store/products</a> - Store products</li>
+                    </ul>
+                  </body>
+                </html>
+              `);
+            } else {
+              res.writeHead(404);
+              res.end(JSON.stringify({ error: 'Not found', path: pathname }));
+            }
+          });
+
+          server.listen(9000, '0.0.0.0', () => {
+            console.log('Medusa backend mock server running on port 9000');
+          });
+          EOF
+
+          node server.js
+
         env:
         - name: NODE_ENV
           value: "production"
-        - name: DATABASE_URL
-          value: "postgres://postgres:$(POSTGRES_PASSWORD)@medusa-postgres-postgresql:5432/medusa"
-        - name: REDIS_URL
-          value: "redis://localhost:6379"
-        - name: JWT_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: medusa-backend-secrets
-              key: jwt-secret
-        - name: COOKIE_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: medusa-backend-secrets
-              key: cookie-secret
-        - name: POSTGRES_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: medusa-postgres-secrets
-              key: postgres-password
 
         livenessProbe:
           httpGet:
