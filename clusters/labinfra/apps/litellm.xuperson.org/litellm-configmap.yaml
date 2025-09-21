@@ -14,7 +14,7 @@ data:
       # Default model - stealth/sonoma-dusk-alpha
       - model_name: "stealth/sonoma-dusk-alpha"
         litellm_params:
-          model: "ai-gateway/stealth/sonoma-dusk-alpha"
+          model: "openai/stealth/sonoma-dusk-alpha"
           api_key: "os.environ/VERCEL_AI_GATEWAY_API_KEY"
           api_base: "https://gateway.ai.vercel.app/v1"
           rpm: 20
@@ -26,7 +26,7 @@ data:
       # Fast model - stealth/sonoma-sky-alpha
       - model_name: "stealth/sonoma-sky-alpha"
         litellm_params:
-          model: "ai-gateway/stealth/sonoma-sky-alpha"
+          model: "openai/stealth/sonoma-sky-alpha"
           api_key: "os.environ/VERCEL_AI_GATEWAY_API_KEY"
           api_base: "https://gateway.ai.vercel.app/v1"
           rpm: 30
@@ -35,133 +35,15 @@ data:
           health_check_timeout: 8
           cooldown_time: 30
 
-      # === SPECIFIC MODEL ROUTING ===
-      # Direct routing to specific models when requested by exact name
-      
-      # Gemini 2.5 Pro - Enhanced thinking and reasoning
-      - model_name: "gemini-2.5-pro"
-        litellm_params:
-          model: "gemini/gemini-2.5-pro"
-          api_key: "os.environ/GEMINI_KEY_1"
-          rpm: 5
-          tpm: 250000
-        model_info:
-          health_check_timeout: 15               # Extended timeout for large models
-          cooldown_time: 180                     # 3min cooldown for daily quota rotation
-      - model_name: "gemini-2.5-pro"
-        litellm_params:
-          model: "gemini/gemini-2.5-pro"
-          api_key: "os.environ/GEMINI_KEY_2"
-          rpm: 5
-          tpm: 250000
-        model_info:
-          health_check_timeout: 15
-          cooldown_time: 180
-          
-      # Gemini 2.5 Flash - Adaptive thinking, cost efficient
-      - model_name: "gemini-2.5-flash"
-        litellm_params:
-          model: "gemini/gemini-2.5-flash"
-          api_key: "os.environ/GEMINI_KEY_1"
-          rpm: 10
-          tpm: 250000
-        model_info:
-          health_check_timeout: 10
-          cooldown_time: 120                    # 20min cooldown for quota issues
-      - model_name: "gemini-2.5-flash"
-        litellm_params:
-          model: "gemini/gemini-2.5-flash"
-          api_key: "os.environ/GEMINI_KEY_2"
-          rpm: 10
-          tpm: 250000
-        model_info:
-          health_check_timeout: 10
-          cooldown_time: 120
-          
-      # Gemini 2.5 Flash-Lite - Most cost-efficient
-      - model_name: "gemini-2.5-flash-lite"
-        litellm_params:
-          model: "gemini/gemini-2.5-flash-lite"
-          api_key: "os.environ/GEMINI_KEY_1"
-          rpm: 15
-          tpm: 250000
-        model_info:
-          health_check_timeout: 8
-          cooldown_time: 90                     # 15min cooldown
-      - model_name: "gemini-2.5-flash-lite"
-        litellm_params:
-          model: "gemini/gemini-2.5-flash-lite"
-          api_key: "os.environ/GEMINI_KEY_2"
-          rpm: 15
-          tpm: 250000
-        model_info:
-          health_check_timeout: 8
-          cooldown_time: 90
-          
-      # Gemini 2.0 Flash - High throughput
-      - model_name: "gemini-2.0-flash"
-        litellm_params:
-          model: "gemini/gemini-2.0-flash"
-          api_key: "os.environ/GEMINI_KEY_1"
-          rpm: 15
-          tpm: 1000000
-        model_info:
-          health_check_timeout: 8
-          cooldown_time: 60                     # 10min cooldown
-      - model_name: "gemini-2.0-flash"
-        litellm_params:
-          model: "gemini/gemini-2.0-flash"
-          api_key: "os.environ/GEMINI_KEY_2"
-          rpm: 15
-          tpm: 1000000
-        model_info:
-          health_check_timeout: 8
-          cooldown_time: 60
-          
-      # Gemini 2.0 Flash Experimental - Higher rate limits (correct model ID)
-      - model_name: "gemini-2.0-flash-lite"
-        litellm_params:
-          model: "gemini/gemini-2.0-flash-exp"
-          api_key: "os.environ/GEMINI_KEY_1"
-          rpm: 15
-          tpm: 1000000
-        model_info:
-          health_check_timeout: 8
-          cooldown_time: 60                     # 10min cooldown
-      - model_name: "gemini-2.0-flash-lite"
-        litellm_params:
-          model: "gemini/gemini-2.0-flash-exp"
-          api_key: "os.environ/GEMINI_KEY_2"
-          rpm: 15
-          tpm: 1000000
-        model_info:
-          health_check_timeout: 8
-          cooldown_time: 60
-          
-          
-      # === WILDCARD ROUTING (Gemini only - excludes Gemma) ===
-      # Only matches gemini-2.x models, NOT gemma models (no tool calling support)
-      - model_name: "gemini-2*"
-        litellm_params:
-          model: "gemini/gemini-2.5-flash"
-          api_key: "os.environ/GEMINI_KEY_1"
-        model_info:
-          health_check_timeout: 10
-          cooldown_time: 60                     # 5min cooldown for wildcards
-      - model_name: "gemini-2*"
-        litellm_params:
-          model: "gemini/gemini-2.5-flash"
-          api_key: "os.environ/GEMINI_KEY_2"
-        model_info:
-          health_check_timeout: 10
-          cooldown_time: 60
+      # === GEMINI MODELS TEMPORARILY DISABLED ===
+      # All Gemini models are disabled - using only Sonoma models via AI Gateway
           
       # === DEFAULT ROTATION POOL ===
       # "gpt-4" and catch-all models now use AI Gateway stealth/sonoma models
 
       - model_name: "gpt-4"
         litellm_params:
-          model: "ai-gateway/stealth/sonoma-dusk-alpha"
+          model: "openai/stealth/sonoma-dusk-alpha"
           api_key: "os.environ/VERCEL_AI_GATEWAY_API_KEY"
           api_base: "https://gateway.ai.vercel.app/v1"
           rpm: 20
@@ -172,7 +54,7 @@ data:
 
       - model_name: "gpt-4"
         litellm_params:
-          model: "ai-gateway/stealth/sonoma-sky-alpha"
+          model: "openai/stealth/sonoma-sky-alpha"
           api_key: "os.environ/VERCEL_AI_GATEWAY_API_KEY"
           api_base: "https://gateway.ai.vercel.app/v1"
           rpm: 30
