@@ -30,25 +30,48 @@ spec:
       
       containers:
       - name: medusa
-        image: nginx:alpine # {"$imagepolicy": "medusa:medusa-backend-policy"}
+        image: medusajs/medusa:latest # {"$imagepolicy": "medusa:medusa-backend-policy"}
         imagePullPolicy: Always
         ports:
-        - containerPort: 80
+        - containerPort: 9000
           name: http
-        
+
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: DATABASE_URL
+          value: "postgres://postgres:$(POSTGRES_PASSWORD)@medusa-postgres-postgresql:5432/medusa"
+        - name: REDIS_URL
+          value: "redis://localhost:6379"
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: medusa-backend-secrets
+              key: jwt-secret
+        - name: COOKIE_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: medusa-backend-secrets
+              key: cookie-secret
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: medusa-postgres-secrets
+              key: postgres-password
+
         livenessProbe:
           httpGet:
-            path: /
-            port: 80
-          initialDelaySeconds: 10
+            path: /health
+            port: 9000
+          initialDelaySeconds: 60
           periodSeconds: 30
-          timeoutSeconds: 5
+          timeoutSeconds: 10
 
         readinessProbe:
           httpGet:
-            path: /
-            port: 80
-          initialDelaySeconds: 5
+            path: /health
+            port: 9000
+          initialDelaySeconds: 30
           periodSeconds: 10
           timeoutSeconds: 5
         
