@@ -2,7 +2,7 @@
 apiVersion: tekton.dev/v1beta1
 kind: PipelineRun
 metadata:
-  generateName: medusa-build-run-
+  name: medusa-build-run-initial
   namespace: medusa
 spec:
   pipelineRef:

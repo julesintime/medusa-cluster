@@ -36,24 +36,28 @@ spec:
   tasks:
   - name: fetch-source
     taskRef:
-      name: git-clone
-      kind: ClusterTask
+      name: medusa-git-clone
     workspaces:
-    - name: output
+    - name: source
       workspace: shared-data
     params:
     - name: url
       value: $(params.git-url)
     - name: revision
       value: $(params.git-revision)
-    - name: deleteExisting
-      value: "true"
 
-  - name: build-push
+  - name: create-dockerfile
     runAfter: ["fetch-source"]
     taskRef:
-      name: buildah
-      kind: ClusterTask
+      name: medusa-dockerfile-creator
+    workspaces:
+    - name: source
+      workspace: shared-data
+
+  - name: build-push
+    runAfter: ["create-dockerfile"]
+    taskRef:
+      name: medusa-buildah
     workspaces:
     - name: source
       workspace: shared-data
@@ -61,15 +65,55 @@ spec:
       workspace: docker-credentials
     params:
     - name: IMAGE
-      value: $(params.image-registry)/$(params.image-name):$(tasks.fetch-source.results.commit)
+      value: $(params.image-registry)/$(params.image-name):latest
     - name: DOCKERFILE
       value: ./Dockerfile
     - name: CONTEXT
       value: .
-    - name: TLSVERIFY
-      value: "false"
-    - name: BUILD_EXTRA_ARGS
-      value: "--build-arg NODE_ENV=production"
+
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: medusa-git-clone
+  namespace: medusa
+spec:
+  description: Clone git repository
+  params:
+  - name: url
+    description: Repository URL to clone from
+    type: string
+  - name: revision
+    description: Revision to checkout
+    type: string
+    default: "master"
+
+  workspaces:
+  - name: source
+    description: The workspace where the git repository will be cloned
+
+  results:
+  - name: commit
+    description: The precise commit SHA that was checked out
+
+  steps:
+  - name: clone
+    image: alpine/git:latest
+    workingDir: $(workspaces.source.path)
+    script: |
+      #!/bin/sh
+      set -eu
+
+      echo "Cloning $(params.url) @ $(params.revision)"
+
+      # Clean directory
+      rm -rf ./*
+
+      git clone --depth=1 --branch=$(params.revision) $(params.url) .
+
+      RESULT_SHA="$(git rev-parse HEAD)"
+      echo -n "$RESULT_SHA" > "$(results.commit.path)"
+      echo "Clone completed successfully. Commit: $RESULT_SHA"
 
 ---
 apiVersion: tekton.dev/v1beta1
@@ -138,6 +182,67 @@ spec:
       else
         echo "Dockerfile already exists"
       fi
+
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: medusa-buildah
+  namespace: medusa
+spec:
+  description: Build and push container image using Buildah
+  params:
+  - name: IMAGE
+    description: Reference of the image buildah will produce
+    type: string
+  - name: DOCKERFILE
+    description: Path to the Dockerfile to build
+    type: string
+    default: ./Dockerfile
+  - name: CONTEXT
+    description: Path to the directory to use as context
+    type: string
+    default: .
+
+  workspaces:
+  - name: source
+    description: Workspace containing the source to build
+  - name: dockerconfig
+    description: Docker config directory
+    optional: true
+
+  steps:
+  - name: build-and-push
+    image: quay.io/buildah/stable:latest
+    workingDir: $(workspaces.source.path)
+    securityContext:
+      privileged: true
+    script: |
+      #!/bin/bash
+      set -eu
+
+      # Build the image
+      buildah bud \
+        --format=oci \
+        --tls-verify=false \
+        --no-cache \
+        -f $(params.DOCKERFILE) \
+        -t $(params.IMAGE) \
+        $(params.CONTEXT)
+
+      # Push the image
+      buildah push \
+        --tls-verify=false \
+        $(params.IMAGE)
+
+      echo "Image built and pushed: $(params.IMAGE)"
+    volumeMounts:
+    - name: varlibcontainers
+      mountPath: /var/lib/containers
+
+  volumes:
+  - name: varlibcontainers
+    emptyDir: {}
 
 ---
 apiVersion: v1
