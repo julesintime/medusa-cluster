@@ -28,14 +28,12 @@ spec:
     wordpressBlogName: "Avada Portfolio"
     wordpressTablePrefix: wp_
 
-    # Custom WordPress Image (our CI/CD built image)
+    # Standard WordPress Image (temporary until CI/CD builds custom image)
     image:
-      registry: git.xuperson.org
-      repository: helloroot/portfolio-app
-      tag: main-abc123  # {"$imagepolicy": "portfolio:portfolio-app"}
-      pullPolicy: Always
-      pullSecrets:
-        - gitea-registry-secret
+      registry: docker.io
+      repository: wordpress
+      tag: "6.4-php8.1-apache"
+      pullPolicy: IfNotPresent
 
     # WordPress Security Configuration
     existingSecret: portfolio-wordpress-secrets
