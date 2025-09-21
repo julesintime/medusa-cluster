@@ -17,14 +17,3 @@ commonLabels:
   app.kubernetes.io/name: portfolio
   app.kubernetes.io/part-of: portfolio-wordpress
   app.kubernetes.io/managed-by: flux
-
-# Resource ordering to ensure dependencies
-patches:
-  - target:
-      kind: HelmRelease
-      name: portfolio-wordpress
-    patch: |-
-      - op: add
-        path: /metadata/annotations
-        value:
-          kustomize.toolkit.fluxcd.io/depends-on: "portfolio/portfolio-registry-credentials,portfolio/portfolio-secrets"

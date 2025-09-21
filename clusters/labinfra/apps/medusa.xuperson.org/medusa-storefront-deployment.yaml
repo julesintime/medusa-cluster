@@ -20,7 +20,7 @@ spec:
       - name: gitea-registry-secret
       containers:
       - name: storefront
-        image: git.xuperson.org/helloroot/medusa-storefront:main-900bb8b # {"$imagepolicy": "medusa:medusa-storefront-policy"}
+        image: nginx:alpine # {"$imagepolicy": "medusa:medusa-storefront-policy"}
         imagePullPolicy: Always
         ports:
         - containerPort: 3000
