@@ -5,11 +5,7 @@ namespace: medusa
 
 resources:
   - medusa-namespace.yaml
-  - medusa-tekton-pipeline.yaml
-  - medusa-tekton-pipelinerun.yaml
   - medusa-postgres-helmrelease.yaml
   - medusa-redis-helmrelease.yaml
-  - medusa-infisical-secrets.yaml
-  - medusa-simple-deployment.yaml
+  - medusa-powerful.yaml
   - medusa-ingress.yaml
-  - medusa-hpa.yaml
