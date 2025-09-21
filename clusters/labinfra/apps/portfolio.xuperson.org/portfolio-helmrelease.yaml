@@ -96,8 +96,8 @@ spec:
         database: wordpress
         existingSecret: portfolio-mysql-secrets
         secretKeys:
-          adminPasswordKey: mysql-root-password
-          userPasswordKey: mysql-password
+          adminPasswordKey: mariadb-root-password
+          userPasswordKey: mariadb-password
 
       primary:
         persistence:
