@@ -32,27 +32,6 @@ metadata:
     nginx.ingress.kubernetes.io/rate-limit-connections: "10"
     nginx.ingress.kubernetes.io/rate-limit-requests-per-minute: "60"
 
-    # WordPress admin protection
-    nginx.ingress.kubernetes.io/server-snippet: |
-      # Security for WordPress admin
-      location ~* /wp-admin/includes {
-        deny all;
-      }
-      location ~* /wp-includes/[^/]+\.php$ {
-        deny all;
-      }
-      location ~ ^/wp-content/uploads/.*\.php$ {
-        deny all;
-      }
-
-      # Cache static assets
-      location ~* \.(css|js|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
-        expires 1y;
-        add_header Cache-Control "public, immutable";
-        add_header Vary Accept-Encoding;
-        access_log off;
-      }
-
 spec:
   ingressClassName: nginx
   tls:
