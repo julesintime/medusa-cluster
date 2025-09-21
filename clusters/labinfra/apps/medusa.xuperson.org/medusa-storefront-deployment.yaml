@@ -16,8 +16,6 @@ spec:
         app: medusa-storefront
     spec:
       serviceAccountName: medusa
-      imagePullSecrets:
-      - name: gitea-registry-secret
       containers:
       - name: storefront
         image: nginx:alpine # {"$imagepolicy": "medusa:medusa-storefront-policy"}
