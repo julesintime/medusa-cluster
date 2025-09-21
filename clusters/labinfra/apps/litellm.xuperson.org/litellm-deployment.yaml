@@ -6,7 +6,7 @@ metadata:
   labels:
     app: litellm
 spec:
-  replicas: 0  # Temporarily disabled due to deployment failures
+  replicas: 1  # Enabled with AI Gateway support
   selector:
     matchLabels:
       app: litellm
@@ -37,11 +37,16 @@ spec:
         env:
         - name: STORE_MODEL_IN_DB
           value: "True"
-        # Add startup probe for better bootstrap coordination  
+        # Add startup probe for better bootstrap coordination
         - name: LITELLM_LOG_LEVEL
           value: "INFO"
         - name: WORKERS
           value: "1"
+        # AI Gateway model references
+        - name: AI_GATEWAY_LLM_MODEL_FAST
+          value: "stealth/sonoma-sky-alpha"
+        - name: AI_GATEWAY_LLM_MODEL
+          value: "stealth/sonoma-dusk-alpha"
         envFrom:
         - secretRef:
             name: litellm-secrets

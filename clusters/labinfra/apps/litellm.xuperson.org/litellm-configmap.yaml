@@ -6,8 +6,35 @@ metadata:
 data:
   config.yaml: |
     # Advanced routing: specific models, wildcards, and default rotation with fallbacks
-    model_list: 
-      
+    model_list:
+
+      # === AI GATEWAY MODELS (PRIMARY) ===
+      # Vercel AI Gateway - stealth/sonoma models with fallback routing
+
+      # Default model - stealth/sonoma-dusk-alpha
+      - model_name: "stealth/sonoma-dusk-alpha"
+        litellm_params:
+          model: "ai-gateway/stealth/sonoma-dusk-alpha"
+          api_key: "os.environ/VERCEL_AI_GATEWAY_API_KEY"
+          api_base: "https://gateway.ai.vercel.app/v1"
+          rpm: 20
+          tpm: 1000000
+        model_info:
+          health_check_timeout: 10
+          cooldown_time: 60
+
+      # Fast model - stealth/sonoma-sky-alpha
+      - model_name: "stealth/sonoma-sky-alpha"
+        litellm_params:
+          model: "ai-gateway/stealth/sonoma-sky-alpha"
+          api_key: "os.environ/VERCEL_AI_GATEWAY_API_KEY"
+          api_base: "https://gateway.ai.vercel.app/v1"
+          rpm: 30
+          tpm: 1000000
+        model_info:
+          health_check_timeout: 8
+          cooldown_time: 30
+
       # === SPECIFIC MODEL ROUTING ===
       # Direct routing to specific models when requested by exact name
       
@@ -130,102 +157,29 @@ data:
           cooldown_time: 60
           
       # === DEFAULT ROTATION POOL ===
-      # "gpt-4" and catch-all models rotate through all available models
-      
+      # "gpt-4" and catch-all models now use AI Gateway stealth/sonoma models
+
       - model_name: "gpt-4"
         litellm_params:
-          model: "gemini/gemini-2.5-pro"
-          api_key: "os.environ/GEMINI_KEY_1"
-          rpm: 5
-          tpm: 250000
-        model_info:
-          health_check_timeout: 15
-          cooldown_time: 180
-      - model_name: "gpt-4"
-        litellm_params:
-          model: "gemini/gemini-2.5-pro"
-          api_key: "os.environ/GEMINI_KEY_2"
-          rpm: 5
-          tpm: 250000
-        model_info:
-          health_check_timeout: 15
-          cooldown_time: 180
-          
-      - model_name: "gpt-4"
-        litellm_params:
-          model: "gemini/gemini-2.5-flash"
-          api_key: "os.environ/GEMINI_KEY_1"
-          rpm: 10
-          tpm: 250000
+          model: "ai-gateway/stealth/sonoma-dusk-alpha"
+          api_key: "os.environ/VERCEL_AI_GATEWAY_API_KEY"
+          api_base: "https://gateway.ai.vercel.app/v1"
+          rpm: 20
+          tpm: 1000000
         model_info:
           health_check_timeout: 10
-          cooldown_time: 120
+          cooldown_time: 60
+
       - model_name: "gpt-4"
         litellm_params:
-          model: "gemini/gemini-2.5-flash"
-          api_key: "os.environ/GEMINI_KEY_2"
-          rpm: 10
-          tpm: 250000
-        model_info:
-          health_check_timeout: 10
-          cooldown_time: 120
-          
-      - model_name: "gpt-4"
-        litellm_params:
-          model: "gemini/gemini-2.5-flash-lite"
-          api_key: "os.environ/GEMINI_KEY_1"
-          rpm: 15
-          tpm: 250000
-        model_info:
-          health_check_timeout: 8
-          cooldown_time: 90
-      - model_name: "gpt-4"
-        litellm_params:
-          model: "gemini/gemini-2.5-flash-lite"
-          api_key: "os.environ/GEMINI_KEY_2"
-          rpm: 15
-          tpm: 250000
-        model_info:
-          health_check_timeout: 8
-          cooldown_time: 90
-          
-      - model_name: "gpt-4"
-        litellm_params:
-          model: "gemini/gemini-2.0-flash"
-          api_key: "os.environ/GEMINI_KEY_1"
-          rpm: 15
+          model: "ai-gateway/stealth/sonoma-sky-alpha"
+          api_key: "os.environ/VERCEL_AI_GATEWAY_API_KEY"
+          api_base: "https://gateway.ai.vercel.app/v1"
+          rpm: 30
           tpm: 1000000
         model_info:
           health_check_timeout: 8
-          cooldown_time: 60
-      - model_name: "gpt-4"
-        litellm_params:
-          model: "gemini/gemini-2.0-flash"
-          api_key: "os.environ/GEMINI_KEY_2"
-          rpm: 15
-          tpm: 1000000
-        model_info:
-          health_check_timeout: 8
-          cooldown_time: 60
-          
-      - model_name: "gpt-4"
-        litellm_params:
-          model: "gemini/gemini-2.0-flash-exp"
-          api_key: "os.environ/GEMINI_KEY_1"
-          rpm: 15
-          tpm: 1000000
-        model_info:
-          health_check_timeout: 8
-          cooldown_time: 60
-      - model_name: "gpt-4"
-        litellm_params:
-          model: "gemini/gemini-2.0-flash-exp"
-          api_key: "os.environ/GEMINI_KEY_2"
-          rpm: 15
-          tpm: 1000000
-        model_info:
-          health_check_timeout: 8
-          cooldown_time: 60
+          cooldown_time: 30
           
     
     # Optimized router settings for daily quota management
@@ -259,26 +213,40 @@ data:
         "BadRequestErrorAllowedFails": 0       # Immediate permanent cooldown for Gemma
         "AuthenticationErrorAllowedFails": 0   # Immediate permanent cooldown for auth
     
-    # Advanced fallback configuration
+    # Advanced fallback configuration - ALL MODELS FALLBACK TO SONOMA
     litellm_settings:
-      # Specific model fallbacks - fall back to gpt-4 rotation pool (tool-calling models only)
-      fallbacks: 
-        - "gemini-2.5-pro": ["gpt-4"]
-        - "gemini-2.5-flash": ["gpt-4"] 
-        - "gemini-2.5-flash-lite": ["gpt-4"]
-        - "gemini-2.0-flash": ["gpt-4"]
-        - "gemini-2.0-flash-lite": ["gpt-4"]
-        - "gemini/*": ["gpt-4"]                  # Wildcard fallback to rotation
-      
-      # Default fallback for any unrecognized model
-      default_fallbacks: ["gpt-4"]
+      # All models fallback to AI Gateway stealth/sonoma models
+      fallbacks:
+        # Specific model fallbacks
+        - "gemini-2.5-pro": ["stealth/sonoma-dusk-alpha"]
+        - "gemini-2.5-flash": ["stealth/sonoma-dusk-alpha"]
+        - "gemini-2.5-flash-lite": ["stealth/sonoma-sky-alpha"]
+        - "gemini-2.0-flash": ["stealth/sonoma-sky-alpha"]
+        - "gemini-2.0-flash-lite": ["stealth/sonoma-sky-alpha"]
+        - "gemini/*": ["stealth/sonoma-dusk-alpha"]
+        # GPT models fallback to sonoma
+        - "gpt-3.5-turbo": ["stealth/sonoma-sky-alpha"]
+        - "gpt-4-turbo": ["stealth/sonoma-dusk-alpha"]
+        - "gpt-4o": ["stealth/sonoma-dusk-alpha"]
+        - "gpt-4o-mini": ["stealth/sonoma-sky-alpha"]
+        - "gpt/*": ["stealth/sonoma-dusk-alpha"]
+        # Anthropic models fallback to sonoma
+        - "claude-3-opus": ["stealth/sonoma-dusk-alpha"]
+        - "claude-3-sonnet": ["stealth/sonoma-dusk-alpha"]
+        - "claude-3-haiku": ["stealth/sonoma-sky-alpha"]
+        - "claude-3.5-sonnet": ["stealth/sonoma-dusk-alpha"]
+        - "claude/*": ["stealth/sonoma-dusk-alpha"]
+        - "anthropic/*": ["stealth/sonoma-dusk-alpha"]
+
+      # Default fallback for any unrecognized model - uses sonoma-dusk-alpha as primary
+      default_fallbacks: ["stealth/sonoma-dusk-alpha"]
       
       # Fallback error conditions - trigger fallbacks on quota/rate limit errors
       context_window_fallbacks: [
-        {"RateLimitError": ["gpt-4"]},
-        {"ResourceExhaustedError": ["gpt-4"]}, 
-        {"ServiceUnavailableError": ["gpt-4"]},
-        {"QuotaExceededError": ["gpt-4"]}
+        {"RateLimitError": ["stealth/sonoma-dusk-alpha"]},
+        {"ResourceExhaustedError": ["stealth/sonoma-dusk-alpha"]},
+        {"ServiceUnavailableError": ["stealth/sonoma-dusk-alpha"]},
+        {"QuotaExceededError": ["stealth/sonoma-dusk-alpha"]}
       ]
       
       # General settings
