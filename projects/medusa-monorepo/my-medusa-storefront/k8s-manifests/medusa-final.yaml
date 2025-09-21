@@ -1,0 +1,198 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: medusa-backend-app
+  namespace: medusa
+data:
+  package.json: |
+    {
+      "name": "medusa-backend",
+      "version": "1.0.0",
+      "description": "Medusa Backend",
+      "main": "index.js",
+      "scripts": {
+        "start": "medusa start",
+        "dev": "medusa develop"
+      },
+      "dependencies": {
+        "@medusajs/medusa": "^2.0.0",
+        "@medusajs/admin": "latest",
+        "typeorm": "^0.3.17",
+        "pg": "^8.11.3"
+      }
+    }
+  medusa-config.js: |
+    module.exports = {
+      projectConfig: {
+        redis_url: process.env.REDIS_URL,
+        database_url: process.env.DATABASE_URL || "postgres://medusa:medusa@medusa-postgresql:5432/medusa",
+        database_type: "postgres",
+        store_cors: process.env.STORE_CORS || "https://medusa.xuperson.org",
+        admin_cors: process.env.ADMIN_CORS || "https://medusa.xuperson.org",
+        jwt_secret: process.env.JWT_SECRET || "supersecret",
+        cookie_secret: process.env.COOKIE_SECRET || "supersecret"
+      },
+      plugins: []
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medusa-backend
+  namespace: medusa
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: medusa-backend
+  template:
+    metadata:
+      labels:
+        app: medusa-backend
+    spec:
+      containers:
+      - name: medusa
+        image: node:18-alpine
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          cd /app
+          npm install @medusajs/medusa @medusajs/admin pg typeorm
+          npx medusa migrations run || true
+          npx medusa start
+        ports:
+        - containerPort: 9000
+        env:
+        - name: DATABASE_URL
+          value: "postgres://medusa:medusa@medusa-postgresql:5432/medusa"
+        - name: NODE_ENV
+          value: "production"
+        - name: JWT_SECRET
+          value: "supersecret-change-in-production"
+        - name: COOKIE_SECRET
+          value: "supersecret-change-in-production"
+        - name: STORE_CORS
+          value: "https://medusa.xuperson.org"
+        - name: ADMIN_CORS
+          value: "https://medusa.xuperson.org"
+        volumeMounts:
+        - name: app-config
+          mountPath: /app
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+      volumes:
+      - name: app-config
+        configMap:
+          name: medusa-backend-app
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: medusa-storefront-app
+  namespace: medusa
+data:
+  index.html: |
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Medusa Store</title>
+      <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #f5f5f5; }
+        .header { background: #5c6ac4; color: white; padding: 20px; text-align: center; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 40px 20px; }
+        .product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; margin-top: 40px; }
+        .product-card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .product-card h3 { margin: 0 0 10px 0; color: #333; }
+        .product-card p { color: #666; margin: 10px 0; }
+        .price { font-size: 20px; font-weight: bold; color: #5c6ac4; }
+        .btn { background: #5c6ac4; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; }
+        .btn:hover { background: #4a5ac2; }
+        .status { background: #4CAF50; color: white; padding: 10px; border-radius: 4px; margin-bottom: 20px; }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <h1>🛍️ Medusa Store</h1>
+        <p>Your Modern E-Commerce Platform</p>
+      </div>
+      <div class="container">
+        <div class="status">
+          ✅ Storefront is running at <strong>medusa.xuperson.org</strong>
+        </div>
+        <h2>Welcome to Your Store</h2>
+        <p>This is the Medusa storefront. The backend API is available at <a href="https://medusa-api.xuperson.org/health">medusa-api.xuperson.org</a></p>
+        
+        <div class="product-grid" id="products">
+          <div class="product-card">
+            <h3>Sample Product 1</h3>
+            <p>High-quality product description</p>
+            <p class="price">$29.99</p>
+            <button class="btn">Add to Cart</button>
+          </div>
+          <div class="product-card">
+            <h3>Sample Product 2</h3>
+            <p>Another amazing product</p>
+            <p class="price">$49.99</p>
+            <button class="btn">Add to Cart</button>
+          </div>
+          <div class="product-card">
+            <h3>Sample Product 3</h3>
+            <p>Premium quality guaranteed</p>
+            <p class="price">$79.99</p>
+            <button class="btn">Add to Cart</button>
+          </div>
+        </div>
+        
+        <div style="margin-top: 40px; padding: 20px; background: white; border-radius: 8px;">
+          <h3>API Status</h3>
+          <p>Backend API: <span id="api-status">Checking...</span></p>
+          <p>Admin Panel: Available at <a href="https://medusa-api.xuperson.org/admin">medusa-api.xuperson.org/admin</a></p>
+        </div>
+      </div>
+      <script>
+        // Check backend API status
+        fetch('https://medusa-api.xuperson.org/health')
+          .then(response => {
+            document.getElementById('api-status').innerHTML = response.ok ? 
+              '<span style="color: green;">✅ Online</span>' : 
+              '<span style="color: orange;">⏳ Starting up...</span>';
+          })
+          .catch(() => {
+            document.getElementById('api-status').innerHTML = '<span style="color: orange;">⏳ Starting up...</span>';
+          });
+      </script>
+    </body>
+    </html>
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medusa-storefront
+  namespace: medusa
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: medusa-storefront
+  template:
+    metadata:
+      labels:
+        app: medusa-storefront
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: html
+          mountPath: /usr/share/nginx/html
+      volumes:
+      - name: html
+        configMap:
+          name: medusa-storefront-app

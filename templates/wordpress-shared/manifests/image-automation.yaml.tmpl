@@ -1,0 +1,74 @@
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageRepository
+metadata:
+  name: {{.NAMESPACE}}-app
+  namespace: {{.NAMESPACE}}
+  labels:
+    app.kubernetes.io/name: {{.APP_NAME}}
+    app.kubernetes.io/component: image-automation
+    app.kubernetes.io/managed-by: gitops-automation
+spec:
+  image: git.xuperson.org/{{.NAMESPACE}}/{{.APP_NAME}}
+  interval: 1m
+  secretRef:
+    name: gitea-registry-secret
+
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: {{.NAMESPACE}}-app
+  namespace: {{.NAMESPACE}}
+  labels:
+    app.kubernetes.io/name: {{.APP_NAME}}
+    app.kubernetes.io/component: image-automation
+    app.kubernetes.io/managed-by: gitops-automation
+spec:
+  imageRepositoryRef:
+    name: {{.NAMESPACE}}-app
+  policy:
+    alphabetical:
+      order: asc
+  filterTags:
+    pattern: '^main-[a-f0-9]+'
+    extract: '$0'
+
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta1
+kind: ImageUpdateAutomation
+metadata:
+  name: {{.NAMESPACE}}-app
+  namespace: {{.NAMESPACE}}
+  labels:
+    app.kubernetes.io/name: {{.APP_NAME}}
+    app.kubernetes.io/component: image-automation
+    app.kubernetes.io/managed-by: gitops-automation
+spec:
+  interval: 30s
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+    namespace: flux-system
+  git:
+    checkout:
+      ref:
+        branch: master
+    commit:
+      author:
+        email: flux@xuperson.org
+        name: Flux Image Automation
+      messageTemplate: |
+        🚀 Update {{.NAMESPACE}} {{.APP_NAME}} image
+
+        Images:
+        {{ range .Updated.Images -}}
+        - {{ . }}
+        {{ end }}
+
+        🤖 Automated update by GitOps
+    push:
+      branch: master
+  update:
+    path: "./tenants/{{.DOMAIN}}"
+    strategy: Setters

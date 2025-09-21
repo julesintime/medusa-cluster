@@ -1,0 +1,272 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: shared-services
+  labels:
+    app.kubernetes.io/name: shared-services
+    app.kubernetes.io/managed-by: flux
+
+---
+apiVersion: secrets.infisical.com/v1alpha1
+kind: InfisicalSecret
+metadata:
+  name: mysql-cluster-shared-credentials
+  namespace: shared-services
+  labels:
+    app.kubernetes.io/name: mysql-cluster-shared
+    app.kubernetes.io/component: credentials
+    app.kubernetes.io/managed-by: flux
+spec:
+  hostAPI: https://app.infisical.com/api
+  resyncInterval: 60
+
+  authentication:
+    serviceToken:
+      secretsScope:
+        envSlug: prod
+        secretsPath: "/shared-services/mysql"
+        recursive: false
+      serviceTokenSecretReference:
+        secretName: infisical-service-token
+        secretNamespace: infisical-operator
+
+  managedKubeSecretReferences:
+    - secretName: mysql-cluster-shared-secrets
+      secretNamespace: shared-services
+      creationPolicy: "Orphan"
+      template:
+        data:
+          mysql-root-password: "{{ .MYSQL_SHARED_ROOT_PASSWORD.Value }}"
+          mysql-password: "{{ .MYSQL_SHARED_PASSWORD.Value }}"
+          mysql-replication-password: "{{ .MYSQL_SHARED_REPLICATION_PASSWORD.Value }}"
+
+---
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: mysql-cluster-shared
+  namespace: shared-services
+  labels:
+    app.kubernetes.io/name: mysql-cluster-shared
+    app.kubernetes.io/component: database
+    app.kubernetes.io/managed-by: flux
+spec:
+  interval: 15m
+  chart:
+    spec:
+      chart: mysql
+      version: "9.x.x"
+      sourceRef:
+        kind: HelmRepository
+        name: bitnami
+        namespace: flux-system
+  values:
+    # MySQL Configuration for multi-tenancy
+    auth:
+      rootPassword: ""  # Will use existing secret
+      username: wordpress
+      password: ""      # Will use existing secret
+      database: wordpress_shared
+      existingSecret: mysql-cluster-shared-secrets
+      secretKeys:
+        adminPasswordKey: mysql-root-password
+        userPasswordKey: mysql-password
+        replicationPasswordKey: mysql-replication-password
+
+    # Primary MySQL instance
+    primary:
+      persistence:
+        enabled: true
+        storageClass: "longhorn"
+        size: 500Gi  # Large storage for many sites
+
+      resources:
+        requests:
+          memory: 4Gi
+          cpu: 2000m
+        limits:
+          memory: 8Gi
+          cpu: 4000m
+
+      configuration: |
+        [mysqld]
+        # Multi-tenancy optimizations
+        max_connections=1000
+        innodb_buffer_pool_size=6G
+        innodb_log_file_size=512M
+        innodb_flush_log_at_trx_commit=2
+        sync_binlog=0
+
+        # Security
+        skip-symbolic-links
+        sql_mode=NO_ENGINE_SUBSTITUTION,STRICT_TRANS_TABLES
+
+        # Performance
+        query_cache_type=1
+        query_cache_size=256M
+        table_open_cache=4000
+        thread_cache_size=50
+
+        # Character set
+        character-set-server=utf8mb4
+        collation-server=utf8mb4_unicode_ci
+
+        # Multi-tenancy database settings
+        innodb_file_per_table=1
+        lower_case_table_names=0
+
+      # MySQL service configuration
+      service:
+        type: ClusterIP
+        ports:
+          mysql: 3306
+
+    # Secondary MySQL instances for read replicas (optional)
+    secondary:
+      replicaCount: 2
+      persistence:
+        enabled: true
+        storageClass: "longhorn"
+        size: 500Gi
+
+      resources:
+        requests:
+          memory: 2Gi
+          cpu: 1000m
+        limits:
+          memory: 4Gi
+          cpu: 2000m
+
+    # Metrics and monitoring
+    metrics:
+      enabled: true
+      resources:
+        requests:
+          memory: 64Mi
+          cpu: 50m
+        limits:
+          memory: 128Mi
+          cpu: 100m
+
+      serviceMonitor:
+        enabled: true
+        namespace: monitoring
+
+    # Volume permissions
+    volumePermissions:
+      enabled: true
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-cluster-shared
+  namespace: shared-services
+  labels:
+    app.kubernetes.io/name: mysql-cluster-shared
+    app.kubernetes.io/component: database
+    app.kubernetes.io/managed-by: flux
+spec:
+  type: ClusterIP
+  ports:
+    - name: mysql
+      port: 3306
+      targetPort: mysql
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: mysql
+    app.kubernetes.io/instance: mysql-cluster-shared
+    app.kubernetes.io/component: primary
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-cluster-init-scripts
+  namespace: shared-services
+  labels:
+    app.kubernetes.io/name: mysql-cluster-shared
+    app.kubernetes.io/component: init-scripts
+    app.kubernetes.io/managed-by: flux
+data:
+  01-create-databases.sql: |
+    -- Create databases for multi-tenant WordPress sites
+    -- This script creates separate databases for each tenant
+
+    -- Example tenant databases (these would be created automatically by the deployment script)
+    -- CREATE DATABASE IF NOT EXISTS wp_test1 CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+    -- CREATE DATABASE IF NOT EXISTS wp_test2 CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+    -- CREATE DATABASE IF NOT EXISTS wp_test3 CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+    -- Grant permissions for WordPress user to all wp_* databases
+    -- GRANT ALL PRIVILEGES ON `wp_%`.* TO 'wordpress'@'%';
+    -- FLUSH PRIVILEGES;
+
+    -- Show existing databases
+    SHOW DATABASES;
+
+  02-optimize-settings.sql: |
+    -- MySQL optimization for multi-tenant WordPress hosting
+
+    -- Set global variables for better performance
+    SET GLOBAL innodb_stats_on_metadata = 0;
+    SET GLOBAL innodb_lock_wait_timeout = 50;
+    SET GLOBAL max_allowed_packet = 268435456; -- 256MB
+
+    -- Show current settings
+    SHOW VARIABLES LIKE 'innodb_buffer_pool_size';
+    SHOW VARIABLES LIKE 'max_connections';
+    SHOW VARIABLES LIKE 'query_cache_size';
+
+---
+# Database monitoring and alerting
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-monitoring-queries
+  namespace: shared-services
+  labels:
+    app.kubernetes.io/name: mysql-cluster-shared
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/managed-by: flux
+data:
+  custom-queries.yml: |
+    # Custom MySQL queries for multi-tenant monitoring
+    rules:
+      - name: mysql.tenant_database_sizes
+        help: "Size of each tenant database in bytes"
+        labels:
+          - "tenant_db"
+        values:
+          - "size_bytes"
+        query: |
+          SELECT
+            SCHEMA_NAME as tenant_db,
+            SUM(data_length + index_length) as size_bytes
+          FROM information_schema.tables
+          WHERE SCHEMA_NAME LIKE 'wp_%'
+          GROUP BY SCHEMA_NAME
+
+      - name: mysql.tenant_connections
+        help: "Number of connections per tenant database"
+        labels:
+          - "tenant_db"
+        values:
+          - "connection_count"
+        query: |
+          SELECT
+            DB as tenant_db,
+            COUNT(*) as connection_count
+          FROM information_schema.processlist
+          WHERE DB LIKE 'wp_%'
+          GROUP BY DB
+
+      - name: mysql.total_tenant_databases
+        help: "Total number of tenant databases"
+        values:
+          - "count"
+        query: |
+          SELECT COUNT(*) as count
+          FROM information_schema.schemata
+          WHERE SCHEMA_NAME LIKE 'wp_%'

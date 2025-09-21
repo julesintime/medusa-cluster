@@ -1,0 +1,127 @@
+name: Medusa Full Stack CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-backend:
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.modified, 'my-medusa-store/') || contains(github.event.head_commit.modified, 'docker-compose.yml') || github.event_name == 'pull_request'
+
+    steps:
+    - name: Build Medusa Backend
+      run: |
+        set -e
+        
+        echo "📦 Building Medusa Backend..."
+        
+        # Clone repository
+        REPO_URL="${{ gitea.server_url }}/${{ gitea.repository }}.git"
+        git clone "$REPO_URL" repo
+        cd repo
+        git checkout "${{ gitea.sha }}"
+        
+        # Get commit info
+        COMMIT_SHA=$(git rev-parse --short HEAD)
+        BRANCH_NAME=${{ gitea.ref_name }}
+        IMAGE_BASE="gitea-http.gitea.svc.cluster.local:3000/helloroot/medusa-backend"
+        
+        # Build tags
+        if [ "$BRANCH_NAME" = "main" ] || [ "$BRANCH_NAME" = "master" ]; then
+          TAGS="$IMAGE_BASE:latest,$IMAGE_BASE:$BRANCH_NAME-$COMMIT_SHA"
+        else
+          TAGS="$IMAGE_BASE:$BRANCH_NAME-$COMMIT_SHA"
+        fi
+        
+        # Build
+        cd my-medusa-store
+        
+        # Setup authentication
+        ADMIN_USER="${{ secrets.ADMIN_USER }}"
+        ADMIN_PASS="${{ secrets.ADMIN_PASS }}"
+        mkdir -p ~/.docker
+        AUTH_STRING=$(echo -n "$ADMIN_USER:$ADMIN_PASS" | base64)
+        cat > ~/.docker/config.json << EOF
+        {
+          "auths": {
+            "gitea-http.gitea.svc.cluster.local:3000": {
+              "auth": "$AUTH_STRING"
+            }
+          }
+        }
+        EOF
+        
+        # Build and push
+        for TAG in $(echo $TAGS | tr "," "\n"); do
+          echo "Building backend tag: $TAG"
+          buildctl --addr $BUILDKIT_HOST build \
+            --frontend dockerfile.v0 \
+            --local context=. \
+            --local dockerfile=. \
+            --output type=image,name="$TAG",push=true,registry.insecure=true
+        done
+        
+        echo "✅ Backend build completed: $TAGS"
+
+  build-storefront:
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.modified, 'my-medusa-storefront/') || contains(github.event.head_commit.modified, 'docker-compose.yml') || github.event_name == 'pull_request'
+
+    steps:
+    - name: Build Medusa Storefront
+      run: |
+        set -e
+        
+        echo "📦 Building Medusa Storefront..."
+        
+        # Clone repository
+        REPO_URL="${{ gitea.server_url }}/${{ gitea.repository }}.git"
+        git clone "$REPO_URL" repo
+        cd repo
+        git checkout "${{ gitea.sha }}"
+        
+        # Get commit info
+        COMMIT_SHA=$(git rev-parse --short HEAD)
+        BRANCH_NAME=${{ gitea.ref_name }}
+        IMAGE_BASE="gitea-http.gitea.svc.cluster.local:3000/helloroot/medusa-storefront"
+        
+        # Build tags
+        if [ "$BRANCH_NAME" = "main" ] || [ "$BRANCH_NAME" = "master" ]; then
+          TAGS="$IMAGE_BASE:latest,$IMAGE_BASE:$BRANCH_NAME-$COMMIT_SHA"
+        else
+          TAGS="$IMAGE_BASE:$BRANCH_NAME-$COMMIT_SHA"
+        fi
+        
+        # Build
+        cd my-medusa-storefront
+        
+        # Setup authentication
+        ADMIN_USER="${{ secrets.ADMIN_USER }}"
+        ADMIN_PASS="${{ secrets.ADMIN_PASS }}"
+        mkdir -p ~/.docker
+        AUTH_STRING=$(echo -n "$ADMIN_USER:$ADMIN_PASS" | base64)
+        cat > ~/.docker/config.json << EOF
+        {
+          "auths": {
+            "gitea-http.gitea.svc.cluster.local:3000": {
+              "auth": "$AUTH_STRING"
+            }
+          }
+        }
+        EOF
+        
+        # Build and push
+        for TAG in $(echo $TAGS | tr "," "\n"); do
+          echo "Building storefront tag: $TAG"
+          buildctl --addr $BUILDKIT_HOST build \
+            --frontend dockerfile.v0 \
+            --local context=. \
+            --local dockerfile=. \
+            --opt target=production \
+            --output type=image,name="$TAG",push=true,registry.insecure=true
+        done
+        
+        echo "✅ Storefront build completed: $TAGS"

@@ -1,0 +1,51 @@
+# Enterprise Tier Configuration - Maximum performance and isolation
+tier: enterprise
+description: "High-performance dedicated infrastructure with SLA"
+
+# Database Configuration
+mariadb_enabled: true
+external_db_enabled: false
+external_db_host: ""
+external_db_port: 3306
+external_db_user: ""
+external_db_secret: ""
+
+# Resource Limits (Enterprise)
+resources:
+  memory_request: "1Gi"
+  memory_limit: "2Gi"
+  cpu_request: "500m"
+  cpu_limit: "2000m"
+
+# Database Resources (High-performance MariaDB)
+db_resources:
+  memory_request: "512Mi"
+  memory_limit: "1Gi"
+  cpu_request: "250m"
+  cpu_limit: "1000m"
+
+# Storage
+persistence_enabled: true
+storage_size: "50Gi"
+db_persistence_enabled: true
+db_storage_size: "100Gi"
+
+# Performance Settings
+wp_memory_limit: "512M"
+upload_max_size: "500M"
+
+# Rate Limiting (Generous)
+rate_limit_connections: "100"
+rate_limit_rpm: "600"
+
+# Scaling
+max_sites_per_cluster: 10
+cost_per_month: "$100"
+
+# Features
+backup_enabled: true
+monitoring_enabled: true
+ssl_enabled: true
+cdn_enabled: true
+sla_enabled: true
+dedicated_worker_nodes: true

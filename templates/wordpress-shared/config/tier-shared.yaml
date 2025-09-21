@@ -1,0 +1,49 @@
+# Shared Tier Configuration - Multi-tenant with shared resources
+tier: shared
+description: "Cost-effective shared hosting for small sites"
+
+# Database Configuration
+mariadb_enabled: false
+external_db_enabled: true
+external_db_host: "mysql-cluster-shared.shared-services.svc.cluster.local"
+external_db_port: 3306
+external_db_user: "wordpress"
+external_db_secret: "mysql-cluster-shared-secrets"
+
+# Resource Limits (Micro)
+resources:
+  memory_request: "64Mi"
+  memory_limit: "128Mi"
+  cpu_request: "25m"
+  cpu_limit: "100m"
+
+# Database Resources (N/A for external)
+db_resources:
+  memory_request: "0"
+  memory_limit: "0"
+  cpu_request: "0"
+  cpu_limit: "0"
+
+# Storage
+persistence_enabled: true
+storage_size: "1Gi"
+db_persistence_enabled: false
+db_storage_size: "0"
+
+# Performance Settings
+wp_memory_limit: "128M"
+upload_max_size: "10M"
+
+# Rate Limiting
+rate_limit_connections: "5"
+rate_limit_rpm: "30"
+
+# Scaling
+max_sites_per_cluster: 500
+cost_per_month: "$1"
+
+# Features
+backup_enabled: true
+monitoring_enabled: true
+ssl_enabled: true
+cdn_enabled: false

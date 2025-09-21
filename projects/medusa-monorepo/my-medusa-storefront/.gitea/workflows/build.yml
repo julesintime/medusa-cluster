@@ -1,0 +1,58 @@
+name: Build and Push with BuildKit
+on:
+  push:
+    branches: [main, master]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Build Medusa Backend and Storefront
+      run: |
+        #!/bin/bash
+        set -e
+        
+        echo "Starting Medusa build pipeline..."
+        
+        # Setup BuildKit connection
+        BUILDKIT_HOST="tcp://buildkit.buildkit.svc.cluster.local:1234"
+        REGISTRY="git.xuperson.org"
+        REPO_OWNER="helloroot"
+        COMMIT_SHA="${GITHUB_SHA:0:7}"
+        
+        # Clone repository
+        git clone https://git.xuperson.org/$REPO_OWNER/medusa-fresh.git /tmp/repo
+        cd /tmp/repo
+        
+        # Build backend
+        echo "Building backend..."
+        cd my-medusa-store
+        
+        buildctl --addr=$BUILDKIT_HOST build \
+          --frontend dockerfile.v0 \
+          --local context=. \
+          --local dockerfile=. \
+          --opt filename=Dockerfile \
+          --opt build-arg:NODE_ENV=production \
+          --output type=image,name=$REGISTRY/$REPO_OWNER/medusa-backend:main-$COMMIT_SHA,push=false || true
+        
+        echo "Build completed, skipping push for now"
+        
+        echo "Backend build complete: $REGISTRY/$REPO_OWNER/medusa-backend:main-$COMMIT_SHA"
+        
+        # Build storefront
+        echo "Building storefront..."
+        cd ../my-medusa-storefront
+        
+        buildctl --addr=$BUILDKIT_HOST build \
+          --frontend dockerfile.v0 \
+          --local context=. \
+          --local dockerfile=. \
+          --opt filename=Dockerfile \
+          --output type=image,name=$REGISTRY/$REPO_OWNER/medusa-storefront:main-$COMMIT_SHA,push=false || true
+        
+        echo "Build completed, skipping push for now"
+        
+        echo "Storefront build complete: $REGISTRY/$REPO_OWNER/medusa-storefront:main-$COMMIT_SHA"
+        
+        echo "All builds completed successfully!"

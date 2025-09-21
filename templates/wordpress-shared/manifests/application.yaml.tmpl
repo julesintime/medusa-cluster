@@ -1,0 +1,133 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: {{.NAMESPACE}}-wordpress
+  namespace: {{.NAMESPACE}}
+  labels:
+    app.kubernetes.io/name: {{.APP_NAME}}
+    app.kubernetes.io/component: wordpress
+    app.kubernetes.io/managed-by: gitops-automation
+spec:
+  interval: 15m
+  chart:
+    spec:
+      chart: wordpress
+      version: "19.x.x"
+      sourceRef:
+        kind: HelmRepository
+        name: bitnami
+        namespace: flux-system
+  values:
+    # WordPress Configuration
+    wordpressUsername: admin
+    wordpressPassword: ""  # Will be auto-generated
+    wordpressEmail: admin@{{.DOMAIN}}
+    wordpressFirstName: {{.NAMESPACE | title}}
+    wordpressLastName: Admin
+    wordpressBlogName: "{{.NAMESPACE | title}} Site"
+    wordpressTablePrefix: wp_
+
+    # WordPress Image
+    image:
+      registry: git.xuperson.org
+      repository: {{.NAMESPACE}}/{{.APP_NAME}}
+      tag: main-latest  # {"$imagepolicy": "{{.NAMESPACE}}:{{.NAMESPACE}}-app"}
+      pullPolicy: Always
+      pullSecrets:
+        - gitea-registry-secret
+
+    # WordPress Security
+    existingSecret: {{.NAMESPACE}}-wordpress-secrets
+
+    # WordPress Persistence (tier-based)
+    persistence:
+      enabled: {{.PERSISTENCE_ENABLED}}
+      storageClass: "longhorn"
+      size: {{.STORAGE_SIZE}}
+      accessModes:
+        - ReadWriteOnce
+
+    # WordPress Resources (tier-based)
+    resources:
+      requests:
+        memory: {{.RESOURCES_MEMORY_REQUEST}}
+        cpu: {{.RESOURCES_CPU_REQUEST}}
+      limits:
+        memory: {{.RESOURCES_MEMORY_LIMIT}}
+        cpu: {{.RESOURCES_CPU_LIMIT}}
+
+    # WordPress Service
+    service:
+      type: ClusterIP
+      port: 80
+
+    # MariaDB Configuration (shared or dedicated based on tier)
+    mariadb:
+      enabled: {{.MARIADB_ENABLED}}
+      auth:
+        rootPassword: ""
+        username: wordpress
+        password: ""
+        database: {{.DATABASE_NAME}}
+        existingSecret: {{.NAMESPACE}}-mysql-secrets
+        secretKeys:
+          adminPasswordKey: mariadb-root-password
+          userPasswordKey: mariadb-password
+
+      primary:
+        persistence:
+          enabled: {{.DB_PERSISTENCE_ENABLED}}
+          storageClass: "longhorn"
+          size: {{.DB_STORAGE_SIZE}}
+
+        resources:
+          requests:
+            memory: {{.DB_RESOURCES_MEMORY_REQUEST}}
+            cpu: {{.DB_RESOURCES_CPU_REQUEST}}
+          limits:
+            memory: {{.DB_RESOURCES_MEMORY_LIMIT}}
+            cpu: {{.DB_RESOURCES_CPU_LIMIT}}
+
+    # External Database (for shared tier)
+    externalDatabase:
+      host: {{.EXTERNAL_DB_HOST}}
+      port: 3306
+      user: {{.EXTERNAL_DB_USER}}
+      password: ""
+      database: {{.EXTERNAL_DB_NAME}}
+      existingSecret: {{.EXTERNAL_DB_SECRET}}
+
+    # MySQL (disabled)
+    mysql:
+      enabled: false
+
+    # WordPress Configuration
+    wordpressConfigureCache: false
+    wordpressPlugins: "akismet"
+    wordpressExtraConfigContent: |
+      // WordPress optimizations
+      define('WP_MEMORY_LIMIT', '{{.WP_MEMORY_LIMIT}}');
+      define('WP_MAX_MEMORY_LIMIT', '{{.WP_MEMORY_LIMIT}}');
+
+      // Security headers
+      define('FORCE_SSL_ADMIN', true);
+      define('DISALLOW_FILE_EDIT', true);
+
+      // Site configuration
+      define('WP_HOME', 'https://{{.DOMAIN}}');
+      define('WP_SITEURL', 'https://{{.DOMAIN}}');
+
+    # Ingress disabled (using separate resource)
+    ingress:
+      enabled: false
+
+    # Metrics disabled by default
+    metrics:
+      enabled: false
+
+    # Auto-updates
+    wordpressAutoUpdateLevel: none
+
+    # No init containers to avoid permission issues
+    initContainers: []
