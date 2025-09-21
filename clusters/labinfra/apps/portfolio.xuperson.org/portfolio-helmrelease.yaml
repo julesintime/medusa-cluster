@@ -30,7 +30,7 @@ spec:
     image:
       registry: git.xuperson.org
       repository: helloroot/portfolio-app
-      tag: "main-3316b11" # {"$imagepolicy": "portfolio:portfolio-app"}
+      tag: "git.xuperson.org/helloroot/portfolio-app:main-3316b11" # {"$imagepolicy": "portfolio:portfolio-app"}
       pullPolicy: IfNotPresent
       pullSecrets:
         - gitea-registry-secret
@@ -60,7 +60,7 @@ spec:
       allowPrivilegeEscalation: false
       capabilities:
         drop:
-        - ALL
+          - ALL
     # WordPress Service
     service:
       type: ClusterIP
@@ -156,19 +156,19 @@ spec:
 
   # Post-install configuration
   postRenderers:
-  - kustomize:
-      patches:
-      - target:
-          kind: Deployment
-          name: portfolio-wordpress
-        patch: |-
-          - op: add
-            path: /spec/template/spec/containers/0/env/-
-            value:
-              name: WORDPRESS_HOME
-              value: "https://portfolio.xuperson.org"
-          - op: add
-            path: /spec/template/spec/containers/0/env/-
-            value:
-              name: WORDPRESS_SITEURL
-              value: "https://portfolio.xuperson.org"
+    - kustomize:
+        patches:
+          - target:
+              kind: Deployment
+              name: portfolio-wordpress
+            patch: |-
+              - op: add
+                path: /spec/template/spec/containers/0/env/-
+                value:
+                  name: WORDPRESS_HOME
+                  value: "https://portfolio.xuperson.org"
+              - op: add
+                path: /spec/template/spec/containers/0/env/-
+                value:
+                  name: WORDPRESS_SITEURL
+                  value: "https://portfolio.xuperson.org"
