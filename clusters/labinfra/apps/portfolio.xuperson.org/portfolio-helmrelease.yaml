@@ -30,7 +30,7 @@ spec:
     image:
       registry: git.xuperson.org
       repository: helloroot/portfolio-app
-      tag: "git.xuperson.org/helloroot/portfolio-app:main-3316b11" # {"$imagepolicy": "portfolio:portfolio-app"}
+      tag: "main-3316b11" # {"$imagepolicy": "portfolio:portfolio-app"}
       pullPolicy: IfNotPresent
       pullSecrets:
         - gitea-registry-secret
