@@ -30,7 +30,7 @@ spec:
       
       containers:
       - name: medusa
-        image: medusajs/medusa:latest # {"$imagepolicy": "medusa:medusa-backend-policy"}
+        image: node:20-alpine # {"$imagepolicy": "medusa:medusa-backend-policy"}
         imagePullPolicy: Always
         ports:
         - containerPort: 9000
