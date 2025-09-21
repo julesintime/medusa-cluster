@@ -1,0 +1,98 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medusa-simple
+  namespace: medusa
+  labels:
+    app: medusa-simple
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: medusa-simple
+  template:
+    metadata:
+      labels:
+        app: medusa-simple
+    spec:
+      initContainers:
+      - name: wait-for-postgres
+        image: busybox:latest
+        command:
+        - sh
+        - -c
+        - until nc -z medusa-postgres-postgresql 5432; do echo waiting for postgres; sleep 2; done
+      - name: setup-db
+        image: postgres:15-alpine
+        command:
+        - sh
+        - -c
+        - |
+          export PGPASSWORD=postgres123
+          until pg_isready -h medusa-postgres-postgresql.medusa.svc.cluster.local -p 5432 -U postgres; do
+            echo "Waiting for postgres..."
+            sleep 2
+          done
+
+          psql -h medusa-postgres-postgresql.medusa.svc.cluster.local -p 5432 -U postgres -c "CREATE DATABASE medusa;" || echo "Database exists"
+          psql -h medusa-postgres-postgresql.medusa.svc.cluster.local -p 5432 -U postgres -c "CREATE USER medusa WITH PASSWORD 'medusa123';" || echo "User exists"
+          psql -h medusa-postgres-postgresql.medusa.svc.cluster.local -p 5432 -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE medusa TO medusa;" || echo "Permissions granted"
+      containers:
+      - name: medusa
+        image: medusajs/medusa:latest
+        ports:
+        - name: http
+          containerPort: 9000
+          protocol: TCP
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: PORT
+          value: "9000"
+        - name: DATABASE_URL
+          value: "postgresql://medusa:medusa123@medusa-postgres-postgresql.medusa.svc.cluster.local:5432/medusa"
+        - name: REDIS_URL
+          value: "redis://medusa-redis-master.medusa.svc.cluster.local:6379"
+        - name: JWT_SECRET
+          value: "supersecretjwtkey123456789"
+        - name: COOKIE_SECRET
+          value: "supersecretcookiekey123456789"
+        - name: ADMIN_CORS
+          value: "https://medusa-console.xuperson.org,http://localhost:7000"
+        - name: STORE_CORS
+          value: "https://medusa.xuperson.org,http://localhost:8000"
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 60
+          periodSeconds: 30
+        resources:
+          requests:
+            memory: 512Mi
+            cpu: 250m
+          limits:
+            memory: 1Gi
+            cpu: 500m
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: medusa-simple
+  namespace: medusa
+spec:
+  selector:
+    app: medusa-simple
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+    protocol: TCP
+  type: ClusterIP

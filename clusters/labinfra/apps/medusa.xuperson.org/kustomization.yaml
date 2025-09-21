@@ -10,7 +10,6 @@ resources:
   - medusa-postgres-helmrelease.yaml
   - medusa-redis-helmrelease.yaml
   - medusa-infisical-secrets.yaml
-  - medusa-deployment.yaml
-  - medusa-service.yaml
+  - medusa-simple-deployment.yaml
   - medusa-ingress.yaml
   - medusa-hpa.yaml
