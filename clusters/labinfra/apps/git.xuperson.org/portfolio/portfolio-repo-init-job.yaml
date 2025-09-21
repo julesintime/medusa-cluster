@@ -44,12 +44,12 @@ spec:
           echo "🔑 Setting up Gitea admin credentials for portfolio CI/CD..."
 
           # Get admin credentials from Infisical-synced secrets
-          if kubectl get secret gitea-admin-credentials -n gitea >/dev/null 2>&1; then
-            ADMIN_USER=$(kubectl get secret gitea-admin-credentials -n gitea -o jsonpath='{.data.username}' | base64 -d)
-            ADMIN_PASS=$(kubectl get secret gitea-admin-credentials -n gitea -o jsonpath='{.data.password}' | base64 -d)
+          if kubectl get secret gitea-admin-secrets -n gitea >/dev/null 2>&1; then
+            ADMIN_USER=$(kubectl get secret gitea-admin-secrets -n gitea -o jsonpath='{.data.username}' | base64 -d)
+            ADMIN_PASS=$(kubectl get secret gitea-admin-secrets -n gitea -o jsonpath='{.data.password}' | base64 -d)
             echo "✅ Using existing admin credentials"
           else
-            echo "❌ gitea-admin-credentials secret not found in gitea namespace"
+            echo "❌ gitea-admin-secrets secret not found in gitea namespace"
             echo "🔧 Please ensure Infisical secret is synced with GITEA_ADMIN_USERNAME and GITEA_ADMIN_PASSWORD"
             exit 1
           fi
