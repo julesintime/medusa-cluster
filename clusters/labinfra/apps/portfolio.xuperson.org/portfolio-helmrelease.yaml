@@ -158,25 +158,8 @@ spec:
     # WordPress auto-updates
     wordpressAutoUpdateLevel: none
 
-    # Init containers for theme setup
-    initContainers:
-      - name: setup-permissions
-        image: busybox:1.35
-        command:
-          - /bin/sh
-          - -c
-          - |
-            echo "🔧 Setting up WordPress permissions for Avada theme..."
-            # Ensure proper permissions for wp-content
-            chown -R 1001:1001 /var/www/html/wp-content || true
-            chmod -R 755 /var/www/html/wp-content || true
-            echo "✅ Permissions setup complete"
-        volumeMounts:
-          - name: wordpress-data
-            mountPath: /var/www/html
-            subPath: wordpress
-        securityContext:
-          runAsUser: 0  # Run as root for permission changes
+    # Remove init containers - causing permission conflicts
+    initContainers: []
 
   # Health check and dependencies
 
