@@ -1,0 +1,179 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: medusa-build-pipeline
+  namespace: medusa
+spec:
+  description: |
+    Build Medusa from official GitHub repository and push to registry
+
+  params:
+  - name: git-url
+    description: Git repository URL
+    type: string
+    default: "https://github.com/medusajs/medusa-starter-default.git"
+  - name: git-revision
+    description: Git revision to build
+    type: string
+    default: "master"
+  - name: image-registry
+    description: Image registry URL
+    type: string
+    default: "registry.xuperson.org"
+  - name: image-name
+    description: Image name
+    type: string
+    default: "medusa/backend"
+
+  workspaces:
+  - name: shared-data
+    description: Shared workspace for the pipeline
+  - name: docker-credentials
+    description: Docker registry credentials
+    optional: true
+
+  tasks:
+  - name: fetch-source
+    taskRef:
+      name: git-clone
+      kind: ClusterTask
+    workspaces:
+    - name: output
+      workspace: shared-data
+    params:
+    - name: url
+      value: $(params.git-url)
+    - name: revision
+      value: $(params.git-revision)
+    - name: deleteExisting
+      value: "true"
+
+  - name: build-push
+    runAfter: ["fetch-source"]
+    taskRef:
+      name: buildah
+      kind: ClusterTask
+    workspaces:
+    - name: source
+      workspace: shared-data
+    - name: dockerconfig
+      workspace: docker-credentials
+    params:
+    - name: IMAGE
+      value: $(params.image-registry)/$(params.image-name):$(tasks.fetch-source.results.commit)
+    - name: DOCKERFILE
+      value: ./Dockerfile
+    - name: CONTEXT
+      value: .
+    - name: TLSVERIFY
+      value: "false"
+    - name: BUILD_EXTRA_ARGS
+      value: "--build-arg NODE_ENV=production"
+
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: medusa-dockerfile-creator
+  namespace: medusa
+spec:
+  description: Create Dockerfile for Medusa if it doesn't exist
+  workspaces:
+  - name: source
+    description: Source workspace
+
+  steps:
+  - name: create-dockerfile
+    image: alpine:latest
+    workingDir: $(workspaces.source.path)
+    script: |
+      #!/bin/sh
+      if [ ! -f Dockerfile ]; then
+        cat > Dockerfile << 'EOF'
+      FROM node:20-alpine AS builder
+
+      WORKDIR /server
+
+      # Copy package files
+      COPY package*.json ./
+
+      # Install dependencies
+      RUN npm ci --only=production && \
+          npm cache clean --force
+
+      # Copy application files
+      COPY . .
+
+      # Build Medusa
+      RUN npm run build || true
+
+      # Production stage
+      FROM node:20-alpine
+
+      # Install dumb-init for proper signal handling
+      RUN apk add --no-cache dumb-init
+
+      # Create non-root user
+      RUN addgroup -g 1001 -S nodejs && \
+          adduser -S medusa -u 1001 -G nodejs
+
+      WORKDIR /server
+
+      # Copy built application
+      COPY --from=builder --chown=medusa:nodejs /server .
+
+      # Create required directories
+      RUN mkdir -p /server/uploads && \
+          chown -R medusa:nodejs /server
+
+      USER medusa
+
+      EXPOSE 9000
+
+      ENTRYPOINT ["dumb-init", "--"]
+      CMD ["npm", "run", "start"]
+      EOF
+        echo "Dockerfile created successfully"
+      else
+        echo "Dockerfile already exists"
+      fi
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: medusa-pipeline-sa
+  namespace: medusa
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: medusa-pipeline-role
+  namespace: medusa
+rules:
+- apiGroups: [""]
+  resources: ["secrets", "configmaps", "persistentvolumeclaims"]
+  verbs: ["get", "list", "create", "update", "patch", "delete"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets"]
+  verbs: ["get", "list", "patch", "update"]
+- apiGroups: ["tekton.dev"]
+  resources: ["tasks", "taskruns", "pipelines", "pipelineruns"]
+  verbs: ["get", "list", "create", "update", "patch", "delete"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: medusa-pipeline-binding
+  namespace: medusa
+subjects:
+- kind: ServiceAccount
+  name: medusa-pipeline-sa
+  namespace: medusa
+roleRef:
+  kind: Role
+  name: medusa-pipeline-role
+  apiGroup: rbac.authorization.k8s.io

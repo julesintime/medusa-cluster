@@ -4,4 +4,5 @@ namespace: gitea
 resources:
   - medusa-fresh-app-configmap.yaml
   - medusa-fresh-cicd-configmap.yaml
+  - medusa-fresh-backend-configmap.yaml
   - medusa-fresh-repo-init-job.yaml

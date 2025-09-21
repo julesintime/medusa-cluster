@@ -1,0 +1,37 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: PipelineRun
+metadata:
+  generateName: medusa-build-run-
+  namespace: medusa
+spec:
+  pipelineRef:
+    name: medusa-build-pipeline
+
+  params:
+  - name: git-url
+    value: "https://github.com/medusajs/medusa-starter-default.git"
+  - name: git-revision
+    value: "master"
+  - name: image-registry
+    value: "registry.xuperson.org"
+  - name: image-name
+    value: "medusa/backend"
+
+  workspaces:
+  - name: shared-data
+    volumeClaimTemplate:
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 10Gi
+        storageClassName: local-path
+
+  - name: docker-credentials
+    secret:
+      secretName: registry-credentials
+
+  serviceAccountName: medusa-pipeline-sa
+  timeout: 1h

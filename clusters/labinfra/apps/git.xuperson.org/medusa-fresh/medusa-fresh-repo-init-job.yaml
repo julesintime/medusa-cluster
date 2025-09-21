@@ -85,26 +85,29 @@ spec:
           git config user.name "Medusa Fresh Deployer"
           git config user.email "deployer@medusa.xuperson.org"
           
-          # Copy application files from medusa-monorepo directory
-          echo "📦 Copying Medusa monorepo application files..."
+          # Create comprehensive Medusa project structure
+          echo "📦 Creating complete Medusa v2 backend structure..."
 
-          # First check if the source directory exists and has content
-          if [ -d "/workspace/medusa-monorepo" ] && [ "$(ls -A /workspace/medusa-monorepo 2>/dev/null)" ]; then
-            cp -r /workspace/medusa-monorepo/* . 2>/dev/null || true
-            echo "✅ Copied files from /workspace/medusa-monorepo"
-          else
-            echo "⚠️ Source directory /workspace/medusa-monorepo not found or empty"
-            echo "📝 Creating basic project structure..."
-            
-            # Create basic structure from ConfigMaps
-            mkdir -p my-medusa-store my-medusa-storefront .gitea/workflows
-            
-            # Copy from configmaps
-            cp /app-config/README.md . 2>/dev/null || echo "# Medusa Fresh" > README.md
-            cp /app-config/package.json . 2>/dev/null || echo '{"name":"medusa-fresh","version":"1.0.0"}' > package.json
-            cp /app-config/docker-compose.yml . 2>/dev/null || true
-            cp /cicd-config/medusa-fresh-ci.yml .gitea/workflows/ 2>/dev/null || true
-          fi
+          # Create project directories
+          mkdir -p my-medusa-store my-medusa-storefront .gitea/workflows
+
+          # Copy backend files from ConfigMaps
+          echo "📁 Setting up backend (my-medusa-store/)..."
+          cp /backend-config/package.json my-medusa-store/
+          cp /backend-config/medusa-config.ts my-medusa-store/
+          cp /backend-config/start.sh my-medusa-store/
+          cp /backend-config/Dockerfile my-medusa-store/
+          chmod +x my-medusa-store/start.sh
+
+          # Setup CI/CD workflow
+          cp /backend-config/.gitea_workflows_backend-ci.yml .gitea/workflows/backend-ci.yml
+
+          # Copy app-level files
+          cp /app-config/README.md . 2>/dev/null || echo "# Medusa Fresh" > README.md
+          cp /app-config/package.json . 2>/dev/null || echo '{"name":"medusa-fresh","version":"1.0.0"}' > package.json
+          cp /app-config/docker-compose.yml . 2>/dev/null || true
+
+          echo "✅ Complete Medusa v2 project structure created"
           
           # Ensure CI/CD workflow exists
           mkdir -p .gitea/workflows
@@ -158,10 +161,10 @@ spec:
           mountPath: /usr/local/bin
         - name: app-config
           mountPath: /app-config
-        - name: cicd-config  
+        - name: cicd-config
           mountPath: /cicd-config
-        - name: medusa-monorepo-source
-          mountPath: /workspace/medusa-monorepo
+        - name: backend-config
+          mountPath: /backend-config
           
       volumes:
       - name: shared-tools
@@ -172,7 +175,6 @@ spec:
       - name: cicd-config
         configMap:
           name: medusa-fresh-cicd-config
-      - name: medusa-monorepo-source
-        hostPath:
-          path: /Users/xoojulian/Downloads/labinfra/projects/medusa-monorepo
-          type: DirectoryOrCreate
+      - name: backend-config
+        configMap:
+          name: medusa-fresh-backend-config

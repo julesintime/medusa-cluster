@@ -1,0 +1,149 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medusa
+  namespace: medusa
+  labels:
+    app: medusa
+    app.kubernetes.io/name: medusa
+    app.kubernetes.io/component: backend
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+
+  selector:
+    matchLabels:
+      app: medusa
+
+  template:
+    metadata:
+      labels:
+        app: medusa
+        app.kubernetes.io/name: medusa
+        app.kubernetes.io/component: backend
+
+    spec:
+      initContainers:
+      - name: wait-for-postgres
+        image: busybox:latest
+        command: ['sh', '-c', 'until nc -z medusa-postgres-postgresql 5432; do echo waiting for postgres; sleep 2; done']
+
+      - name: wait-for-redis
+        image: busybox:latest
+        command: ['sh', '-c', 'until nc -z medusa-redis-master 6379; do echo waiting for redis; sleep 2; done']
+
+      - name: run-migrations
+        image: registry.xuperson.org/medusa/backend:latest
+        imagePullPolicy: Always
+        command: ["npm", "run", "migrations:run"]
+        envFrom:
+        - secretRef:
+            name: medusa-app-secrets
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: DATABASE_HOST
+          value: "medusa-postgres-postgresql"
+        - name: DATABASE_PORT
+          value: "5432"
+        - name: DATABASE_NAME
+          value: "medusa"
+        - name: DATABASE_USER
+          value: "medusa"
+        - name: REDIS_HOST
+          value: "medusa-redis-master"
+        - name: REDIS_PORT
+          value: "6379"
+
+      containers:
+      - name: medusa
+        image: registry.xuperson.org/medusa/backend:latest
+        imagePullPolicy: Always
+
+        ports:
+        - name: http
+          containerPort: 9000
+          protocol: TCP
+
+        envFrom:
+        - secretRef:
+            name: medusa-app-secrets
+
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: PORT
+          value: "9000"
+        - name: DATABASE_HOST
+          value: "medusa-postgres-postgresql"
+        - name: DATABASE_PORT
+          value: "5432"
+        - name: DATABASE_NAME
+          value: "medusa"
+        - name: DATABASE_USER
+          value: "medusa"
+        - name: REDIS_HOST
+          value: "medusa-redis-master"
+        - name: REDIS_PORT
+          value: "6379"
+        - name: STORE_CORS
+          value: "https://store.medusa.xuperson.org,http://localhost:8000"
+        - name: ADMIN_CORS
+          value: "https://medusa-console.xuperson.org,http://localhost:7000"
+
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 90
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        volumeMounts:
+        - name: uploads
+          mountPath: /server/uploads
+
+      volumes:
+      - name: uploads
+        persistentVolumeClaim:
+          claimName: medusa-uploads-pvc
+
+      imagePullSecrets:
+      - name: registry-credentials
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: medusa-uploads-pvc
+  namespace: medusa
+spec:
+  accessModes:
+  - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: local-path
