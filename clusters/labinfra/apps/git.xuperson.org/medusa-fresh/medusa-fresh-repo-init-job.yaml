@@ -44,8 +44,8 @@ spec:
           echo "🚀 Setting up Medusa Fresh repository in Gitea..."
           
           # Get admin credentials from Kubernetes secrets
-          ADMIN_USER=$(kubectl get secret gitea-admin-credentials -o jsonpath='{.data.username}' | base64 -d)
-          ADMIN_PASS=$(kubectl get secret gitea-admin-credentials -o jsonpath='{.data.password}' | base64 -d)
+          ADMIN_USER=$(kubectl get secret gitea-admin-secrets -n gitea -o jsonpath='{.data.username}' | base64 -d)
+          ADMIN_PASS=$(kubectl get secret gitea-admin-secrets -n gitea -o jsonpath='{.data.password}' | base64 -d)
           
           GITEA_URL="http://gitea-http.gitea.svc.cluster.local:3000"
           
@@ -82,15 +82,15 @@ spec:
           git config user.name "Medusa Fresh Deployer"
           git config user.email "deployer@medusa.xuperson.org"
           
-          # Copy application files from medusa-fresh directory
-          echo "📦 Copying Medusa Fresh application files..."
-          
+          # Copy application files from medusa-monorepo directory
+          echo "📦 Copying Medusa monorepo application files..."
+
           # First check if the source directory exists and has content
-          if [ -d "/workspace/medusa-fresh" ] && [ "$(ls -A /workspace/medusa-fresh 2>/dev/null)" ]; then
-            cp -r /workspace/medusa-fresh/* . 2>/dev/null || true
-            echo "✅ Copied files from /workspace/medusa-fresh"
+          if [ -d "/workspace/medusa-monorepo" ] && [ "$(ls -A /workspace/medusa-monorepo 2>/dev/null)" ]; then
+            cp -r /workspace/medusa-monorepo/* . 2>/dev/null || true
+            echo "✅ Copied files from /workspace/medusa-monorepo"
           else
-            echo "⚠️ Source directory /workspace/medusa-fresh not found or empty"
+            echo "⚠️ Source directory /workspace/medusa-monorepo not found or empty"
             echo "📝 Creating basic project structure..."
             
             # Create basic structure from ConfigMaps
@@ -157,8 +157,8 @@ spec:
           mountPath: /app-config
         - name: cicd-config  
           mountPath: /cicd-config
-        - name: medusa-fresh-source
-          mountPath: /workspace/medusa-fresh
+        - name: medusa-monorepo-source
+          mountPath: /workspace/medusa-monorepo
           
       volumes:
       - name: shared-tools
@@ -169,7 +169,7 @@ spec:
       - name: cicd-config
         configMap:
           name: medusa-fresh-cicd-config
-      - name: medusa-fresh-source
+      - name: medusa-monorepo-source
         hostPath:
-          path: /Users/xoojulian/Downloads/labinfra/medusa-fresh
+          path: /Users/xoojulian/Downloads/labinfra/projects/medusa-monorepo
           type: DirectoryOrCreate
