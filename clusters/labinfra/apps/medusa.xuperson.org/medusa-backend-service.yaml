@@ -11,6 +11,6 @@ spec:
     app: medusa-backend
   ports:
   - port: 9000
-    targetPort: 9000
+    targetPort: 80
     protocol: TCP
     name: http
