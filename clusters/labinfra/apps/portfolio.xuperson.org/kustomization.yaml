@@ -9,7 +9,7 @@ resources:
   - portfolio-infisical-secrets.yaml
   - portfolio-registry-secret.yaml
   - portfolio-imagerepository.yaml
-  - portfolio-helmrelease.yaml
+  - portfolio-deployment.yaml
   - portfolio-ingress.yaml
 
 commonLabels:
