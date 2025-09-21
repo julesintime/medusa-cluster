@@ -172,7 +172,7 @@ spec:
                   IMAGE_BASE="portfolio-app"
                   REGISTRY_URL="git.xuperson.org"
                   GITEA_URL="http://gitea-http.gitea.svc.cluster.local:3000"
-                  BUILDKIT_HOST="tcp://buildkit.buildkit.svc.cluster.local:1234"
+                  BUILDKIT_HOST="tcp://buildkitd.gitea.svc.cluster.local:1234"
 
                   # Get commit SHA for tagging
                   COMMIT_SHA=$(echo $GITHUB_SHA | cut -c1-7)
