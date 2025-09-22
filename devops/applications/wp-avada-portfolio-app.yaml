@@ -9,11 +9,11 @@ metadata:
 spec:
   project: default
 
-  # Source: WordPress cluster monorepo
+  # Source: WordPress cluster monorepo (via subtree)
   source:
-    repoURL: https://github.com/julesintime/wp-cluster.git
+    repoURL: https://github.com/julesintime/labinfra.git
     targetRevision: main
-    path: wp-avada-portfolio.xuperson.org
+    path: devops/projects/wp-cluster/wp-avada-portfolio.xuperson.org
 
   # Destination
   destination:
