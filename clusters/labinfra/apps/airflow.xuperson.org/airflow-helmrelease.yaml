@@ -65,8 +65,8 @@ spec:
           adminPasswordKey: postgresql-postgres-password
           userPasswordKey: postgresql-password
 
-    # Use Infisical-synced secrets for credentials
-    extraEnv:
+    # Environment variables for secrets
+    extraEnv: |
       - name: AIRFLOW__WEBSERVER__SECRET_KEY
         valueFrom:
           secretKeyRef:
@@ -77,13 +77,8 @@ spec:
           secretKeyRef:
             name: airflow-secrets
             key: fernet-key
-      - name: AIRFLOW_CONN_AIRFLOW_DB
-        valueFrom:
-          secretKeyRef:
-            name: airflow-secrets
-            key: postgresql-password
 
-    # Default admin user from Infisical
+    # Airflow configuration
     config:
       AIRFLOW__WEBSERVER__AUTHENTICATE: "True"
       AIRFLOW__WEBSERVER__AUTH_BACKEND: "airflow.api.auth.backend.basic_auth"
