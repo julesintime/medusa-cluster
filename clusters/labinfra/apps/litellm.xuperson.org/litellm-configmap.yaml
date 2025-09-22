@@ -11,7 +11,7 @@ data:
       # === AI GATEWAY MODELS (PRIMARY) ===
       # Vercel AI Gateway - stealth/sonoma models with fallback routing
 
-      # Default model - stealth/sonoma-dusk-alpha
+      # Primary model - stealth/sonoma-dusk-alpha (WORKING)
       - model_name: "stealth/sonoma-dusk-alpha"
         litellm_params:
           model: "vercel_ai_gateway/stealth/sonoma-dusk-alpha"
@@ -22,10 +22,10 @@ data:
           health_check_timeout: 10
           cooldown_time: 60
 
-      # Fast model - stealth/sonoma-sky-alpha
+      # Alias for fast model - also uses sonoma-dusk-alpha since sky-alpha returns empty
       - model_name: "stealth/sonoma-sky-alpha"
         litellm_params:
-          model: "vercel_ai_gateway/stealth/sonoma-sky-alpha"
+          model: "vercel_ai_gateway/stealth/sonoma-dusk-alpha"  # Using dusk instead of sky
           api_key: "os.environ/VERCEL_AI_GATEWAY_API_KEY"
           rpm: 30
           tpm: 1000000
@@ -41,23 +41,13 @@ data:
 
       - model_name: "gpt-4"
         litellm_params:
-          model: "vercel_ai_gateway/stealth/sonoma-dusk-alpha"
+          model: "vercel_ai_gateway/stealth/sonoma-dusk-alpha"  # Only using dusk (working)
           api_key: "os.environ/VERCEL_AI_GATEWAY_API_KEY"
           rpm: 20
           tpm: 1000000
         model_info:
           health_check_timeout: 10
           cooldown_time: 60
-
-      - model_name: "gpt-4"
-        litellm_params:
-          model: "vercel_ai_gateway/stealth/sonoma-sky-alpha"
-          api_key: "os.environ/VERCEL_AI_GATEWAY_API_KEY"
-          rpm: 30
-          tpm: 1000000
-        model_info:
-          health_check_timeout: 8
-          cooldown_time: 30
           
     
     # Optimized router settings for daily quota management
