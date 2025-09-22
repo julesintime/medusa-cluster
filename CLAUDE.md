@@ -174,6 +174,126 @@ echo "  - newapp.xuperson.org" >> clusters/labinfra/apps/kustomization.yaml
 git add . && git commit -m "Add newapp application with Infisical secrets" && git push
 ```
 
+## WordPress Git Subtree Management
+
+WordPress sites use a **different pattern** from standard applications - they're managed via **git subtree** in a centralized monorepo.
+
+### WordPress Cluster Architecture
+
+```
+devops/projects/wp-cluster/               # Git subtree (NOT submodule)
+├── README.md                             # Monorepo documentation
+├── sites/template/                       # Template for new WordPress sites
+├── wp-avada-portfolio.xuperson.org/      # Individual WordPress site
+├── wp-avada-spa.xuperson.org/           # Additional WordPress sites...
+└── docs/                                # Shared documentation
+```
+
+**CRITICAL**: This is a **git subtree**, not a submodule. Files are **physically present** in labinfra.
+
+### Git Subtree vs Submodule
+
+**Git Subtree (WordPress approach):**
+- ✅ Files are **COPIED INTO** labinfra repository
+- ✅ Work **directly** in `devops/projects/wp-cluster/`
+- ✅ Normal git workflow in labinfra
+- ✅ ArgoCD reads directly from labinfra
+- ✅ Use `git subtree push` to sync back to wp-cluster repo
+
+**Git Submodule (NOT used):**
+- ❌ External repository stays separate
+- ❌ Only pointer/reference in main repo
+- ❌ Requires separate clone and management
+
+### WordPress Development Workflow
+
+#### Daily Development (Recommended)
+```bash
+# 1. Work directly in labinfra subtree
+vim devops/projects/wp-cluster/wp-avada-portfolio.xuperson.org/wp-content/themes/style.css
+vim devops/projects/wp-cluster/wp-avada-spa.xuperson.org/wp-config/wp-config.php
+
+# 2. Commit to labinfra (triggers ArgoCD)
+git add devops/projects/wp-cluster/
+git commit -m "Update WordPress themes"
+git push origin main
+
+# 3. ArgoCD auto-deploys within 3 minutes
+# Monitor: argocd app get wp-avada-portfolio --grpc-web
+
+# 4. Optional: Sync back to wp-cluster monorepo
+git subtree push --prefix=devops/projects/wp-cluster \
+  https://github.com/julesintime/wp-cluster.git main
+```
+
+#### Adding New WordPress Sites
+```bash
+# 1. Copy template in labinfra subtree
+cp -r devops/projects/wp-cluster/sites/template/ \
+  devops/projects/wp-cluster/new-site.xuperson.org/
+
+# 2. Update configurations (domain, namespace, LoadBalancer IP)
+vim devops/projects/wp-cluster/new-site.xuperson.org/k8s-manifests.yaml
+
+# 3. Create ArgoCD Application
+cp devops/applications/wp-avada-portfolio-app.yaml \
+  devops/applications/new-site-app.yaml
+# Update source.path to: devops/projects/wp-cluster/new-site.xuperson.org
+
+# 4. Commit and deploy
+git add . && git commit -m "Add new WordPress site" && git push
+```
+
+#### Managing Git Subtree
+```bash
+# Pull changes from wp-cluster monorepo into labinfra
+git subtree pull --prefix=devops/projects/wp-cluster \
+  https://github.com/julesintime/wp-cluster.git main --squash
+
+# Push labinfra changes back to wp-cluster monorepo
+git subtree push --prefix=devops/projects/wp-cluster \
+  https://github.com/julesintime/wp-cluster.git main
+```
+
+### WordPress ArgoCD Applications
+
+Each WordPress site gets its own ArgoCD Application:
+
+```yaml
+# devops/applications/wp-site-app.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: wp-site
+  namespace: argocd
+spec:
+  source:
+    repoURL: https://github.com/julesintime/labinfra.git
+    targetRevision: main
+    path: devops/projects/wp-cluster/wp-site.xuperson.org  # Direct subtree path
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: wp-site
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+```
+
+### MetalLB IP Management for WordPress
+
+```bash
+# Check WordPress LoadBalancer IPs
+kubectl get svc -A | grep LoadBalancer | grep wp-
+
+# WordPress IP allocation:
+# wp-avada-portfolio: 192.168.80.122
+# wp-avada-spa: 192.168.80.123
+# Next available: 124, 125, 126...
+```
+
+**Key Benefit**: Edit files → Git push labinfra → ArgoCD deploys → Optionally sync to wp-cluster monorepo!
+
 ## Hello Application CI/CD Boilerplate
 
 Use the **hello** application as a complete CI/CD boilerplate for new projects with Gitea Actions, BuildKit, and Flux CD automation.

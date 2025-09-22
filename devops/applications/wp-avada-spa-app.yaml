@@ -1,0 +1,45 @@
+# ArgoCD Application for WordPress Avada SPA
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: wp-avada-spa
+  namespace: argocd
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  # Source: WordPress cluster monorepo (via subtree)
+  source:
+    repoURL: https://github.com/julesintime/labinfra.git
+    targetRevision: main
+    path: devops/projects/wp-cluster/wp-avada-spa.xuperson.org
+
+  # Destination
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: wp-avada-spa
+
+  # Sync Policy
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+    - CreateNamespace=true
+    - PrunePropagationPolicy=foreground
+    - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+
+  # Health checks
+  ignoreDifferences:
+  - group: apps
+    kind: Deployment
+    jsonPointers:
+    - /spec/replicas  # Allow external scaling
