@@ -1,0 +1,72 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: EventSource
+metadata:
+  name: portfolio-git-webhook
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argo-events-webhooks
+    app.kubernetes.io/component: eventsource
+spec:
+  serviceAccountName: webhook-eventsource
+
+  # Git webhook configuration
+  webhook:
+    # Portfolio repository webhook
+    portfolio-repo:
+      port: "12000"
+      endpoint: /portfolio-webhook
+      method: POST
+
+      # Webhook authentication (optional but recommended)
+      # authSecret:
+      #   name: webhook-auth-secret
+      #   key: token
+
+      # Event filter for specific events
+      filter:
+        expression: "body.ref contains 'refs/heads/main' || body.ref contains 'refs/heads/master'"
+
+  # Generic Git webhook for any repository
+  generic:
+    # Generic webhook for any Git push
+    git-push:
+      port: "13000"
+      endpoint: /git-webhook
+      method: POST
+
+      # More flexible filtering
+      filter:
+        expression: |
+          (
+            (body.ref contains 'refs/heads/main' || body.ref contains 'refs/heads/master') &&
+            (
+              body.repository.full_name contains 'labinfra' ||
+              body.repository.full_name contains 'avada-portfolio'
+            )
+          )
+
+---
+# Service to expose webhook endpoints
+apiVersion: v1
+kind: Service
+metadata:
+  name: portfolio-git-webhook-eventsource-svc
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argo-events-webhooks
+    app.kubernetes.io/component: eventsource-service
+spec:
+  type: LoadBalancer
+  loadBalancerIP: "192.168.80.116"  # Pick available IP from MetalLB pool
+  ports:
+  - name: portfolio-webhook
+    port: 12000
+    targetPort: 12000
+    protocol: TCP
+  - name: generic-webhook
+    port: 13000
+    targetPort: 13000
+    protocol: TCP
+  selector:
+    eventsource-name: portfolio-git-webhook

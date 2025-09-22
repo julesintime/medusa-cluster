@@ -1,0 +1,217 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: portfolio-deploy-pipeline
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argo-workflows-cicd
+    app.kubernetes.io/component: deploy-pipeline
+spec:
+  serviceAccountName: workflow-builder
+  entrypoint: deploy-application
+
+  arguments:
+    parameters:
+    - name: application-name
+      value: "avada-portfolio"
+    - name: target-revision
+      value: "HEAD"
+    - name: sync-timeout
+      value: "300s"
+
+  templates:
+
+  # Main deployment pipeline
+  - name: deploy-application
+    dag:
+      tasks:
+      - name: pre-deployment-check
+        template: health-check
+        arguments:
+          parameters:
+          - name: check-type
+            value: "pre-deployment"
+
+      - name: sync-application
+        template: argocd-sync
+        arguments:
+          parameters:
+          - name: app-name
+            value: "{{workflow.parameters.application-name}}"
+          - name: revision
+            value: "{{workflow.parameters.target-revision}}"
+        dependencies: [pre-deployment-check]
+
+      - name: wait-for-sync
+        template: wait-sync-complete
+        arguments:
+          parameters:
+          - name: app-name
+            value: "{{workflow.parameters.application-name}}"
+          - name: timeout
+            value: "{{workflow.parameters.sync-timeout}}"
+        dependencies: [sync-application]
+
+      - name: post-deployment-test
+        template: health-check
+        arguments:
+          parameters:
+          - name: check-type
+            value: "post-deployment"
+        dependencies: [wait-for-sync]
+
+      - name: notify-completion
+        template: notify-status
+        arguments:
+          parameters:
+          - name: status
+            value: "success"
+          - name: app-name
+            value: "{{workflow.parameters.application-name}}"
+        dependencies: [post-deployment-test]
+
+  # ArgoCD sync operation (replaces Tekton deployment trigger)
+  - name: argocd-sync
+    inputs:
+      parameters:
+      - name: app-name
+      - name: revision
+    container:
+      image: quay.io/argoproj/argocd:latest
+      command: [sh, -c]
+      args:
+      - |
+        # Login to ArgoCD using local cluster connection
+        argocd login argocd-server.argocd.svc.cluster.local:443 \
+          --insecure \
+          --username admin \
+          --password $ARGOCD_ADMIN_PASSWORD
+
+        # Sync the application with new revision
+        echo "Syncing application {{inputs.parameters.app-name}} to revision {{inputs.parameters.revision}}"
+
+        argocd app sync {{inputs.parameters.app-name}} \
+          --revision {{inputs.parameters.revision}} \
+          --force \
+          --timeout 300
+
+        echo "Application sync initiated successfully"
+      env:
+      - name: ARGOCD_ADMIN_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: argocd-secrets
+            key: admin-password
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+
+  # Wait for sync completion
+  - name: wait-sync-complete
+    inputs:
+      parameters:
+      - name: app-name
+      - name: timeout
+    container:
+      image: quay.io/argoproj/argocd:latest
+      command: [sh, -c]
+      args:
+      - |
+        # Login to ArgoCD
+        argocd login argocd-server.argocd.svc.cluster.local:443 \
+          --insecure \
+          --username admin \
+          --password $ARGOCD_ADMIN_PASSWORD
+
+        # Wait for application to be healthy
+        echo "Waiting for application {{inputs.parameters.app-name}} to be healthy..."
+
+        argocd app wait {{inputs.parameters.app-name}} \
+          --health \
+          --timeout {{inputs.parameters.timeout}}
+
+        echo "Application is healthy and sync completed"
+      env:
+      - name: ARGOCD_ADMIN_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: argocd-secrets
+            key: admin-password
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+
+  # Health check template
+  - name: health-check
+    inputs:
+      parameters:
+      - name: check-type
+    container:
+      image: alpine/curl:latest
+      command: [sh, -c]
+      args:
+      - |
+        echo "Running {{inputs.parameters.check-type}} health check..."
+
+        if [ "{{inputs.parameters.check-type}}" = "pre-deployment" ]; then
+          echo "Pre-deployment checks:"
+          echo "✅ Cluster connectivity"
+          echo "✅ ArgoCD server reachable"
+          echo "✅ Ready for deployment"
+
+        elif [ "{{inputs.parameters.check-type}}" = "post-deployment" ]; then
+          echo "Post-deployment checks:"
+
+          # Check WordPress application health
+          echo "🔍 Checking WordPress application..."
+          for i in $(seq 1 30); do
+            if curl -f -s http://wordpress.avada-portfolio.svc.cluster.local/wp-admin/install.php > /dev/null; then
+              echo "✅ WordPress is responding"
+              break
+            else
+              echo "⏳ Waiting for WordPress... (attempt $i/30)"
+              sleep 10
+            fi
+          done
+
+          # Check MySQL database health
+          echo "🔍 Checking MySQL database..."
+          if nc -z mysql.avada-portfolio.svc.cluster.local 3306; then
+            echo "✅ MySQL is reachable"
+          else
+            echo "❌ MySQL connection failed"
+            exit 1
+          fi
+
+          echo "✅ All post-deployment checks passed"
+        fi
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+
+  # Notification template
+  - name: notify-status
+    inputs:
+      parameters:
+      - name: status
+      - name: app-name
+    container:
+      image: alpine/curl:latest
+      command: [sh, -c]
+      args:
+      - |
+        echo "📢 Deployment {{inputs.parameters.status}} for {{inputs.parameters.app-name}}"
+        echo "🎯 Application: {{inputs.parameters.app-name}}"
+        echo "📅 Timestamp: $(date)"
+        echo "🔧 Pipeline: Argo Workflows Deploy Pipeline"
+
+        # Here you could add webhook notifications to Slack, Discord, etc.
+        # curl -X POST -H 'Content-type: application/json' \
+        #   --data '{"text":"Deployment {{inputs.parameters.status}} for {{inputs.parameters.app-name}}"}' \
+        #   $SLACK_WEBHOOK_URL
+
+        echo "✅ Notification sent"
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000

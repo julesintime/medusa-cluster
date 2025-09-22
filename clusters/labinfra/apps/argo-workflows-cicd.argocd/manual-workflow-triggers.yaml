@@ -1,0 +1,177 @@
+---
+# Manual workflow trigger via Kubernetes manifest (CLI-free)
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: manual-portfolio-deploy-
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argo-workflows-cicd
+    app.kubernetes.io/component: manual-trigger
+    trigger: manual
+    target: avada-portfolio
+spec:
+  serviceAccountName: workflow-builder
+  entrypoint: manual-deploy-pipeline
+
+  arguments:
+    parameters:
+    - name: repo-url
+      value: "https://github.com/xuperson-org/labinfra"
+    - name: revision
+      value: "HEAD"
+    - name: image-tag
+      value: "manual-deploy-v1.0"
+    - name: trigger-reason
+      value: "Initial manual deployment via Kubernetes manifest"
+
+  templates:
+
+  # Manual deployment pipeline
+  - name: manual-deploy-pipeline
+    dag:
+      tasks:
+      - name: log-deployment-start
+        template: log-trigger-info
+
+      - name: build-images
+        templateRef:
+          name: portfolio-build-pipeline
+          template: build-and-push
+        arguments:
+          parameters:
+          - name: repo-url
+            value: "{{workflow.parameters.repo-url}}"
+          - name: revision
+            value: "{{workflow.parameters.revision}}"
+          - name: image-tag
+            value: "{{workflow.parameters.image-tag}}"
+        dependencies: [log-deployment-start]
+
+      - name: deploy-application
+        templateRef:
+          name: portfolio-deploy-pipeline
+          template: deploy-application
+        arguments:
+          parameters:
+          - name: application-name
+            value: "avada-portfolio"
+          - name: target-revision
+            value: "{{workflow.parameters.revision}}"
+        dependencies: [build-images]
+
+      - name: final-verification
+        template: final-health-check
+        dependencies: [deploy-application]
+
+  # Log trigger information
+  - name: log-trigger-info
+    container:
+      image: alpine:latest
+      command: [sh, -c]
+      args:
+      - |
+        echo "🚀 Manual Portfolio Deployment Started"
+        echo "========================================"
+        echo "📅 Timestamp: $(date)"
+        echo "🎯 Repository: {{workflow.parameters.repo-url}}"
+        echo "🔖 Revision: {{workflow.parameters.revision}}"
+        echo "🏷️ Image Tag: {{workflow.parameters.image-tag}}"
+        echo "📝 Reason: {{workflow.parameters.trigger-reason}}"
+        echo "========================================"
+        echo "🔧 This workflow will:"
+        echo "  1. Build custom WordPress images"
+        echo "  2. Update deployment manifests"
+        echo "  3. Trigger ArgoCD application sync"
+        echo "  4. Run health checks"
+        echo "========================================"
+        echo "✅ Manual deployment pipeline initiated"
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+
+  # Final verification
+  - name: final-health-check
+    container:
+      image: alpine/curl:latest
+      command: [sh, -c]
+      args:
+      - |
+        echo "🔍 Final Health Check for Avada Portfolio"
+        echo "========================================"
+
+        # Wait for application to be ready
+        echo "⏳ Waiting for application to be ready..."
+        sleep 30
+
+        # Check WordPress health
+        echo "🧪 Testing WordPress accessibility..."
+        for i in $(seq 1 20); do
+          echo "Attempt $i/20..."
+          if curl -f -s --max-time 10 http://wordpress.avada-portfolio.svc.cluster.local/wp-admin/install.php > /dev/null; then
+            echo "✅ WordPress is responding internally"
+            break
+          else
+            echo "⏳ WordPress not ready yet, waiting..."
+            sleep 15
+          fi
+        done
+
+        # Check MySQL connectivity
+        echo "🧪 Testing MySQL connectivity..."
+        if nc -z mysql.avada-portfolio.svc.cluster.local 3306; then
+          echo "✅ MySQL is accessible"
+        else
+          echo "❌ MySQL connection failed"
+        fi
+
+        echo "========================================"
+        echo "🎉 Manual deployment pipeline completed!"
+        echo "📍 Access your application at:"
+        echo "   https://avada-portfolio.xuperson.org"
+        echo "========================================"
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+
+---
+# Simple test workflow to verify Argo Workflows is working
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: test-argo-workflows-
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argo-workflows-cicd
+    app.kubernetes.io/component: test
+spec:
+  serviceAccountName: workflow-builder
+  entrypoint: test-pipeline
+
+  templates:
+  - name: test-pipeline
+    dag:
+      tasks:
+      - name: test-step-1
+        template: hello-world
+      - name: test-step-2
+        template: cluster-info
+        dependencies: [test-step-1]
+
+  - name: hello-world
+    container:
+      image: alpine:latest
+      command: [echo]
+      args: ["🎉 Argo Workflows is working! Pipeline test successful."]
+
+  - name: cluster-info
+    container:
+      image: alpine:latest
+      command: [sh, -c]
+      args:
+      - |
+        echo "🔍 Cluster Information:"
+        echo "Namespace: argocd"
+        echo "Workflow: {{workflow.name}}"
+        echo "Timestamp: $(date)"
+        echo "✅ Test pipeline completed successfully"

@@ -1,0 +1,161 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wordpress
+  namespace: avada-portfolio
+  labels:
+    app.kubernetes.io/name: avada-portfolio
+    app.kubernetes.io/component: wordpress
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: avada-portfolio
+      app.kubernetes.io/component: wordpress
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: avada-portfolio
+        app.kubernetes.io/component: wordpress
+    spec:
+      securityContext:
+        runAsNonRoot: false  # WordPress needs root for file permissions
+        fsGroup: 33  # www-data group
+      containers:
+      - name: wordpress
+        image: wordpress:latest
+        env:
+        - name: WORDPRESS_DB_HOST
+          value: "mysql:3306"
+        - name: WORDPRESS_DB_NAME
+          valueFrom:
+            secretKeyRef:
+              name: avada-portfolio-db-secrets
+              key: mysql-database
+        - name: WORDPRESS_DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: avada-portfolio-db-secrets
+              key: mysql-user
+        - name: WORDPRESS_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: avada-portfolio-db-secrets
+              key: mysql-password
+        - name: WP_AUTH_KEY
+          valueFrom:
+            secretKeyRef:
+              name: avada-portfolio-wp-secrets
+              key: wordpress-auth-key
+        - name: WP_SECURE_AUTH_KEY
+          valueFrom:
+            secretKeyRef:
+              name: avada-portfolio-wp-secrets
+              key: wordpress-secure-auth-key
+        - name: WP_LOGGED_IN_KEY
+          valueFrom:
+            secretKeyRef:
+              name: avada-portfolio-wp-secrets
+              key: wordpress-logged-in-key
+        - name: WP_NONCE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: avada-portfolio-wp-secrets
+              key: wordpress-nonce-key
+        ports:
+        - containerPort: 80
+          name: http
+        volumeMounts:
+        - name: wordpress-data
+          mountPath: /var/www/html
+        - name: wordpress-config
+          mountPath: /usr/local/etc/php/conf.d/custom.ini
+          subPath: php.ini
+        - name: wordpress-config
+          mountPath: /var/www/html/wp-config-custom.php
+          subPath: wp-config-custom.php
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+            add:
+            - CHOWN
+            - DAC_OVERRIDE
+            - SETGID
+            - SETUID
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: 1000m
+            memory: 2Gi
+        livenessProbe:
+          httpGet:
+            path: /wp-admin/install.php
+            port: 80
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /wp-admin/install.php
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+      initContainers:
+      - name: copy-content
+        image: wordpress:latest
+        command:
+        - sh
+        - -c
+        - |
+          # Initialize WordPress content if empty
+          if [ ! -f /var/www/html/wp-config.php ]; then
+            echo "Initializing WordPress content..."
+            # Copy default WordPress files
+            cp -R /usr/src/wordpress/* /var/www/html/
+            # Set permissions
+            chown -R www-data:www-data /var/www/html
+            chmod -R 755 /var/www/html
+          else
+            echo "WordPress already initialized"
+          fi
+        volumeMounts:
+        - name: wordpress-data
+          mountPath: /var/www/html
+        securityContext:
+          runAsUser: 0  # Need root for initial setup
+      volumes:
+      - name: wordpress-data
+        persistentVolumeClaim:
+          claimName: wordpress-data
+      - name: wordpress-config
+        configMap:
+          name: wordpress-config
+      restartPolicy: Always
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: wordpress-data
+  namespace: avada-portfolio
+  labels:
+    app.kubernetes.io/name: avada-portfolio
+    app.kubernetes.io/component: wordpress
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: longhorn

@@ -1,0 +1,188 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: portfolio-ci-schedule
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argo-workflows-cicd
+    app.kubernetes.io/component: scheduled-ci
+spec:
+  schedule: "0 2 * * *"  # Daily at 2 AM UTC
+  timezone: "UTC"
+  startingDeadlineSeconds: 0
+  concurrencyPolicy: "Replace"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+
+  workflowSpec:
+    serviceAccountName: workflow-builder
+    entrypoint: full-ci-cd-pipeline
+
+    arguments:
+      parameters:
+      - name: repo-url
+        value: "https://github.com/xuperson-org/labinfra"
+      - name: revision
+        value: "HEAD"
+      - name: image-tag
+        value: "nightly-{{workflow.creationTimestamp.Y}}{{workflow.creationTimestamp.m}}{{workflow.creationTimestamp.d}}"
+
+    templates:
+
+    # Full CI/CD pipeline combining build and deploy
+    - name: full-ci-cd-pipeline
+      dag:
+        tasks:
+        - name: build-phase
+          templateRef:
+            name: portfolio-build-pipeline
+            template: build-and-push
+          arguments:
+            parameters:
+            - name: repo-url
+              value: "{{workflow.parameters.repo-url}}"
+            - name: revision
+              value: "{{workflow.parameters.revision}}"
+            - name: image-tag
+              value: "{{workflow.parameters.image-tag}}"
+
+        - name: deploy-phase
+          templateRef:
+            name: portfolio-deploy-pipeline
+            template: deploy-application
+          arguments:
+            parameters:
+            - name: application-name
+              value: "avada-portfolio"
+            - name: target-revision
+              value: "{{workflow.parameters.revision}}"
+          dependencies: [build-phase]
+
+        - name: integration-tests
+          template: run-integration-tests
+          dependencies: [deploy-phase]
+
+    # Integration test template
+    - name: run-integration-tests
+      container:
+        image: alpine/curl:latest
+        command: [sh, -c]
+        args:
+        - |
+          echo "🧪 Running integration tests for avada-portfolio..."
+
+          # Test WordPress installation page
+          echo "📋 Test 1: WordPress installation page"
+          if curl -f -s https://avada-portfolio.xuperson.org/wp-admin/install.php > /dev/null; then
+            echo "✅ WordPress installation page accessible"
+          else
+            echo "❌ WordPress installation page not accessible"
+            exit 1
+          fi
+
+          # Test database connectivity through WordPress
+          echo "📋 Test 2: Database connectivity"
+          if curl -f -s https://avada-portfolio.xuperson.org/wp-admin/setup-config.php > /dev/null; then
+            echo "✅ Database connectivity test passed"
+          else
+            echo "❌ Database connectivity test failed"
+            exit 1
+          fi
+
+          # Test responsive design (simple HTTP response check)
+          echo "📋 Test 3: Basic HTTP response"
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://avada-portfolio.xuperson.org/)
+          if [ "$HTTP_CODE" -eq 200 ] || [ "$HTTP_CODE" -eq 302 ]; then
+            echo "✅ HTTP response test passed (code: $HTTP_CODE)"
+          else
+            echo "❌ HTTP response test failed (code: $HTTP_CODE)"
+            exit 1
+          fi
+
+          echo "🎉 All integration tests passed!"
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+
+---
+# Manual trigger workflow for immediate CI/CD
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: portfolio-manual-trigger
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argo-workflows-cicd
+    app.kubernetes.io/component: manual-trigger
+spec:
+  serviceAccountName: workflow-builder
+  entrypoint: manual-ci-cd
+
+  arguments:
+    parameters:
+    - name: repo-url
+      value: "https://github.com/xuperson-org/labinfra"
+    - name: revision
+      value: "HEAD"
+    - name: image-tag
+      value: "manual-{{workflow.creationTimestamp.Y}}{{workflow.creationTimestamp.m}}{{workflow.creationTimestamp.d}}-{{workflow.creationTimestamp.H}}{{workflow.creationTimestamp.M}}"
+    - name: trigger-reason
+      value: "Manual deployment trigger"
+
+  templates:
+
+  # Manual CI/CD trigger with notification
+  - name: manual-ci-cd
+    dag:
+      tasks:
+      - name: notify-start
+        template: notify-pipeline-start
+        arguments:
+          parameters:
+          - name: reason
+            value: "{{workflow.parameters.trigger-reason}}"
+          - name: revision
+            value: "{{workflow.parameters.revision}}"
+
+      - name: build-and-deploy
+        templateRef:
+          name: portfolio-ci-schedule
+          template: full-ci-cd-pipeline
+        arguments:
+          parameters:
+          - name: repo-url
+            value: "{{workflow.parameters.repo-url}}"
+          - name: revision
+            value: "{{workflow.parameters.revision}}"
+          - name: image-tag
+            value: "{{workflow.parameters.image-tag}}"
+        dependencies: [notify-start]
+
+  # Pipeline start notification
+  - name: notify-pipeline-start
+    inputs:
+      parameters:
+      - name: reason
+      - name: revision
+    container:
+      image: alpine/curl:latest
+      command: [sh, -c]
+      args:
+      - |
+        echo "🚀 Starting manual CI/CD pipeline"
+        echo "📋 Reason: {{inputs.parameters.reason}}"
+        echo "🎯 Revision: {{inputs.parameters.revision}}"
+        echo "⏰ Started at: $(date)"
+        echo "🔧 Triggered by: Argo Workflows Manual Trigger"
+        echo ""
+        echo "This pipeline will:"
+        echo "  1. Build new container images"
+        echo "  2. Update manifests with new tags"
+        echo "  3. Deploy via ArgoCD"
+        echo "  4. Run integration tests"
+        echo ""
+        echo "✅ Pipeline notification sent"
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000

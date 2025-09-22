@@ -1,0 +1,16 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - avada-portfolio-namespace.yaml
+  - avada-portfolio-infisical-secrets.yaml
+  - avada-portfolio-mysql-pvc.yaml
+  - avada-portfolio-configmap.yaml
+  - avada-portfolio-mysql-deployment.yaml
+  - avada-portfolio-wordpress-deployment.yaml
+  - avada-portfolio-services.yaml
+  - avada-portfolio-ingress.yaml
+  - avada-portfolio-argocd-application.yaml
+
+namespace: avada-portfolio
