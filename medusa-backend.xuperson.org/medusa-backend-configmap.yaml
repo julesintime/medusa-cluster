@@ -16,16 +16,20 @@ data:
         "seed": "medusa seed -f ./data/seed.json"
       },
       "dependencies": {
-        "@medusajs/medusa": "^2.0.0",
-        "@medusajs/admin-ui": "^3.0.0",
-        "@medusajs/cache-redis": "^2.0.0",
-        "@medusajs/event-bus-redis": "^2.0.0",
-        "@medusajs/workflow-engine-redis": "^2.0.0",
-        "pg": "^8.11.0",
-        "redis": "^4.6.0"
+        "@medusajs/medusa": "2.9.0",
+        "@medusajs/admin-bundler": "2.9.0",
+        "@medusajs/cache-redis": "2.9.0",
+        "@medusajs/event-bus-redis": "2.9.0",
+        "@medusajs/workflow-engine-redis": "2.9.0",
+        "@mikro-orm/core": "6.4.3",
+        "@mikro-orm/postgresql": "6.4.3",
+        "pg": "^8.13.0",
+        "awilix": "^8.0.1"
       },
       "devDependencies": {
-        "@medusajs/medusa-cli": "^2.0.0"
+        "@medusajs/cli": "2.9.0",
+        "@mikro-orm/cli": "6.4.3",
+        "typescript": "^5.6.2"
       },
       "engines": {
         "node": ">=20"
