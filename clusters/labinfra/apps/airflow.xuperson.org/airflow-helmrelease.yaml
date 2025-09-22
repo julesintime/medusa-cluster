@@ -36,9 +36,6 @@ spec:
     webserver:
       enabled: true
       replicas: 1
-      service:
-        type: ClusterIP
-        port: 8080
 
     # Configure ingress
     ingress:
