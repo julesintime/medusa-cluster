@@ -1,0 +1,131 @@
+# Gitea Actions CI/CD Pipeline for WordPress Avada Salon
+# Builds custom WordPress image and triggers ArgoCD deployment
+
+name: Build and Deploy WordPress Salon
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'devops/projects/wp-cluster/sites/wp-avada-salon.xuperson.org/**'
+  workflow_dispatch:
+
+env:
+  REGISTRY: git.xuperson.org
+  IMAGE_NAME: wp-avada-salon
+  SITE_PATH: devops/projects/wp-cluster/sites/wp-avada-salon.xuperson.org
+
+jobs:
+  build-and-push:
+    name: Build WordPress Image
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Gitea Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITEA_TOKEN }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch,prefix=main-
+          type=sha,prefix=main-
+          type=raw,value=latest
+
+    - name: Create WordPress content if missing
+      run: |
+        cd ${{ env.SITE_PATH }}
+
+        # Create basic WordPress theme if none exists
+        if [ ! -d "wp-content/themes" ] || [ -z "$(ls -A wp-content/themes)" ]; then
+          mkdir -p wp-content/themes/salon-theme
+          cat > wp-content/themes/salon-theme/style.css << 'EOF'
+        /*
+        Theme Name: Salon Theme
+        Description: Custom theme for Avada Salon
+        Version: 1.0
+        */
+
+        body {
+          font-family: Arial, sans-serif;
+          background-color: #f8f9fa;
+        }
+
+        .salon-header {
+          background-color: #343a40;
+          color: white;
+          padding: 20px;
+          text-align: center;
+        }
+        EOF
+
+          cat > wp-content/themes/salon-theme/index.php << 'EOF'
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title><?php bloginfo('name'); ?></title>
+          <?php wp_head(); ?>
+        </head>
+        <body>
+          <div class="salon-header">
+            <h1><?php bloginfo('name'); ?></h1>
+            <p><?php bloginfo('description'); ?></p>
+          </div>
+          <div class="content">
+            <?php if (have_posts()) : while (have_posts()) : the_post(); ?>
+              <h2><?php the_title(); ?></h2>
+              <?php the_content(); ?>
+            <?php endwhile; endif; ?>
+          </div>
+          <?php wp_footer(); ?>
+        </body>
+        </html>
+        EOF
+        fi
+
+        # Create plugins directory
+        mkdir -p wp-content/plugins
+        mkdir -p wp-content/uploads
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: ${{ env.SITE_PATH }}
+        file: ${{ env.SITE_PATH }}/Dockerfile
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Image digest
+      run: echo ${{ steps.meta.outputs.digest }}
+
+  trigger-deployment:
+    name: Trigger ArgoCD Sync
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Trigger ArgoCD Application Sync
+      run: |
+        echo "✅ Image built and pushed successfully"
+        echo "🔄 ArgoCD Image Updater will detect the new image and update the deployment automatically"
+        echo "📋 Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main-${{ github.sha }}"
+        echo "🚀 WordPress Salon will be deployed to: https://wp-avada-salon.xuperson.org"

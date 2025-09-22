@@ -1,0 +1,83 @@
+# ArgoCD ApplicationSet for Autonomous WordPress Site Discovery
+# This replaces manual CLI-based ArgoCD applications with automatic discovery
+# When a new WordPress site is added to devops/projects/wp-cluster/sites/,
+# it will be automatically discovered and deployed
+
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: wordpress-sites
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+
+  # Git Generator: Automatically discovers WordPress sites
+  generators:
+  - git:
+      repoURL: https://github.com/julesintime/labinfra.git
+      revision: main
+      directories:
+      - path: devops/projects/wp-cluster/sites/*
+        exclude: false
+      # Exclude the template directory
+      - path: devops/projects/wp-cluster/sites/template
+        exclude: true
+      requeueAfterSeconds: 180  # Check for new sites every 3 minutes
+
+  # Template: Defines how each discovered site becomes an ArgoCD Application
+  template:
+    metadata:
+      name: '{{.path.basename}}'  # e.g., "wp-avada-salon.xuperson.org"
+      namespace: argocd
+      labels:
+        app.kubernetes.io/name: wordpress
+        app.kubernetes.io/part-of: wp-cluster
+        app.kubernetes.io/managed-by: argocd-applicationset
+        site: '{{.path.basename}}'
+      annotations:
+        argocd.argoproj.io/sync-wave: "2"
+    spec:
+      project: default
+
+      # Source: Each discovered WordPress site directory
+      source:
+        repoURL: https://github.com/julesintime/labinfra.git
+        targetRevision: main
+        path: '{{.path.path}}'  # devops/projects/wp-cluster/sites/wp-avada-salon.xuperson.org
+
+      # Destination: Create dedicated namespace for each site
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{.path.basename | replace ".xuperson.org" ""}}'  # wp-avada-salon
+
+      # Sync Policy: Fully automated deployment
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+          allowEmpty: false
+        syncOptions:
+        - CreateNamespace=true
+        - PrunePropagationPolicy=foreground
+        - PruneLast=true
+        - RespectIgnoreDifferences=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 3m
+
+      # Health checks
+      ignoreDifferences:
+      - group: apps
+        kind: Deployment
+        jsonPointers:
+        - /spec/replicas  # Allow external scaling
+      - group: ""
+        kind: Secret
+        jsonPointers:
+        - /data  # Allow secret updates
