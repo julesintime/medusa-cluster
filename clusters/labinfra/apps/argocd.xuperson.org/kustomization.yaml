@@ -24,3 +24,6 @@ resources:
   # GitHub webhook integration
   - argocd-eventbus.yaml
   - argocd-webhook-eventsource.yaml
+
+  # GitHub repository credentials
+  - github-repository-credentials.yaml

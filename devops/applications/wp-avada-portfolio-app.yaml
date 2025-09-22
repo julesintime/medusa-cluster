@@ -1,0 +1,45 @@
+# ArgoCD Application for WordPress Avada Portfolio
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: wp-avada-portfolio
+  namespace: argocd
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  # Source: GitHub repository (single source of truth)
+  source:
+    repoURL: https://github.com/julesintime/labinfra.git
+    targetRevision: HEAD
+    path: devops/projects/wp-avada-portfolio
+
+  # Destination
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: wp-avada-portfolio
+
+  # Sync Policy
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+    - CreateNamespace=true
+    - PrunePropagationPolicy=foreground
+    - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+
+  # Health checks
+  ignoreDifferences:
+  - group: apps
+    kind: Deployment
+    jsonPointers:
+    - /spec/replicas  # Allow external scaling
