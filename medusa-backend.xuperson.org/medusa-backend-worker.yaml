@@ -49,15 +49,25 @@ spec:
         - sh
         - -c
         - |
+          # Create medusa user and home directory
+          addgroup -g 1001 -S nodejs || true
+          adduser -S medusa -u 1001 -G nodejs || true
+
+          # Create home directory and config directory
+          mkdir -p /home/medusa/.config/medusa
+          chown -R 1001:1001 /home/medusa
+
           # Copy app files from ConfigMap
           cp /app-config/* /server/
           chmod +x /server/start.sh
+          chown -R 1001:1001 /server
 
-          # Install dependencies
+          # Install dependencies as root
           npm install
 
           # Create user data directory
           mkdir -p /server/data
+          chown -R 1001:1001 /server/data
         volumeMounts:
         - name: medusa-app
           mountPath: /app-config
@@ -70,6 +80,8 @@ spec:
         env:
         - name: NODE_ENV
           value: "production"
+        - name: HOME
+          value: "/home/medusa"
         - name: DATABASE_URL
           valueFrom:
             secretKeyRef:
@@ -99,6 +111,8 @@ spec:
           mountPath: /app-config
         - name: server-data
           mountPath: /server
+        - name: home-data
+          mountPath: /home/medusa
         command: ["/server/start.sh"]
         resources:
           requests:
@@ -121,4 +135,6 @@ spec:
           name: medusa-app-source
           defaultMode: 0755
       - name: server-data
+        emptyDir: {}
+      - name: home-data
         emptyDir: {}
