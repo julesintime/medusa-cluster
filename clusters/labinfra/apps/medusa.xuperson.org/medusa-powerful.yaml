@@ -76,7 +76,7 @@ spec:
           # Run migrations
           echo "🔄 Running migrations..."
           npm run build
-          npx medusa migrations run
+          npx medusa db:migrate
 
           # Create admin user
           echo "👤 Creating admin user..."
