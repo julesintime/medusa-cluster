@@ -42,7 +42,6 @@ spec:
             echo "Waiting for Redis..."
             sleep 2
           done
-      initContainers:
       - name: setup-medusa-worker
         image: node:20-alpine
         workingDir: /server
@@ -64,13 +63,6 @@ spec:
           mountPath: /app-config
         - name: server-data
           mountPath: /server
-      volumes:
-      - name: medusa-app
-        configMap:
-          name: medusa-app-source
-          defaultMode: 0755
-      - name: server-data
-        emptyDir: {}
       containers:
       - name: medusa-worker
         image: node:20-alpine
@@ -123,3 +115,10 @@ spec:
           capabilities:
             drop:
             - ALL
+      volumes:
+      - name: medusa-app
+        configMap:
+          name: medusa-app-source
+          defaultMode: 0755
+      - name: server-data
+        emptyDir: {}
