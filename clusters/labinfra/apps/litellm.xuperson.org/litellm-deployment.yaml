@@ -54,15 +54,15 @@ spec:
         # Health checks
         livenessProbe:
           httpGet:
-            path: /health
+            path: /health/liveliness
             port: 4000
           initialDelaySeconds: 60
           periodSeconds: 30
           timeoutSeconds: 10
-          
+
         readinessProbe:
           httpGet:
-            path: /health  
+            path: /health/liveliness
             port: 4000
           initialDelaySeconds: 45
           periodSeconds: 15
