@@ -63,6 +63,7 @@ spec:
       # Additional command arguments
       extraArgs:
         - --insecure
+        - --disable-tls
 
       # Config for external URL
       config:
