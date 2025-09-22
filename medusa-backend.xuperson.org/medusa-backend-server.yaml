@@ -43,11 +43,19 @@ spec:
             sleep 2
           done
       - name: run-migrations
-        image: medusajs/medusa:latest
+        image: node:20-alpine
+        workingDir: /app
         command:
         - sh
         - -c
         - |
+          # Install medusa CLI globally
+          npm install -g @medusajs/medusa-cli
+          # Initialize a basic Medusa project
+          medusa new . --skip-db --skip-env
+          # Install dependencies
+          npm install
+          # Run migrations
           npx medusa db:migrate
         env:
         - name: DATABASE_URL
@@ -72,7 +80,8 @@ spec:
               key: jwt-secret
       containers:
       - name: medusa-server
-        image: medusajs/medusa:latest
+        image: node:20-alpine
+        workingDir: /app
         ports:
         - containerPort: 9000
         env:
@@ -121,6 +130,16 @@ spec:
           value: "server"
         - name: MEDUSA_BACKEND_URL
           value: "https://medusa-backend.xuperson.org"
+        command:
+        - sh
+        - -c
+        - |
+          # Install dependencies
+          npm install -g @medusajs/medusa-cli
+          medusa new . --skip-db --skip-env
+          npm install
+          # Start the server
+          npm start
         livenessProbe:
           httpGet:
             path: /health

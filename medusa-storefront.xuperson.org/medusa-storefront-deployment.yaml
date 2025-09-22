@@ -29,7 +29,8 @@ spec:
           done
       containers:
       - name: medusa-storefront
-        image: medusajs/starter-default-storefront:latest
+        image: node:20-alpine
+        workingDir: /app
         ports:
         - containerPort: 3000
         env:
@@ -63,6 +64,18 @@ spec:
         #     secretKeyRef:
         #       name: medusa-storefront-secrets
         #       key: google-analytics-id
+        command:
+        - sh
+        - -c
+        - |
+          # Install dependencies
+          npm install -g @medusajs/create-medusa-app
+          # Create storefront app
+          create-medusa-app --with-nextjs-starter --skip-db
+          cd storefront
+          npm install
+          # Start the storefront
+          npm run dev
         livenessProbe:
           httpGet:
             path: /

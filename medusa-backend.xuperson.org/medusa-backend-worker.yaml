@@ -44,7 +44,8 @@ spec:
           done
       containers:
       - name: medusa-worker
-        image: medusajs/medusa:latest
+        image: node:20-alpine
+        workingDir: /app
         env:
         - name: NODE_ENV
           value: "production"
@@ -73,9 +74,15 @@ spec:
         - name: MEDUSA_WORKER_MODE
           value: "worker"
         command:
-        - npm
-        - run
-        - start
+        - sh
+        - -c
+        - |
+          # Install dependencies
+          npm install -g @medusajs/medusa-cli
+          medusa new . --skip-db --skip-env
+          npm install
+          # Start the worker
+          npm start
         resources:
           requests:
             memory: "512Mi"
