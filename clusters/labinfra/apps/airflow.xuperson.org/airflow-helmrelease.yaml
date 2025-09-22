@@ -65,8 +65,8 @@ spec:
           adminPasswordKey: postgresql-postgres-password
           userPasswordKey: postgresql-password
 
-    # Environment variables for secrets
-    extraEnv: |
+    # Environment variables for secrets - simplified for now
+    env:
       - name: AIRFLOW__WEBSERVER__SECRET_KEY
         valueFrom:
           secretKeyRef:
@@ -78,10 +78,13 @@ spec:
             name: airflow-secrets
             key: fernet-key
 
-    # Airflow configuration
+    # Airflow configuration - use nested object format
     config:
-      AIRFLOW__WEBSERVER__AUTHENTICATE: "True"
-      AIRFLOW__WEBSERVER__AUTH_BACKEND: "airflow.api.auth.backend.basic_auth"
+      webserver:
+        authenticate: true
+        auth_backend: "airflow.api.auth.backend.basic_auth"
+      core:
+        load_examples: false
 
     # Admin user configuration
     defaultAirflowRepository: apache/airflow
