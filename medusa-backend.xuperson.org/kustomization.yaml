@@ -4,6 +4,7 @@ kind: Kustomization
 resources:
   - medusa-backend-namespace.yaml
   - medusa-backend-infisical-secrets.yaml
+  - medusa-backend-configmap.yaml
   - medusa-backend-postgresql.yaml
   - medusa-backend-redis.yaml
   - medusa-backend-server.yaml

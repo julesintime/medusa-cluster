@@ -7,8 +7,16 @@ echo "Starting Medusa application..."
 if [ "$MEDUSA_WORKER_MODE" = "server" ]; then
     echo "Running database migrations..."
     npx medusa db:migrate
+
+    echo "Seeding database..."
+    npm run seed || echo "Seeding failed, continuing..."
 fi
 
-# Start the Medusa application
-echo "Starting Medusa in $MEDUSA_WORKER_MODE mode..."
-exec npm start
+# Start the Medusa application based on mode
+if [ "$MEDUSA_WORKER_MODE" = "worker" ]; then
+    echo "Starting Medusa worker..."
+    exec npm start
+else
+    echo "Starting Medusa server..."
+    exec npm start
+fi

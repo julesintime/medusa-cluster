@@ -42,10 +42,39 @@ spec:
             echo "Waiting for Redis..."
             sleep 2
           done
+      initContainers:
+      - name: setup-medusa-worker
+        image: node:20-alpine
+        workingDir: /server
+        command:
+        - sh
+        - -c
+        - |
+          # Copy app files from ConfigMap
+          cp /app-config/* /server/
+          chmod +x /server/start.sh
+
+          # Install dependencies
+          npm install
+
+          # Create user data directory
+          mkdir -p /server/data
+        volumeMounts:
+        - name: medusa-app
+          mountPath: /app-config
+        - name: server-data
+          mountPath: /server
+      volumes:
+      - name: medusa-app
+        configMap:
+          name: medusa-app-source
+          defaultMode: 0755
+      - name: server-data
+        emptyDir: {}
       containers:
       - name: medusa-worker
         image: node:20-alpine
-        workingDir: /app
+        workingDir: /server
         env:
         - name: NODE_ENV
           value: "production"
@@ -73,16 +102,12 @@ spec:
           value: "true"
         - name: MEDUSA_WORKER_MODE
           value: "worker"
-        command:
-        - sh
-        - -c
-        - |
-          # Install dependencies
-          npm install -g @medusajs/medusa-cli
-          medusa new . --skip-db --skip-env
-          npm install
-          # Start the worker
-          npm start
+        volumeMounts:
+        - name: medusa-app
+          mountPath: /app-config
+        - name: server-data
+          mountPath: /server
+        command: ["/server/start.sh"]
         resources:
           requests:
             memory: "512Mi"

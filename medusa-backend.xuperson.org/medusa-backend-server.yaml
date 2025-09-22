@@ -42,21 +42,22 @@ spec:
             echo "Waiting for Redis..."
             sleep 2
           done
-      - name: run-migrations
+      - name: setup-medusa
         image: node:20-alpine
-        workingDir: /app
+        workingDir: /server
         command:
         - sh
         - -c
         - |
-          # Install medusa CLI globally
-          npm install -g @medusajs/medusa-cli
-          # Initialize a basic Medusa project
-          medusa new . --skip-db --skip-env
+          # Copy app files from ConfigMap
+          cp /app-config/* /server/
+          chmod +x /server/start.sh
+
           # Install dependencies
           npm install
-          # Run migrations
-          npx medusa db:migrate
+
+          # Create user data directory
+          mkdir -p /server/data
         env:
         - name: DATABASE_URL
           valueFrom:
@@ -78,10 +79,22 @@ spec:
             secretKeyRef:
               name: medusa-backend-secrets
               key: jwt-secret
+        volumeMounts:
+        - name: medusa-app
+          mountPath: /app-config
+        - name: server-data
+          mountPath: /server
+      volumes:
+      - name: medusa-app
+        configMap:
+          name: medusa-app-source
+          defaultMode: 0755
+      - name: server-data
+        emptyDir: {}
       containers:
       - name: medusa-server
         image: node:20-alpine
-        workingDir: /app
+        workingDir: /server
         ports:
         - containerPort: 9000
         env:
@@ -130,16 +143,12 @@ spec:
           value: "server"
         - name: MEDUSA_BACKEND_URL
           value: "https://medusa-backend.xuperson.org"
-        command:
-        - sh
-        - -c
-        - |
-          # Install dependencies
-          npm install -g @medusajs/medusa-cli
-          medusa new . --skip-db --skip-env
-          npm install
-          # Start the server
-          npm start
+        volumeMounts:
+        - name: medusa-app
+          mountPath: /app-config
+        - name: server-data
+          mountPath: /server
+        command: ["/server/start.sh"]
         livenessProbe:
           httpGet:
             path: /health

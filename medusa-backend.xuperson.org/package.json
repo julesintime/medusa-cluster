@@ -1,0 +1,26 @@
+{
+  "name": "medusa-backend",
+  "version": "1.0.0",
+  "description": "Medusa.js backend for Kubernetes",
+  "scripts": {
+    "dev": "medusa develop",
+    "start": "medusa start",
+    "build": "medusa build",
+    "seed": "medusa seed -f ./data/seed.json"
+  },
+  "dependencies": {
+    "@medusajs/medusa": "^2.0.0",
+    "@medusajs/admin-ui": "^3.0.0",
+    "@medusajs/cache-redis": "^2.0.0",
+    "@medusajs/event-bus-redis": "^2.0.0",
+    "@medusajs/workflow-engine-redis": "^2.0.0",
+    "pg": "^8.11.0",
+    "redis": "^4.6.0"
+  },
+  "devDependencies": {
+    "@medusajs/medusa-cli": "^2.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
