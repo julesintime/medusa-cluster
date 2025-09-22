@@ -23,14 +23,14 @@ spec:
       hosts:
         domain: xuperson.org
         hostSuffix: ""
-        https: false  # TLS handled by ingress
+        https: true  # Enable HTTPS for proper asset loading
         externalIP: "192.168.80.104"
         gitlab:
           name: gitlab.xuperson.org
-          https: false
+          https: true
         registry:
           name: registry.gitlab.xuperson.org
-          https: false
+          https: true
 
       # Ingress configuration
       ingress:
@@ -87,6 +87,10 @@ spec:
     # Certificate Manager (disabled - using Cloudflare)
     certmanager:
       install: false
+
+    # Nginx Ingress Controller (disabled - using main cluster ingress)
+    nginx-ingress:
+      enabled: false
 
     # GitLab Runner (separate installation)
     gitlab-runner:
@@ -188,11 +192,8 @@ spec:
         replicas: 1
 
         service:
-          type: LoadBalancer
-          loadBalancerIP: "192.168.80.104"
+          type: ClusterIP
           externalPort: 8080
-          loadBalancerSourceRanges:
-            - "0.0.0.0/0"
 
         # Security configuration
         podSecurityContext:
