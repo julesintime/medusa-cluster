@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scrapegraph-ai
+  namespace: scrapegraph-ai
+  labels:
+    app: scrapegraph-ai
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: scrapegraph-ai
+  template:
+    metadata:
+      labels:
+        app: scrapegraph-ai
+    spec:
+      containers:
+      - name: scrapegraph-ai
+        image: scrapegraph-ai:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: scrapegraph-ai-secrets
+              key: openai-api-key
+        - name: ANTHROPIC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: scrapegraph-ai-secrets
+              key: anthropic-api-key
+        - name: GOOGLE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: scrapegraph-ai-secrets
+              key: gemini-api-key
+        - name: MISTRAL_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: scrapegraph-ai-secrets
+              key: mistral-api-key
+        - name: SCRAPEGRAPHAI_TELEMETRY_ENABLED
+          value: "false"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: cache
+          mountPath: /app/.cache
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: cache
+        emptyDir: {}
+      securityContext:
+        fsGroup: 1000
