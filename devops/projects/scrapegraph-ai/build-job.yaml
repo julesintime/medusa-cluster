@@ -99,8 +99,8 @@ spec:
         emptyDir: {}
       - name: gitea-secrets
         secret:
-          secretName: gitea-admin-secrets
+          secretName: scrapegraph-ai-gitea-admin-secrets
       - name: app-config
         configMap:
-          name: scrapegraph-ai-app-config
+          name: scrapegraph-ai-scrapegraph-ai-app-config
   backoffLimit: 3
