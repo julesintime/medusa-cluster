@@ -1,9 +1,10 @@
 ---
 # Manual workflow trigger via Kubernetes manifest (CLI-free)
+# Note: This is a template - copy and use kubectl create for actual triggers
 apiVersion: argoproj.io/v1alpha1
-kind: Workflow
+kind: WorkflowTemplate
 metadata:
-  generateName: manual-portfolio-deploy-
+  name: manual-portfolio-deploy-trigger
   namespace: argocd
   labels:
     app.kubernetes.io/name: argo-workflows-cicd
@@ -135,11 +136,11 @@ spec:
         runAsUser: 1000
 
 ---
-# Simple test workflow to verify Argo Workflows is working
+# Simple test workflow template to verify Argo Workflows is working
 apiVersion: argoproj.io/v1alpha1
-kind: Workflow
+kind: WorkflowTemplate
 metadata:
-  generateName: test-argo-workflows-
+  name: test-argo-workflows-template
   namespace: argocd
   labels:
     app.kubernetes.io/name: argo-workflows-cicd

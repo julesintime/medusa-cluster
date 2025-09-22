@@ -1,0 +1,40 @@
+---
+# Simple test workflow to verify Argo Workflows (CLI-free trigger)
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: test-argocd-workflows-
+  namespace: argocd
+  labels:
+    trigger: manual-test
+    component: verification
+spec:
+  entrypoint: test-workflow
+  templates:
+  - name: test-workflow
+    dag:
+      tasks:
+      - name: hello-argo
+        template: hello
+      - name: check-cluster
+        template: cluster-check
+        dependencies: [hello-argo]
+
+  - name: hello
+    container:
+      image: alpine:latest
+      command: [echo]
+      args: ["🎉 Argo Workflows is working! No CLI needed - pure Kubernetes!"]
+
+  - name: cluster-check
+    container:
+      image: alpine:latest
+      command: [sh, -c]
+      args:
+      - |
+        echo "🔍 Cluster Check Results:"
+        echo "Namespace: argocd"
+        echo "Workflow: {{workflow.name}}"
+        echo "Timestamp: $(date)"
+        echo "Status: Argo Workflows functioning correctly"
+        echo "✅ Ready for CI/CD pipeline deployment"
