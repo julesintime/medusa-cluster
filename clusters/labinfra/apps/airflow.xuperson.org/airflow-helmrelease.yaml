@@ -31,3 +31,15 @@ spec:
     serviceAccount:
       create: false
       name: "airflow"
+
+    # Enable Airflow components
+    webserver:
+      enabled: true
+      replicas: 1
+      service:
+        type: ClusterIP
+        port: 8080
+
+    # Configure ingress
+    ingress:
+      enabled: false  # We manage ingress separately
