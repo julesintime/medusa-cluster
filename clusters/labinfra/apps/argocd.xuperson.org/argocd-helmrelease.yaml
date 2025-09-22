@@ -220,7 +220,7 @@ spec:
       install: true
       keep: true
 
-    # Override command parameters to enable insecure mode
+    # Override command parameters to enable insecure mode for SSL termination
     configs:
       cmd:
-        server.insecure: true
+        server.insecure: "true"
