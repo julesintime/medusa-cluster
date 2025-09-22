@@ -1,0 +1,272 @@
+# Kubernetes manifests for WordPress Avada Portfolio
+# Converted from docker-compose.yml
+
+---
+# Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: wp-avada-portfolio
+
+---
+# ConfigMap for WordPress Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wp-config
+  namespace: wp-avada-portfolio
+data:
+  wp-config.php: |
+    <?php
+    define('DB_NAME', getenv('WORDPRESS_DB_NAME'));
+    define('DB_USER', getenv('WORDPRESS_DB_USER'));
+    define('DB_PASSWORD', getenv('WORDPRESS_DB_PASSWORD'));
+    define('DB_HOST', getenv('WORDPRESS_DB_HOST'));
+    define('DB_CHARSET', 'utf8');
+    define('DB_COLLATE', '');
+
+    $table_prefix = 'wp_';
+
+    define('WP_DEBUG', false);
+
+    if ( ! defined( 'ABSPATH' ) ) {
+        define( 'ABSPATH', __DIR__ . '/' );
+    }
+
+    require_once ABSPATH . 'wp-settings.php';
+
+---
+# Secret for Database Credentials
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db-credentials
+  namespace: wp-avada-portfolio
+type: Opaque
+stringData:
+  mysql-root-password: "root_password"
+  mysql-password: "wordpress_password"
+  mysql-user: "wordpress"
+  mysql-database: "wordpress"
+
+---
+# PersistentVolumeClaim for WordPress Content
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: wp-content-pvc
+  namespace: wp-avada-portfolio
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+# PersistentVolumeClaim for Database
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: wp-db-pvc
+  namespace: wp-avada-portfolio
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 5Gi
+
+---
+# MySQL Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql
+  namespace: wp-avada-portfolio
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+      - name: mysql
+        image: mysql:8.0
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: mysql-root-password
+        - name: MYSQL_DATABASE
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: mysql-database
+        - name: MYSQL_USER
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: mysql-user
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: mysql-password
+        ports:
+        - containerPort: 3306
+        volumeMounts:
+        - name: db-data
+          mountPath: /var/lib/mysql
+        resources:
+          requests:
+            memory: 512Mi
+            cpu: 250m
+          limits:
+            memory: 1Gi
+            cpu: 500m
+      volumes:
+      - name: db-data
+        persistentVolumeClaim:
+          claimName: wp-db-pvc
+
+---
+# MySQL Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  namespace: wp-avada-portfolio
+spec:
+  selector:
+    app: mysql
+  ports:
+  - port: 3306
+    targetPort: 3306
+
+---
+# WordPress Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wordpress
+  namespace: wp-avada-portfolio
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wordpress
+  template:
+    metadata:
+      labels:
+        app: wordpress
+    spec:
+      initContainers:
+      - name: wait-for-db
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z mysql 3306; do sleep 1; done']
+      containers:
+      - name: wordpress
+        image: wordpress:latest
+        env:
+        - name: WORDPRESS_DB_HOST
+          value: "mysql:3306"
+        - name: WORDPRESS_DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: mysql-user
+        - name: WORDPRESS_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: mysql-password
+        - name: WORDPRESS_DB_NAME
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: mysql-database
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: wp-content
+          mountPath: /var/www/html/wp-content
+        - name: wp-config
+          mountPath: /var/www/html/wp-config.php
+          subPath: wp-config.php
+        resources:
+          requests:
+            memory: 256Mi
+            cpu: 100m
+          limits:
+            memory: 512Mi
+            cpu: 250m
+        livenessProbe:
+          httpGet:
+            path: /wp-admin/install.php
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /wp-admin/install.php
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: wp-content
+        persistentVolumeClaim:
+          claimName: wp-content-pvc
+      - name: wp-config
+        configMap:
+          name: wp-config
+
+---
+# WordPress Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: wordpress
+  namespace: wp-avada-portfolio
+spec:
+  type: LoadBalancer
+  loadBalancerIP: "192.168.80.122"  # Available IP from MetalLB pool
+  selector:
+    app: wordpress
+  ports:
+  - port: 80
+    targetPort: 80
+
+---
+# WordPress Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: wordpress-ingress
+  namespace: wp-avada-portfolio
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: "wp-avada-portfolio.xuperson.org"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: wp-avada-portfolio.xuperson.org
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: wordpress
+            port:
+              number: 80

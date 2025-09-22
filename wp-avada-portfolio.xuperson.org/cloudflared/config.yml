@@ -1,0 +1,10 @@
+# Cloudflared tunnel config for Docker Compose WordPress
+# Place cert.pem and the correct tunnel JSON in this folder
+
+tunnel: 9caa21c6-c522-4e4e-aa7c-be14197b081f
+credentials-file: /home/nonroot/.cloudflared/9caa21c6-c522-4e4e-aa7c-be14197b081f.json
+
+ingress:
+  - hostname: wp.xuperson.net
+    service: http://wordpress:80
+  - service: http_status:404

@@ -1,0 +1,4 @@
+# Custom MySQL configuration for WordPress
+[mysqld]
+max_allowed_packet=64M
+innodb_buffer_pool_size=128M
