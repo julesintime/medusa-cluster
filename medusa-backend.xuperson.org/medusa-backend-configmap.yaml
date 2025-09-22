@@ -47,7 +47,7 @@ data:
         npx medusa db:migrate
 
         echo "Seeding database..."
-        npm run seed || echo "Seeding failed, continuing..."
+        echo "Skipping seeding - no seed data configured"
     fi
 
     # Start the Medusa application based on mode
