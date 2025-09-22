@@ -65,18 +65,10 @@ spec:
           adminPasswordKey: postgresql-postgres-password
           userPasswordKey: postgresql-password
 
-    # Environment variables for secrets - simplified for now
-    env:
-      - name: AIRFLOW__WEBSERVER__SECRET_KEY
-        valueFrom:
-          secretKeyRef:
-            name: airflow-secrets
-            key: secret-key
-      - name: AIRFLOW__CORE__FERNET_KEY
-        valueFrom:
-          secretKeyRef:
-            name: airflow-secrets
-            key: fernet-key
+    # Use extraEnvFrom to load secrets
+    extraEnvFrom: |
+      - secretRef:
+          name: airflow-secrets
 
     # Airflow configuration - use nested object format
     config:
