@@ -64,9 +64,6 @@ spec:
       config:
         url: "https://argocd.xuperson.org"
 
-      # Override server configuration
-      configParams:
-        server.insecure: true
 
       # Admin password from Infisical
       adminPasswordSecretName: argocd-secrets
@@ -222,3 +219,8 @@ spec:
     crds:
       install: true
       keep: true
+
+    # Override command parameters to enable insecure mode
+    configs:
+      cmd:
+        server.insecure: true
