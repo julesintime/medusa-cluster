@@ -1,0 +1,172 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: scrapegraph-ai-app-config
+  namespace: scrapegraph-ai
+data:
+  app.py: |
+    #!/usr/bin/env python3
+
+    import os
+    import logging
+    from typing import Optional, Dict, Any
+    from pydantic import BaseModel, HttpUrl
+    from fastapi import FastAPI, HTTPException
+    from fastapi.responses import JSONResponse
+    import uvicorn
+
+    # Configure logging
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+
+    app = FastAPI(
+        title="ScrapeGraphAI API",
+        description="Web scraping with AI using ScrapeGraphAI",
+        version="1.0.0"
+    )
+
+    class ScrapeRequest(BaseModel):
+        url: HttpUrl
+        prompt: str
+        llm_model: Optional[str] = "openai/gpt-3.5-turbo"
+        headless: Optional[bool] = True
+        verbose: Optional[bool] = False
+
+    class ScrapeResponse(BaseModel):
+        success: bool
+        data: Optional[Dict[Any, Any]] = None
+        error: Optional[str] = None
+
+    @app.get("/health")
+    async def health_check():
+        """Health check endpoint"""
+        return {"status": "healthy", "service": "scrapegraph-ai"}
+
+    @app.get("/ready")
+    async def readiness_check():
+        """Readiness check endpoint"""
+        try:
+            # Check if required environment variables are set
+            required_envs = ["OPENAI_API_KEY"]
+            missing_envs = [env for env in required_envs if not os.getenv(env)]
+
+            if missing_envs:
+                return JSONResponse(
+                    status_code=503,
+                    content={"status": "not_ready", "missing_env": missing_envs}
+                )
+
+            return {"status": "ready", "service": "scrapegraph-ai"}
+        except Exception as e:
+            return JSONResponse(
+                status_code=503,
+                content={"status": "not_ready", "error": str(e)}
+            )
+
+    @app.post("/scrape", response_model=ScrapeResponse)
+    async def scrape_website(request: ScrapeRequest):
+        """Scrape a website using ScrapeGraphAI"""
+        try:
+            # Import ScrapeGraphAI (lazy import for faster startup)
+            from scrapegraphai.graphs import SmartScraperGraph
+
+            # Configure LLM based on available API keys
+            llm_config = {}
+
+            if request.llm_model.startswith("openai/") and os.getenv("OPENAI_API_KEY"):
+                llm_config = {
+                    "model": request.llm_model.replace("openai/", ""),
+                    "api_key": os.getenv("OPENAI_API_KEY")
+                }
+            elif request.llm_model.startswith("anthropic/") and os.getenv("ANTHROPIC_API_KEY"):
+                llm_config = {
+                    "model": request.llm_model.replace("anthropic/", ""),
+                    "api_key": os.getenv("ANTHROPIC_API_KEY")
+                }
+            elif request.llm_model.startswith("google/") and os.getenv("GOOGLE_API_KEY"):
+                llm_config = {
+                    "model": request.llm_model.replace("google/", ""),
+                    "api_key": os.getenv("GOOGLE_API_KEY")
+                }
+            elif request.llm_model.startswith("mistral/") and os.getenv("MISTRAL_API_KEY"):
+                llm_config = {
+                    "model": request.llm_model.replace("mistral/", ""),
+                    "api_key": os.getenv("MISTRAL_API_KEY")
+                }
+            else:
+                # Default to OpenAI
+                llm_config = {
+                    "model": "gpt-3.5-turbo",
+                    "api_key": os.getenv("OPENAI_API_KEY")
+                }
+
+            # Configure graph
+            graph_config = {
+                "llm": llm_config,
+                "verbose": request.verbose,
+                "headless": request.headless,
+            }
+
+            # Create and run scraper
+            smart_scraper_graph = SmartScraperGraph(
+                prompt=request.prompt,
+                source=str(request.url),
+                config=graph_config
+            )
+
+            result = smart_scraper_graph.run()
+
+            return ScrapeResponse(success=True, data=result)
+
+        except ImportError as e:
+            logger.error(f"Failed to import ScrapeGraphAI: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail="ScrapeGraphAI not properly installed"
+            )
+        except Exception as e:
+            logger.error(f"Scraping failed: {e}")
+            return ScrapeResponse(success=False, error=str(e))
+
+    @app.get("/models")
+    async def list_available_models():
+        """List available LLM models based on configured API keys"""
+        models = []
+
+        if os.getenv("OPENAI_API_KEY"):
+            models.extend([
+                "openai/gpt-3.5-turbo",
+                "openai/gpt-4",
+                "openai/gpt-4-turbo-preview"
+            ])
+
+        if os.getenv("ANTHROPIC_API_KEY"):
+            models.extend([
+                "anthropic/claude-3-sonnet-20240229",
+                "anthropic/claude-3-opus-20240229"
+            ])
+
+        if os.getenv("GOOGLE_API_KEY"):
+            models.extend([
+                "google/gemini-pro",
+                "google/gemini-pro-vision"
+            ])
+
+        if os.getenv("MISTRAL_API_KEY"):
+            models.extend([
+                "mistral/mistral-medium",
+                "mistral/mistral-large"
+            ])
+
+        return {"available_models": models}
+
+    if __name__ == "__main__":
+        # Run the FastAPI app
+        port = int(os.getenv("PORT", 8000))
+        uvicorn.run(
+            "app:app",
+            host="0.0.0.0",
+            port=port,
+            log_level="info",
+            access_log=True
+        )

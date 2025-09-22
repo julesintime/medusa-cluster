@@ -1,0 +1,106 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: scrapegraph-ai-build
+  namespace: scrapegraph-ai
+spec:
+  template:
+    spec:
+      initContainers:
+      - name: setup-buildctl
+        image: alpine/curl:latest
+        command: ["/bin/sh"]
+        args:
+        - -c
+        - |
+          curl -L https://github.com/moby/buildkit/releases/download/v0.12.0/buildkit-v0.12.0.linux-amd64.tar.gz | tar -xz -C /usr/local --strip-components=1
+        volumeMounts:
+        - name: buildctl
+          mountPath: /usr/local/bin
+      containers:
+      - name: buildkit-build
+        image: alpine:latest
+        command: ["/bin/sh"]
+        args:
+        - -c
+        - |
+          set -e
+          echo "Setting up build environment..."
+
+          # Get credentials from secrets
+          GITEA_USER=$(cat /var/secrets/username)
+          GITEA_PASS=$(cat /var/secrets/password)
+
+          # Create Dockerfile content
+          cat > /tmp/Dockerfile << 'EOF'
+          FROM python:3.11-slim
+
+          WORKDIR /app
+
+          RUN apt-get update && apt-get install -y \
+              curl wget gnupg unzip && \
+              rm -rf /var/lib/apt/lists/*
+
+          RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
+              apt-get install -y nodejs
+
+          COPY requirements.txt .
+          RUN pip install --no-cache-dir -r requirements.txt
+          RUN python -m playwright install --with-deps chromium
+
+          COPY app.py .
+
+          RUN groupadd -r appuser && useradd -r -g appuser appuser
+          RUN chown -R appuser:appuser /app
+          USER appuser
+
+          EXPOSE 8000
+
+          HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+              CMD curl -f http://localhost:8000/health || exit 1
+
+          CMD ["python", "app.py"]
+          EOF
+
+          # Create requirements.txt
+          cat > /tmp/requirements.txt << 'EOF'
+          scrapegraphai
+          fastapi
+          uvicorn[standard]
+          pydantic
+          python-multipart
+          requests
+          EOF
+
+          # Copy app.py from configmap
+          cp /app-config/app.py /tmp/app.py
+
+          # Build and push using buildctl
+          /usr/local/bin/buildctl \
+            --addr tcp://buildkitd.gitea.svc.cluster.local:1234 \
+            build \
+            --frontend dockerfile.v0 \
+            --local context=/tmp \
+            --local dockerfile=/tmp \
+            --output type=image,name=gitea-http.gitea.svc.cluster.local:3000/helloroot/scrapegraph-ai:latest,push=true,registry.insecure=true \
+            --opt build-arg:BUILDKIT_INLINE_CACHE=1
+        volumeMounts:
+        - name: buildctl
+          mountPath: /usr/local/bin
+        - name: gitea-secrets
+          mountPath: /var/secrets
+          readOnly: true
+        - name: app-config
+          mountPath: /app-config
+          readOnly: true
+      restartPolicy: Never
+      volumes:
+      - name: buildctl
+        emptyDir: {}
+      - name: gitea-secrets
+        secret:
+          secretName: gitea-admin-secrets
+      - name: app-config
+        configMap:
+          name: scrapegraph-ai-app-config
+  backoffLimit: 3

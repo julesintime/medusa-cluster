@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: scrapegraph-ai
-        image: scrapegraph-ai:latest
+        image: git.xuperson.org/helloroot/scrapegraph-ai:latest
         ports:
         - containerPort: 8000
         env:
