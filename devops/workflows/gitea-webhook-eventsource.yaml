@@ -1,0 +1,140 @@
+# Argo Events - Gitea Webhook Event Source
+apiVersion: argoproj.io/v1alpha1
+kind: EventSource
+metadata:
+  name: gitea-webhook
+  namespace: argocd
+spec:
+  service:
+    ports:
+    - port: 12000
+      targetPort: 12000
+
+  webhook:
+    gitea-push:
+      port: "12000"
+      endpoint: /gitea-push
+      method: POST
+
+      # Gitea webhook payload structure
+      # https://docs.gitea.io/en-us/webhooks/
+
+---
+# Argo Events - Sensor to trigger CI/CD workflow
+apiVersion: argoproj.io/v1alpha1
+kind: Sensor
+metadata:
+  name: gitea-ci-cd-sensor
+  namespace: argocd
+spec:
+  template:
+    serviceAccountName: workflow-executor
+
+  dependencies:
+  - name: gitea-push-event
+    eventSourceName: gitea-webhook
+    eventName: gitea-push
+
+    # Filter for main/master branch pushes only
+    filters:
+      data:
+      - path: body.ref
+        type: string
+        value:
+        - "refs/heads/main"
+        - "refs/heads/master"
+
+  triggers:
+  - template:
+      name: ci-cd-trigger
+      argoWorkflow:
+        operation: submit
+        source:
+          resource:
+            apiVersion: argoproj.io/v1alpha1
+            kind: Workflow
+            metadata:
+              generateName: ci-cd-
+              namespace: argocd
+            spec:
+              workflowTemplateRef:
+                name: ci-cd-buildkit-deploy
+              arguments:
+                parameters:
+                # Extract repository info from webhook payload
+                - name: org
+                  value: "{{ .Input.gitea-push-event.body.repository.owner.login }}"
+                - name: repo
+                  value: "{{ .Input.gitea-push-event.body.repository.name }}"
+                - name: repo-branch
+                  value: "{{ .Input.gitea-push-event.body.ref | split(\"/\") | last }}"
+                - name: commit-sha
+                  value: "{{ .Input.gitea-push-event.body.after }}"
+
+---
+# Service Account for Workflow Executor
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: workflow-executor
+  namespace: argocd
+
+---
+# ClusterRole for Workflow Executor
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: workflow-executor
+rules:
+- apiGroups: [""]
+  resources: ["pods", "pods/log"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: [""]
+  resources: ["secrets", "configmaps"]
+  verbs: ["get", "list"]
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "list", "watch", "create", "update", "patch"]
+- apiGroups: ["argoproj.io"]
+  resources: ["workflows", "workflowtemplates"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+---
+# ClusterRoleBinding for Workflow Executor
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: workflow-executor
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: workflow-executor
+subjects:
+- kind: ServiceAccount
+  name: workflow-executor
+  namespace: argocd
+
+---
+# Ingress for Webhook Events
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gitea-webhook-ingress
+  namespace: argocd
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: "webhooks.xuperson.org"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: webhooks.xuperson.org
+    http:
+      paths:
+      - path: /gitea(/|$)(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: gitea-webhook-eventsource-svc
+            port:
+              number: 12000

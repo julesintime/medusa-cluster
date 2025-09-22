@@ -1,0 +1,57 @@
+# Example ArgoCD Application - DevOps Project
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: hello-dev
+  namespace: argocd
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: devops
+
+  # Source: DevOps directory (separate from FluxCD apps)
+  source:
+    repoURL: https://github.com/julesintime/labinfra.git
+    targetRevision: HEAD
+    path: devops/projects/hello-dev
+
+  # Destination
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: hello-dev
+
+  # Sync Policy
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+    - CreateNamespace=true
+    - PrunePropagationPolicy=foreground
+    - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+
+  # Health checks
+  ignoreDifferences:
+  - group: apps
+    kind: Deployment
+    jsonPointers:
+    - /spec/replicas  # Allow external scaling
+
+---
+# Example Project Directory Structure
+# devops/projects/hello-dev/
+# ├── kustomization.yaml
+# ├── deployment.yaml
+# ├── service.yaml
+# ├── ingress.yaml
+# └── namespace.yaml
+
+# This demonstrates how ArgoCD applications point to devops/
+# while FluxCD manages clusters/labinfra/apps/

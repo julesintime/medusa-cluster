@@ -1,0 +1,91 @@
+# ArgoCD Webhook EventSource for GitHub Integration
+apiVersion: argoproj.io/v1alpha1
+kind: EventSource
+metadata:
+  name: github-webhook
+  namespace: argocd
+spec:
+  service:
+    ports:
+    - port: 12000
+      targetPort: 12000
+
+  webhook:
+    github-push:
+      port: "12000"
+      endpoint: /github-push
+      method: POST
+
+---
+# Sensor to trigger CI/CD workflow from GitHub webhooks
+apiVersion: argoproj.io/v1alpha1
+kind: Sensor
+metadata:
+  name: github-ci-cd-sensor
+  namespace: argocd
+spec:
+  template:
+    serviceAccountName: argocd
+
+  dependencies:
+  - name: github-push-event
+    eventSourceName: github-webhook
+    eventName: github-push
+
+    # Filter for main/master branch pushes to labinfra repo
+    filters:
+      data:
+      - path: body.ref
+        type: string
+        value:
+        - "refs/heads/main"
+        - "refs/heads/master"
+      - path: body.repository.full_name
+        type: string
+        value:
+        - "julesintime/labinfra"
+
+  triggers:
+  - template:
+      name: github-trigger
+      log:
+        intervalSeconds: 1
+      k8s:
+        operation: create
+        source:
+          resource:
+            apiVersion: v1
+            kind: ConfigMap
+            metadata:
+              name: "github-webhook-{{.Input.github-push-event.body.after}}"
+              namespace: argocd
+            data:
+              commit: "{{.Input.github-push-event.body.after}}"
+              branch: "{{.Input.github-push-event.body.ref}}"
+              repo: "{{.Input.github-push-event.body.repository.full_name}}"
+              message: "Webhook received from GitHub"
+
+---
+# Ingress for GitHub webhooks
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: github-webhook-ingress
+  namespace: argocd
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: "webhooks.xuperson.org"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: webhooks.xuperson.org
+    http:
+      paths:
+      - path: /github(/|$)(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: github-webhook-eventsource-svc
+            port:
+              number: 12000

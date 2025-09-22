@@ -20,3 +20,6 @@ resources:
 
   # Secrets management (Infisical)
   - argocd-infisical-secrets.yaml
+
+  # GitHub webhook integration
+  - argocd-webhook-eventsource.yaml

@@ -1,0 +1,241 @@
+# CI/CD Workflow Template - Replaces Gitea Runner + Tekton
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: ci-cd-buildkit-deploy
+  namespace: argocd
+spec:
+  entrypoint: ci-cd-pipeline
+
+  # Workflow Parameters
+  arguments:
+    parameters:
+    - name: repo-url
+      value: "https://git.xuperson.org/{{workflow.parameters.org}}/{{workflow.parameters.repo}}.git"
+    - name: repo-branch
+      value: "main"
+    - name: org
+      value: "julesintime"
+    - name: repo
+      value: "hello-app"
+    - name: image-base
+      value: "git.xuperson.org/{{workflow.parameters.org}}/{{workflow.parameters.repo}}"
+    - name: image-tag
+      value: "{{workflow.parameters.repo-branch}}-{{workflow.uid}}"
+    - name: app-namespace
+      value: "{{workflow.parameters.repo}}"
+    - name: app-domain
+      value: "{{workflow.parameters.repo}}.xuperson.org"
+
+  # Volume Claims
+  volumeClaimTemplates:
+  - metadata:
+      name: workspace
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 2Gi
+
+  templates:
+  # Main Pipeline
+  - name: ci-cd-pipeline
+    dag:
+      tasks:
+      - name: clone-source
+        template: git-clone
+        arguments:
+          parameters:
+          - name: repo-url
+            value: "{{workflow.parameters.repo-url}}"
+          - name: branch
+            value: "{{workflow.parameters.repo-branch}}"
+
+      - name: build-push-image
+        template: buildkit-build-push
+        arguments:
+          parameters:
+          - name: context-path
+            value: "/workspace/source"
+          - name: image-name
+            value: "{{workflow.parameters.image-base}}"
+          - name: image-tag
+            value: "{{workflow.parameters.image-tag}}"
+        depends: "clone-source"
+
+      - name: update-manifest
+        template: update-deployment-manifest
+        arguments:
+          parameters:
+          - name: image
+            value: "{{workflow.parameters.image-base}}:{{workflow.parameters.image-tag}}"
+          - name: app-namespace
+            value: "{{workflow.parameters.app-namespace}}"
+        depends: "build-push-image"
+
+  # Git Clone Template
+  - name: git-clone
+    inputs:
+      parameters:
+      - name: repo-url
+      - name: branch
+    container:
+      image: alpine/git:latest
+      workingDir: /workspace
+      command: [sh, -c]
+      args:
+      - |
+        set -e
+        echo "🔄 Cloning repository: {{inputs.parameters.repo-url}}"
+        echo "📂 Branch: {{inputs.parameters.branch}}"
+
+        # Clone with credentials from secret
+        git clone --depth 1 --branch {{inputs.parameters.branch}} \
+          https://$GITEA_USERNAME:$GITEA_PASSWORD@$(echo "{{inputs.parameters.repo-url}}" | sed 's|https://||') \
+          source
+
+        cd source
+        echo "✅ Repository cloned successfully"
+        echo "📋 Commit: $(git rev-parse HEAD)"
+        ls -la
+      env:
+      - name: GITEA_USERNAME
+        valueFrom:
+          secretKeyRef:
+            name: gitea-credentials
+            key: username
+      - name: GITEA_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: gitea-credentials
+            key: password
+      volumeMounts:
+      - name: workspace
+        mountPath: /workspace
+
+  # BuildKit Build and Push Template
+  - name: buildkit-build-push
+    inputs:
+      parameters:
+      - name: context-path
+      - name: image-name
+      - name: image-tag
+    container:
+      image: moby/buildkit:latest
+      workingDir: "{{inputs.parameters.context-path}}"
+      command: [sh, -c]
+      args:
+      - |
+        set -e
+        export IMAGE_FULL="{{inputs.parameters.image-name}}:{{inputs.parameters.image-tag}}"
+        echo "🔨 Building image: $IMAGE_FULL"
+
+        # Start BuildKit daemon
+        buildkitd --addr unix:///run/buildkit/buildkitd.sock &
+        BUILDKIT_PID=$!
+
+        # Wait for daemon to start
+        sleep 5
+
+        # Build and push with BuildKit
+        buildctl --addr unix:///run/buildkit/buildkitd.sock build \
+          --frontend dockerfile.v0 \
+          --local context=. \
+          --local dockerfile=. \
+          --output type=image,name=$IMAGE_FULL,push=true,registry.insecure=true \
+          --export-cache type=inline \
+          --import-cache type=registry,ref=$IMAGE_FULL
+
+        echo "✅ Image built and pushed: $IMAGE_FULL"
+
+        # Clean up
+        kill $BUILDKIT_PID || true
+      env:
+      - name: BUILDKIT_HOST
+        value: "unix:///run/buildkit/buildkitd.sock"
+      securityContext:
+        privileged: true
+      volumeMounts:
+      - name: workspace
+        mountPath: /workspace
+
+  # Update Deployment Manifest Template
+  - name: update-deployment-manifest
+    inputs:
+      parameters:
+      - name: image
+      - name: app-namespace
+    container:
+      image: alpine/git:latest
+      workingDir: /workspace
+      command: [sh, -c]
+      args:
+      - |
+        set -e
+        echo "📝 Updating deployment manifest with image: {{inputs.parameters.image}}"
+
+        # Clone the GitOps repository
+        git clone --depth 1 \
+          https://$GITEA_USERNAME:$GITEA_PASSWORD@git.xuperson.org/julesintime/labinfra.git \
+          gitops-repo
+
+        cd gitops-repo
+
+        # Update the deployment manifest in devops directory
+        MANIFEST_PATH="devops/projects/{{inputs.parameters.app-namespace}}"
+
+        if [ ! -d "$MANIFEST_PATH" ]; then
+          echo "📁 Creating new application directory: $MANIFEST_PATH"
+          mkdir -p "$MANIFEST_PATH"
+
+          # Create basic deployment manifest
+          cat > "$MANIFEST_PATH/deployment.yaml" << EOF
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: {{inputs.parameters.app-namespace}}
+          namespace: {{inputs.parameters.app-namespace}}
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app: {{inputs.parameters.app-namespace}}
+          template:
+            metadata:
+              labels:
+                app: {{inputs.parameters.app-namespace}}
+            spec:
+              containers:
+              - name: app
+                image: {{inputs.parameters.image}}
+                ports:
+                - containerPort: 3000
+        EOF
+        else
+          # Update existing deployment
+          sed -i "s|image: .*|image: {{inputs.parameters.image}}|g" \
+            "$MANIFEST_PATH/deployment.yaml"
+        fi
+
+        # Commit and push the changes
+        git config user.name "ArgoCD Workflow"
+        git config user.email "argocd@xuperson.org"
+        git add .
+        git commit -m "🚀 Deploy {{inputs.parameters.image}} to {{inputs.parameters.app-namespace}}"
+        git push
+
+        echo "✅ Deployment manifest updated and pushed"
+      env:
+      - name: GITEA_USERNAME
+        valueFrom:
+          secretKeyRef:
+            name: gitea-credentials
+            key: username
+      - name: GITEA_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: gitea-credentials
+            key: password
+      volumeMounts:
+      - name: workspace
+        mountPath: /workspace
