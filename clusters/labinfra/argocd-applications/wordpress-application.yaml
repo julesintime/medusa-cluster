@@ -1,0 +1,90 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: wordpress
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    chart: wordpress
+    repoURL: https://charts.bitnami.com/bitnami
+    targetRevision: 24.0.7
+    helm:
+      releaseName: wordpress
+      valuesObject:
+        # Global configuration
+        global:
+          storageClass: "local-path"
+
+        # WordPress configuration
+        wordpressUsername: admin
+        wordpressEmail: admin@xuperson.org
+
+        # Use existing secret for WordPress password
+        existingSecret: wordpress-secrets
+        existingSecretKey: wordpress-password
+
+        # Service configuration with LoadBalancer
+        service:
+          type: LoadBalancer
+          loadBalancerIP: "192.168.80.108"
+          port: 80
+          httpsPort: 443
+
+        # Persistence
+        persistence:
+          enabled: true
+          size: 10Gi
+          storageClass: "local-path"
+
+        # MySQL configuration
+        mysql:
+          auth:
+            existingSecret: wordpress-secrets
+            secretKey: mysql-password
+            rootPasswordKey: mysql-root-password
+          primary:
+            persistence:
+              enabled: true
+              size: 8Gi
+              storageClass: "local-path"
+
+        # Security context
+        podSecurityContext:
+          enabled: true
+          runAsNonRoot: true
+          runAsUser: 1001
+          runAsGroup: 1001
+          fsGroup: 1001
+
+        containerSecurityContext:
+          enabled: true
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop:
+            - ALL
+
+        # Resources
+        resources:
+          requests:
+            cpu: 300m
+            memory: 512Mi
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: wordpress
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true
