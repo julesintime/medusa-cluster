@@ -12,7 +12,7 @@ spec:
   # Source: GitHub repository (single source of truth)
   source:
     repoURL: https://github.com/julesintime/labinfra.git
-    targetRevision: HEAD
+    targetRevision: main
     path: devops/projects/wp-avada-portfolio
 
   # Destination
