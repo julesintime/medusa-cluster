@@ -60,6 +60,10 @@ spec:
         - name: ARGOCD_SERVER_INSECURE
           value: "true"  # TLS termination handled by ingress
 
+      # Additional command arguments
+      extraArgs:
+        - --insecure
+
       # Config for external URL
       config:
         url: "https://argocd.xuperson.org"
