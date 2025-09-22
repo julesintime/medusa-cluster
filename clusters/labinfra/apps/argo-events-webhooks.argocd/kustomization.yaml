@@ -4,7 +4,6 @@ kind: Kustomization
 
 resources:
   - webhook-eventsource.yaml
-  - portfolio-sensor.yaml
   - webhook-rbac.yaml
   - webhook-service.yaml
 

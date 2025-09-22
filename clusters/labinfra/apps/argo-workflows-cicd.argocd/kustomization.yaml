@@ -3,9 +3,6 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-  - portfolio-build-workflowtemplate.yaml
-  - portfolio-deploy-workflowtemplate.yaml
-  - portfolio-ci-cronworkflow.yaml
   - build-rbac.yaml
   - manual-workflow-triggers.yaml
 
