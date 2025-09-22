@@ -3,7 +3,6 @@ kind: Kustomization
 resources:
   - airflow.xuperson.org
   - argocd.xuperson.org
-  - avada-portfolio.xuperson.org
   - argo-workflows-cicd.argocd
   - argo-events-webhooks.argocd
   - browserless.yaml
@@ -15,7 +14,5 @@ resources:
   - litellm.xuperson.org
   - n8n.yaml
   - redis.xuperson.org
-  - medusa.xuperson.org
   - cronicle.xuperson.org
   - dkron.xuperson.org
-  - portfolio.xuperson.org

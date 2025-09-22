@@ -13,10 +13,6 @@ resources:
   - buildkit
   # Deploy hello repository setup (creates demo repo with CI/CD workflow)
   - hello
-  # Deploy medusa-fresh repository setup (creates e-commerce repo with CI/CD workflow)
-  - medusa-fresh
-  # Deploy portfolio repository setup (creates WordPress + Avada repo with CI/CD workflow)
-  - portfolio
 
 labels:
   - includeSelectors: false
