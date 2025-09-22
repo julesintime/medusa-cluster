@@ -62,7 +62,7 @@ spec:
 
       # Config for external URL
       config:
-        url: "http://argocd.xuperson.org"
+        url: "https://argocd.xuperson.org"
 
       # Admin password from Infisical
       adminPasswordSecretName: argocd-secrets
