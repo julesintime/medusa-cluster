@@ -22,4 +22,5 @@ resources:
   - argocd-infisical-secrets.yaml
 
   # GitHub webhook integration
+  - argocd-eventbus.yaml
   - argocd-webhook-eventsource.yaml
