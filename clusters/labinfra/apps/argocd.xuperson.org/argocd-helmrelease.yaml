@@ -64,6 +64,10 @@ spec:
       config:
         url: "https://argocd.xuperson.org"
 
+      # Command line parameters to override ConfigMap
+      extraArgs:
+        - --insecure
+
       # Admin password from Infisical
       adminPasswordSecretName: argocd-secrets
       adminPasswordSecretKey: admin-password

@@ -22,10 +22,12 @@ data:
           health_check_timeout: 10
           cooldown_time: 60
 
-      # Alias for fast model - also uses sonoma-dusk-alpha since sky-alpha returns empty
+      # All models use sonoma-dusk-alpha (sky-alpha returns empty responses)
+
+      # Alias sky-alpha to dusk-alpha (since sky returns empty)
       - model_name: "stealth/sonoma-sky-alpha"
         litellm_params:
-          model: "vercel_ai_gateway/stealth/sonoma-dusk-alpha"  # Using dusk instead of sky
+          model: "vercel_ai_gateway/stealth/sonoma-dusk-alpha"
           api_key: "os.environ/VERCEL_AI_GATEWAY_API_KEY"
           rpm: 30
           tpm: 1000000
@@ -88,20 +90,20 @@ data:
         # Specific model fallbacks
         - "gemini-2.5-pro": ["stealth/sonoma-dusk-alpha"]
         - "gemini-2.5-flash": ["stealth/sonoma-dusk-alpha"]
-        - "gemini-2.5-flash-lite": ["stealth/sonoma-sky-alpha"]
-        - "gemini-2.0-flash": ["stealth/sonoma-sky-alpha"]
-        - "gemini-2.0-flash-lite": ["stealth/sonoma-sky-alpha"]
+        - "gemini-2.5-flash-lite": ["stealth/sonoma-dusk-alpha"]
+        - "gemini-2.0-flash": ["stealth/sonoma-dusk-alpha"]
+        - "gemini-2.0-flash-lite": ["stealth/sonoma-dusk-alpha"]
         - "gemini/*": ["stealth/sonoma-dusk-alpha"]
         # GPT models fallback to sonoma
-        - "gpt-3.5-turbo": ["stealth/sonoma-sky-alpha"]
+        - "gpt-3.5-turbo": ["stealth/sonoma-dusk-alpha"]
         - "gpt-4-turbo": ["stealth/sonoma-dusk-alpha"]
         - "gpt-4o": ["stealth/sonoma-dusk-alpha"]
-        - "gpt-4o-mini": ["stealth/sonoma-sky-alpha"]
+        - "gpt-4o-mini": ["stealth/sonoma-dusk-alpha"]
         - "gpt/*": ["stealth/sonoma-dusk-alpha"]
         # Anthropic models fallback to sonoma
         - "claude-3-opus": ["stealth/sonoma-dusk-alpha"]
         - "claude-3-sonnet": ["stealth/sonoma-dusk-alpha"]
-        - "claude-3-haiku": ["stealth/sonoma-sky-alpha"]
+        - "claude-3-haiku": ["stealth/sonoma-dusk-alpha"]
         - "claude-3.5-sonnet": ["stealth/sonoma-dusk-alpha"]
         - "claude/*": ["stealth/sonoma-dusk-alpha"]
         - "anthropic/*": ["stealth/sonoma-dusk-alpha"]
