@@ -3,6 +3,7 @@ kind: Kustomization
 
 resources:
   - namespace.yaml
+  - gitea-admin-secrets.yaml
   - app-configmap.yaml
   - build-job.yaml
   - deployment.yaml
