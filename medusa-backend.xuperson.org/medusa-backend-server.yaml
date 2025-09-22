@@ -84,13 +84,6 @@ spec:
           mountPath: /app-config
         - name: server-data
           mountPath: /server
-      volumes:
-      - name: medusa-app
-        configMap:
-          name: medusa-app-source
-          defaultMode: 0755
-      - name: server-data
-        emptyDir: {}
       containers:
       - name: medusa-server
         image: node:20-alpine
@@ -179,6 +172,13 @@ spec:
           capabilities:
             drop:
             - ALL
+      volumes:
+      - name: medusa-app
+        configMap:
+          name: medusa-app-source
+          defaultMode: 0755
+      - name: server-data
+        emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
