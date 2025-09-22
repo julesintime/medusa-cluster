@@ -1,0 +1,23 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: medusa-storefront
+  namespace: medusa-storefront
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: "medusa-storefront.xuperson.org"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/client-max-body-size: "10m"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: medusa-storefront.xuperson.org
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: medusa-storefront
+            port:
+              number: 3000

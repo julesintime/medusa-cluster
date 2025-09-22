@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - medusa-backend-namespace.yaml
+  - medusa-backend-infisical-secrets.yaml
+  - medusa-backend-postgresql.yaml
+  - medusa-backend-redis.yaml
+  - medusa-backend-server.yaml
+  - medusa-backend-worker.yaml
+  - medusa-backend-ingress.yaml
+  - medusa-backend-rbac.yaml
+
+namePrefix: ""

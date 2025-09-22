@@ -1,0 +1,170 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medusa-server
+  namespace: medusa-backend
+  labels:
+    app: medusa-server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: medusa-server
+  template:
+    metadata:
+      labels:
+        app: medusa-server
+    spec:
+      initContainers:
+      - name: wait-for-postgres
+        image: postgres:15-alpine
+        command:
+        - sh
+        - -c
+        - |
+          until pg_isready -h medusa-postgres -p 5432 -U $(POSTGRES_USER); do
+            echo "Waiting for PostgreSQL..."
+            sleep 2
+          done
+        env:
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: medusa-backend-secrets
+              key: postgres-user
+      - name: wait-for-redis
+        image: redis:7-alpine
+        command:
+        - sh
+        - -c
+        - |
+          until redis-cli -h medusa-redis -p 6379 ping; do
+            echo "Waiting for Redis..."
+            sleep 2
+          done
+      - name: run-migrations
+        image: medusajs/medusa:latest
+        command:
+        - sh
+        - -c
+        - |
+          npx medusa db:migrate
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: medusa-backend-secrets
+              key: database-url
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: medusa-backend-secrets
+              key: redis-url
+        - name: COOKIE_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: medusa-backend-secrets
+              key: cookie-secret
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: medusa-backend-secrets
+              key: jwt-secret
+      containers:
+      - name: medusa-server
+        image: medusajs/medusa:latest
+        ports:
+        - containerPort: 9000
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: medusa-backend-secrets
+              key: database-url
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: medusa-backend-secrets
+              key: redis-url
+        - name: COOKIE_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: medusa-backend-secrets
+              key: cookie-secret
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: medusa-backend-secrets
+              key: jwt-secret
+        - name: STORE_CORS
+          valueFrom:
+            secretKeyRef:
+              name: medusa-backend-secrets
+              key: store-cors
+        - name: ADMIN_CORS
+          valueFrom:
+            secretKeyRef:
+              name: medusa-backend-secrets
+              key: admin-cors
+        - name: AUTH_CORS
+          valueFrom:
+            secretKeyRef:
+              name: medusa-backend-secrets
+              key: auth-cors
+        - name: PORT
+          value: "9000"
+        - name: DISABLE_MEDUSA_ADMIN
+          value: "false"
+        - name: MEDUSA_WORKER_MODE
+          value: "server"
+        - name: MEDUSA_BACKEND_URL
+          value: "https://medusa-backend.xuperson.org"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 9000
+          initialDelaySeconds: 60
+          timeoutSeconds: 10
+          periodSeconds: 30
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 9000
+          initialDelaySeconds: 30
+          timeoutSeconds: 5
+          periodSeconds: 10
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1001
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop:
+            - ALL
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: medusa-server
+  namespace: medusa-backend
+  labels:
+    app: medusa-server
+spec:
+  type: ClusterIP
+  ports:
+  - port: 9000
+    targetPort: 9000
+    protocol: TCP
+    name: http
+  selector:
+    app: medusa-server

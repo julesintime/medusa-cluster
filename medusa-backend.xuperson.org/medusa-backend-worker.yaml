@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medusa-worker
+  namespace: medusa-backend
+  labels:
+    app: medusa-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: medusa-worker
+  template:
+    metadata:
+      labels:
+        app: medusa-worker
+    spec:
+      initContainers:
+      - name: wait-for-postgres
+        image: postgres:15-alpine
+        command:
+        - sh
+        - -c
+        - |
+          until pg_isready -h medusa-postgres -p 5432 -U $(POSTGRES_USER); do
+            echo "Waiting for PostgreSQL..."
+            sleep 2
+          done
+        env:
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: medusa-backend-secrets
+              key: postgres-user
+      - name: wait-for-redis
+        image: redis:7-alpine
+        command:
+        - sh
+        - -c
+        - |
+          until redis-cli -h medusa-redis -p 6379 ping; do
+            echo "Waiting for Redis..."
+            sleep 2
+          done
+      containers:
+      - name: medusa-worker
+        image: medusajs/medusa:latest
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: medusa-backend-secrets
+              key: database-url
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: medusa-backend-secrets
+              key: redis-url
+        - name: COOKIE_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: medusa-backend-secrets
+              key: cookie-secret
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: medusa-backend-secrets
+              key: jwt-secret
+        - name: DISABLE_MEDUSA_ADMIN
+          value: "true"
+        - name: MEDUSA_WORKER_MODE
+          value: "worker"
+        command:
+        - npm
+        - run
+        - start
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1001
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop:
+            - ALL
