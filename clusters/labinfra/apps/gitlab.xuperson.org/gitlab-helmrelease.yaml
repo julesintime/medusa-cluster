@@ -1,0 +1,282 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: gitlab
+  namespace: gitlab
+spec:
+  interval: 10m
+  timeout: 15m
+  chart:
+    spec:
+      chart: gitlab
+      version: "8.6.1"
+      sourceRef:
+        kind: HelmRepository
+        name: gitlab
+        namespace: flux-system
+  install:
+    createNamespace: false
+  values:
+    # Global configuration
+    global:
+      hosts:
+        domain: xuperson.org
+        hostSuffix: ""
+        https: false  # TLS handled by ingress
+        externalIP: "192.168.80.104"
+        gitlab:
+          name: gitlab.xuperson.org
+          https: false
+        registry:
+          name: registry.gitlab.xuperson.org
+          https: false
+
+      # Ingress configuration
+      ingress:
+        enabled: false  # We use custom ingress
+        configureCertmanager: false
+
+      # Edition (CE = Community Edition)
+      edition: ce
+
+      # Time zone
+      time_zone: UTC
+
+      # Initial root password
+      initialRootPassword:
+        secret: gitlab-secrets
+        key: root-password
+
+      # Shell secret
+      shell:
+        authToken:
+          secret: gitlab-secrets
+          key: gitlab-shell-secret
+
+      # Gitaly configuration
+      gitaly:
+        authToken:
+          secret: gitlab-secrets
+          key: gitaly-secret
+
+      # Workhorse configuration
+      workhorse:
+        secret: gitlab-secrets
+        key: gitlab-workhorse-secret
+
+      # Database configuration (bundled PostgreSQL)
+      psql:
+        host: gitlab-postgresql
+        port: 5432
+        database: gitlabhq_production
+        username: gitlab
+        password:
+          secret: gitlab-secrets
+          key: postgresql-password
+
+      # Redis configuration (bundled Redis)
+      redis:
+        host: gitlab-redis-master
+        port: 6379
+        auth:
+          enabled: true
+          secret: gitlab-secrets
+          key: redis-password
+
+    # Certificate Manager (disabled - using Cloudflare)
+    certmanager:
+      install: false
+
+    # GitLab Runner (separate installation)
+    gitlab-runner:
+      install: false
+
+    # Prometheus monitoring (optional)
+    prometheus:
+      install: false
+
+    # Grafana monitoring (optional)
+    grafana:
+      enabled: false
+
+    # PostgreSQL subchart configuration
+    postgresql:
+      install: true
+
+      auth:
+        existingSecret: gitlab-secrets
+        secretKeys:
+          adminPasswordKey: postgresql-postgres-password
+          userPasswordKey: postgresql-password
+
+      primary:
+        service:
+          type: LoadBalancer
+          loadBalancerIP: "192.168.80.105"
+          ports:
+            postgresql: 5432
+
+        # Security configuration
+        podSecurityContext:
+          runAsNonRoot: true
+          runAsUser: 1001
+          runAsGroup: 1001
+          fsGroup: 1001
+
+        containerSecurityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop:
+            - ALL
+
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: 1000m
+            memory: 2Gi
+
+        persistence:
+          enabled: true
+          size: 20Gi
+
+    # Redis subchart configuration
+    redis:
+      install: true
+
+      auth:
+        enabled: true
+        existingSecret: gitlab-secrets
+        existingSecretPasswordKey: redis-password
+
+      master:
+        service:
+          type: LoadBalancer
+          loadBalancerIP: "192.168.80.106"
+          ports:
+            redis: 6379
+
+        # Security configuration
+        podSecurityContext:
+          runAsNonRoot: true
+          runAsUser: 1001
+          runAsGroup: 1001
+          fsGroup: 1001
+
+        containerSecurityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop:
+            - ALL
+
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 1Gi
+
+        persistence:
+          enabled: true
+          size: 8Gi
+
+    # GitLab webservice configuration
+    gitlab:
+      webservice:
+        replicas: 1
+
+        service:
+          type: LoadBalancer
+          loadBalancerIP: "192.168.80.104"
+          externalPort: 8080
+
+        # Security configuration
+        podSecurityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 1000
+          fsGroup: 1000
+
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop:
+            - ALL
+
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: 2000m
+            memory: 4Gi
+
+      # Sidekiq (background jobs)
+      sidekiq:
+        replicas: 1
+
+        # Security configuration
+        podSecurityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 1000
+          fsGroup: 1000
+
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop:
+            - ALL
+
+        resources:
+          requests:
+            cpu: 200m
+            memory: 512Mi
+          limits:
+            cpu: 1000m
+            memory: 2Gi
+
+      # Gitaly (Git repository storage)
+      gitaly:
+        replicas: 1
+
+        # Security configuration
+        podSecurityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 1000
+          fsGroup: 1000
+
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop:
+            - ALL
+
+        resources:
+          requests:
+            cpu: 200m
+            memory: 512Mi
+          limits:
+            cpu: 1000m
+            memory: 2Gi
+
+        persistence:
+          enabled: true
+          size: 50Gi
+
+    # Service Account Configuration
+    serviceAccount:
+      enabled: false  # Using custom service account
+
+    # RBAC Configuration
+    rbac:
+      create: false  # Using custom RBAC

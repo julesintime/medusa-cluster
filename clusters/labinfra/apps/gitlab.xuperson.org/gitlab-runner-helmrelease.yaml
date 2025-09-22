@@ -1,0 +1,122 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: gitlab-runner
+  namespace: gitlab
+spec:
+  interval: 10m
+  timeout: 10m
+  chart:
+    spec:
+      chart: gitlab-runner
+      version: "0.80.1"
+      sourceRef:
+        kind: HelmRepository
+        name: gitlab
+        namespace: flux-system
+  install:
+    createNamespace: false
+  dependsOn:
+    - name: gitlab
+  values:
+    # GitLab URL and registration
+    gitlabUrl: "https://gitlab.xuperson.org"
+
+    # Runner registration token
+    runnerRegistrationToken: ""  # Will be set via secret
+
+    # Runner configuration
+    runners:
+      config: |
+        [[runners]]
+          [runners.kubernetes]
+            namespace = "gitlab"
+            image = "ubuntu:22.04"
+            privileged = false
+            service_account = "gitlab-runner"
+
+            # Security context
+            [runners.kubernetes.pod_security_context]
+              run_as_non_root = true
+              run_as_user = 1000
+              run_as_group = 1000
+              fs_group = 1000
+
+            # Container security context
+            [runners.kubernetes.container_security_context]
+              allow_privilege_escalation = false
+              read_only_root_filesystem = false
+              [runners.kubernetes.container_security_context.capabilities]
+                drop = ["ALL"]
+
+            # Resource allocation
+            cpu_limit = "1000m"
+            memory_limit = "2Gi"
+            cpu_request = "100m"
+            memory_request = "256Mi"
+
+            # Helper image
+            helper_image = "registry.gitlab.com/gitlab-org/gitlab-runner/gitlab-runner-helper:x86_64-latest"
+
+    # Security configuration
+    podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 999
+      runAsGroup: 999
+      fsGroup: 999
+
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop:
+        - ALL
+
+    # Resource limits
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
+
+    # Service account
+    serviceAccount:
+      create: true
+      name: gitlab-runner
+
+    # RBAC - GitLab Runner needs permissions to create pods
+    rbac:
+      create: true
+      rules:
+        - apiGroups: [""]
+          resources: ["pods"]
+          verbs: ["list", "get", "watch", "create", "delete"]
+        - apiGroups: [""]
+          resources: ["pods/exec"]
+          verbs: ["create"]
+        - apiGroups: [""]
+          resources: ["pods/log"]
+          verbs: ["get"]
+        - apiGroups: [""]
+          resources: ["pods/attach"]
+          verbs: ["list", "get", "create", "delete", "update"]
+        - apiGroups: [""]
+          resources: ["secrets"]
+          verbs: ["list", "get", "create", "delete", "update"]
+        - apiGroups: [""]
+          resources: ["configmaps"]
+          verbs: ["list", "get", "create", "delete", "update"]
+
+    # Environment variables for registration
+    envVars:
+      - name: REGISTRATION_TOKEN
+        valueFrom:
+          secretKeyRef:
+            name: gitlab-runner-secrets
+            key: runner-registration-token
+
+    # Replicas
+    replicas: 1

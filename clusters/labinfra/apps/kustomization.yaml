@@ -1,10 +1,13 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
+  - airflow.xuperson.org
+  - argocd.xuperson.org
   - browserless.yaml
   - coder.yaml
   - crawl4ai.xuperson.org
   - gitea.yaml
+  - gitlab.xuperson.org
   - hello.yaml
   - litellm.xuperson.org
   - n8n.yaml

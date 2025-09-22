@@ -1,0 +1,22 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  # Core infrastructure
+  - argocd-namespace.yaml
+  - argocd-rbac.yaml
+
+  # Networking
+  - argocd-ingress.yaml
+
+  # ArgoCD core application
+  - argocd-helmrepository.yaml
+  - argocd-helmrelease.yaml
+
+  # ArgoCD ecosystem components
+  - argo-workflows-helmrelease.yaml
+  - argo-events-helmrelease.yaml
+  - argo-rollouts-helmrelease.yaml
+
+  # Secrets management (Infisical)
+  - argocd-infisical-secrets.yaml

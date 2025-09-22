@@ -1,0 +1,320 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: airflow
+  namespace: airflow
+spec:
+  interval: 10m
+  timeout: 15m
+  chart:
+    spec:
+      chart: airflow
+      version: "1.18.0"
+      sourceRef:
+        kind: HelmRepository
+        name: apache-airflow
+        namespace: flux-system
+  install:
+    createNamespace: false
+  values:
+    # Global configuration
+    airflow:
+      # Airflow configuration
+      config:
+        AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+        AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+        AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "True"
+        AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "True"
+        AIRFLOW__WEBSERVER__AUTHENTICATE: "True"
+        AIRFLOW__WEBSERVER__AUTH_BACKEND: "airflow.auth.backends.password_auth"
+        AIRFLOW__CELERY__RESULT_BACKEND: "redis://airflow-redis:6379/0"
+        AIRFLOW__CELERY__BROKER_URL: "redis://airflow-redis:6379/0"
+
+      # Fernet key for encryption
+      fernetKey: ""  # Will be set via secret
+
+      # Secret key
+      secretKey: ""  # Will be set via secret
+
+    # Database configuration (PostgreSQL)
+    postgresql:
+      enabled: true
+
+      auth:
+        enablePostgresUser: true
+        existingSecret: airflow-secrets
+        secretKeys:
+          adminPasswordKey: postgresql-postgres-password
+          userPasswordKey: postgresql-password
+
+      primary:
+        service:
+          type: LoadBalancer
+          loadBalancerIP: "192.168.80.108"
+          ports:
+            postgresql: 5432
+
+        # Security configuration
+        podSecurityContext:
+          runAsNonRoot: true
+          runAsUser: 1001
+          runAsGroup: 1001
+          fsGroup: 1001
+
+        containerSecurityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop:
+            - ALL
+
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: 1000m
+            memory: 2Gi
+
+        persistence:
+          enabled: true
+          size: 20Gi
+
+    # Redis configuration (for Celery)
+    redis:
+      enabled: true
+
+      auth:
+        enabled: true
+        existingSecret: airflow-secrets
+        existingSecretPasswordKey: redis-password
+
+      master:
+        service:
+          type: LoadBalancer
+          loadBalancerIP: "192.168.80.109"
+          ports:
+            redis: 6379
+
+        # Security configuration
+        podSecurityContext:
+          runAsNonRoot: true
+          runAsUser: 1001
+          runAsGroup: 1001
+          fsGroup: 1001
+
+        containerSecurityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop:
+            - ALL
+
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 1Gi
+
+        persistence:
+          enabled: true
+          size: 8Gi
+
+    # Webserver configuration
+    webserver:
+      replicas: 1
+
+      service:
+        type: LoadBalancer
+        loadBalancerIP: "192.168.80.107"
+        ports:
+          airflow: 8080
+
+      # Security configuration
+      podSecurityContext:
+        runAsNonRoot: true
+        runAsUser: 50000
+        runAsGroup: 50000
+        fsGroup: 50000
+
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: false
+        capabilities:
+          drop:
+          - ALL
+
+      resources:
+        requests:
+          cpu: 250m
+          memory: 512Mi
+        limits:
+          cpu: 1000m
+          memory: 2Gi
+
+      # Default admin user
+      defaultUser:
+        enabled: true
+        role: Admin
+        username: ""  # Will be set via secret
+        email: ""     # Will be set via secret
+        firstName: Admin
+        lastName: User
+        password: ""  # Will be set via secret
+
+    # Scheduler configuration
+    scheduler:
+      replicas: 1
+
+      # Security configuration
+      podSecurityContext:
+        runAsNonRoot: true
+        runAsUser: 50000
+        runAsGroup: 50000
+        fsGroup: 50000
+
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: false
+        capabilities:
+          drop:
+          - ALL
+
+      resources:
+        requests:
+          cpu: 250m
+          memory: 512Mi
+        limits:
+          cpu: 1000m
+          memory: 2Gi
+
+    # Worker configuration (for CeleryExecutor)
+    workers:
+      replicas: 2
+
+      # Security configuration
+      podSecurityContext:
+        runAsNonRoot: true
+        runAsUser: 50000
+        runAsGroup: 50000
+        fsGroup: 50000
+
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: false
+        capabilities:
+          drop:
+          - ALL
+
+      resources:
+        requests:
+          cpu: 200m
+          memory: 512Mi
+        limits:
+          cpu: 1000m
+          memory: 2Gi
+
+      # Worker persistence for logs
+      persistence:
+        enabled: true
+        size: 10Gi
+
+    # Flower (Celery monitoring)
+    flower:
+      enabled: true
+
+      # Security configuration
+      podSecurityContext:
+        runAsNonRoot: true
+        runAsUser: 50000
+        runAsGroup: 50000
+        fsGroup: 50000
+
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: false
+        capabilities:
+          drop:
+          - ALL
+
+      resources:
+        requests:
+          cpu: 50m
+          memory: 128Mi
+        limits:
+          cpu: 200m
+          memory: 512Mi
+
+    # StatsD/Prometheus metrics
+    statsd:
+      enabled: true
+
+      # Security configuration
+      podSecurityContext:
+        runAsNonRoot: true
+        runAsUser: 50000
+        runAsGroup: 50000
+        fsGroup: 50000
+
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: false
+        capabilities:
+          drop:
+          - ALL
+
+      resources:
+        requests:
+          cpu: 50m
+          memory: 128Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
+
+    # Job configurations (important for CI/CD deployment)
+    createUserJob:
+      useHelmHooks: false
+      applyCustomEnv: false
+
+    migrateDatabaseJob:
+      useHelmHooks: false
+      applyCustomEnv: false
+
+    # Service Account Configuration
+    serviceAccount:
+      create: false
+      name: "airflow"
+
+    # RBAC Configuration
+    rbac:
+      create: false  # Using custom RBAC
+
+    # Logs persistence
+    logs:
+      persistence:
+        enabled: true
+        size: 20Gi
+
+    # DAGs persistence
+    dags:
+      persistence:
+        enabled: true
+        size: 10Gi
+
+    # Environment variables from secrets
+    env:
+      - name: AIRFLOW__CORE__FERNET_KEY
+        valueFrom:
+          secretKeyRef:
+            name: airflow-secrets
+            key: fernet-key
+      - name: AIRFLOW__WEBSERVER__SECRET_KEY
+        valueFrom:
+          secretKeyRef:
+            name: airflow-secrets
+            key: secret-key
+      - name: AIRFLOW__CORE__SQL_ALCHEMY_CONN
+        value: "postgresql+psycopg2://airflow:$(AIRFLOW_POSTGRESQL_PASSWORD)@airflow-postgresql:5432/airflow"

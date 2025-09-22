@@ -1,0 +1,220 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: argocd
+  namespace: argocd
+spec:
+  interval: 10m
+  timeout: 10m
+  chart:
+    spec:
+      chart: argo-cd
+      version: "8.5.3"
+      sourceRef:
+        kind: HelmRepository
+        name: argo
+        namespace: flux-system
+  install:
+    createNamespace: false
+  values:
+    global:
+      domain: argocd.xuperson.org
+
+    # ArgoCD Server Configuration
+    server:
+      replicas: 1
+
+      # Service configuration with LoadBalancer
+      service:
+        type: LoadBalancer
+        loadBalancerIP: "192.168.80.102"
+        port: 80
+        portName: server
+
+      # Security configuration
+      podSecurityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop:
+          - ALL
+
+      # Resource limits
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          cpu: 500m
+          memory: 1Gi
+
+      # Environment variables and configuration
+      env:
+        - name: ARGOCD_SERVER_INSECURE
+          value: "true"  # TLS termination handled by ingress
+
+      # Config for external URL
+      config:
+        url: "https://argocd.xuperson.org"
+
+      # Admin password from Infisical
+      adminPasswordSecretName: argocd-secrets
+      adminPasswordSecretKey: admin-password
+
+    # ApplicationSet Controller
+    applicationSet:
+      enabled: true
+      replicas: 1
+
+      # Security configuration
+      podSecurityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop:
+          - ALL
+
+      resources:
+        requests:
+          cpu: 50m
+          memory: 128Mi
+        limits:
+          cpu: 250m
+          memory: 512Mi
+
+    # Repository Server Configuration
+    repoServer:
+      replicas: 1
+
+      # Security configuration
+      podSecurityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop:
+          - ALL
+
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          cpu: 500m
+          memory: 1Gi
+
+    # Application Controller Configuration
+    controller:
+      replicas: 1
+
+      # Security configuration
+      podSecurityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop:
+          - ALL
+
+      resources:
+        requests:
+          cpu: 250m
+          memory: 512Mi
+        limits:
+          cpu: 1000m
+          memory: 2Gi
+
+      # Metrics configuration
+      metrics:
+        enabled: true
+        service:
+          type: ClusterIP
+
+    # Redis Configuration (for HA/caching)
+    redis:
+      enabled: true
+
+      # Security configuration
+      podSecurityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop:
+          - ALL
+
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
+
+    # Notifications Controller
+    notifications:
+      enabled: true
+
+      # Security configuration
+      podSecurityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop:
+          - ALL
+
+      resources:
+        requests:
+          cpu: 50m
+          memory: 128Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
+
+    # Service Account Configuration
+    serviceAccount:
+      create: false
+      name: "argocd"
+
+    # RBAC Configuration
+    rbac:
+      create: true
+
+    # CRD Installation
+    crds:
+      install: true
+      keep: true

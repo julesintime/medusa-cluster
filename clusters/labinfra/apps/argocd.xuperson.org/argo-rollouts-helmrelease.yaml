@@ -1,0 +1,99 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: argo-rollouts
+  namespace: argocd
+spec:
+  interval: 10m
+  timeout: 10m
+  chart:
+    spec:
+      chart: argo-rollouts
+      version: "2.37.7"
+      sourceRef:
+        kind: HelmRepository
+        name: argo
+        namespace: flux-system
+  install:
+    createNamespace: false
+  dependsOn:
+    - name: argocd
+  values:
+    # Controller Configuration
+    controller:
+      replicas: 1
+
+      # Security configuration
+      podSecurityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop:
+          - ALL
+
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          cpu: 500m
+          memory: 1Gi
+
+      # Metrics configuration
+      metrics:
+        enabled: true
+        service:
+          type: ClusterIP
+
+    # Dashboard Configuration (optional)
+    dashboard:
+      enabled: true
+      replicas: 1
+
+      # Security configuration
+      podSecurityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop:
+          - ALL
+
+      resources:
+        requests:
+          cpu: 50m
+          memory: 128Mi
+        limits:
+          cpu: 200m
+          memory: 512Mi
+
+      # Service configuration
+      service:
+        type: ClusterIP
+        port: 3100
+
+    # Service Account Configuration
+    serviceAccount:
+      create: true
+      name: "argo-rollouts"
+
+    # RBAC Configuration
+    rbac:
+      create: true
+
+    # CRD Installation
+    crds:
+      install: true
+      keep: true
