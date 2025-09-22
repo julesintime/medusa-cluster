@@ -37,45 +37,67 @@ spec:
       enabled: true
       replicas: 1
 
-      # Service configuration
+      # Service configuration - CORRECTED FORMAT
       service:
         type: LoadBalancer
         loadBalancerIP: "192.168.80.107"
-        port: 8080
+        # Remove port property - uses ports array instead
+
+      # Default user configuration
+      defaultUser:
+        enabled: true
+        role: Admin
+        username: admin
+        email: admin@example.com
+        firstName: admin
+        lastName: user
+        password: admin
 
     # Configure ingress
     ingress:
       enabled: false  # We manage ingress separately
 
-    # Data configuration
+    # Data configuration - CORRECTED FORMAT
     data:
       metadataConnection:
         user: airflow
-        pass: airflow-secrets
-        passwordSecret: airflow-secrets
-        passwordSecretKey: postgresql-password
         host: airflow-postgresql
         port: 5432
         db: airflow
+        # Password will be provided via extraEnv
+
+    # Use internal PostgreSQL with custom password
+    postgresql:
+      enabled: true
+      auth:
+        existingSecret: airflow-secrets
+        secretKeys:
+          adminPasswordKey: postgresql-postgres-password
+          userPasswordKey: postgresql-password
+
+    # Use Infisical-synced secrets for credentials
+    extraEnv:
+      - name: AIRFLOW__WEBSERVER__SECRET_KEY
+        valueFrom:
+          secretKeyRef:
+            name: airflow-secrets
+            key: secret-key
+      - name: AIRFLOW__CORE__FERNET_KEY
+        valueFrom:
+          secretKeyRef:
+            name: airflow-secrets
+            key: fernet-key
+      - name: AIRFLOW_CONN_AIRFLOW_DB
+        valueFrom:
+          secretKeyRef:
+            name: airflow-secrets
+            key: postgresql-password
 
     # Default admin user from Infisical
     config:
-      webserver:
-        authenticate: true
-        auth_backend: airflow.contrib.auth.backends.password_auth
+      AIRFLOW__WEBSERVER__AUTHENTICATE: "True"
+      AIRFLOW__WEBSERVER__AUTH_BACKEND: "airflow.api.auth.backend.basic_auth"
 
     # Admin user configuration
     defaultAirflowRepository: apache/airflow
     defaultAirflowTag: "3.0.2"
-
-    # Use Infisical-synced secrets for admin user
-    secret:
-      - envName: "_AIRFLOW_WWW_USER_USERNAME"
-        secretName: airflow-secrets
-        secretKey: admin-username
-      - envName: "_AIRFLOW_WWW_USER_PASSWORD"
-        secretName: airflow-secrets
-        secretKey: admin-password
-      - envName: "_AIRFLOW_WWW_USER_EMAIL"
-        secretName: airflow-secrets
-        secretKey: admin-email
