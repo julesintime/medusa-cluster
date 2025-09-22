@@ -186,7 +186,8 @@ spec:
       containers:
       - name: wordpress
         # This image will be automatically updated by ArgoCD Image Updater
-        image: git.xuperson.org/wp-avada-salon:latest
+        # Using standard WordPress image until custom image is built
+        image: wordpress:6.4-php8.2-apache
         env:
         - name: WORDPRESS_DB_HOST
           value: "mysql:3306"
