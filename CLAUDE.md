@@ -280,17 +280,27 @@ spec:
       selfHeal: true
 ```
 
-### MetalLB IP Management for WordPress
+### Ingress-Only WordPress Pattern (Recommended)
+
+WordPress sites use **ClusterIP services + Ingress** approach for efficiency:
 
 ```bash
-# Check WordPress LoadBalancer IPs
-kubectl get svc -A | grep LoadBalancer | grep wp-
+# All WordPress traffic routes through main ingress controller
+kubectl get ingress -A | grep wp-
+# wp-avada-portfolio   nginx   wp-avada-portfolio.xuperson.org   192.168.80.101
+# wp-avada-spa         nginx   wp-avada-spa.xuperson.org         192.168.80.101
 
-# WordPress IP allocation:
-# wp-avada-portfolio: 192.168.80.122
-# wp-avada-spa: 192.168.80.123
-# Next available: 124, 125, 126...
+# No dedicated LoadBalancers needed (saves MetalLB IPs)
+kubectl get svc -A | grep wp- | grep ClusterIP
+# wp-avada-portfolio   wordpress   ClusterIP
+# wp-avada-spa         wordpress   ClusterIP
 ```
+
+**Benefits**:
+- ✅ **Efficient**: Leverages existing wildcard `*.xuperson.org` → `192.168.80.101`
+- ✅ **Cost Effective**: Saves MetalLB IP addresses
+- ✅ **Simplified**: Single ingress point for all WordPress sites
+- ✅ **Scalable**: Easy to add new WordPress sites
 
 **Key Benefit**: Edit files → Git push labinfra → ArgoCD deploys → Optionally sync to wp-cluster monorepo!
 
