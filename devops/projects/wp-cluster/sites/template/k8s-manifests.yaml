@@ -1,0 +1,90 @@
+# Kubernetes manifests for WordPress Site
+# Template - Update domain, namespace, and LoadBalancer IP
+
+---
+# Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: SITE_NAMESPACE  # Update this
+
+---
+# ConfigMap for WordPress Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wp-config
+  namespace: SITE_NAMESPACE  # Update this
+data:
+  wp-config.php: |
+    <?php
+    define('DB_NAME', getenv('WORDPRESS_DB_NAME'));
+    define('DB_USER', getenv('WORDPRESS_DB_USER'));
+    define('DB_PASSWORD', getenv('WORDPRESS_DB_PASSWORD'));
+    define('DB_HOST', getenv('WORDPRESS_DB_HOST'));
+    define('DB_CHARSET', 'utf8');
+    define('DB_COLLATE', '');
+
+    $table_prefix = 'wp_';
+    define('WP_DEBUG', false);
+
+    if ( ! defined( 'ABSPATH' ) ) {
+        define( 'ABSPATH', __DIR__ . '/' );
+    }
+
+    require_once ABSPATH . 'wp-settings.php';
+
+---
+# Secret for Database Credentials
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db-credentials
+  namespace: SITE_NAMESPACE  # Update this
+type: Opaque
+stringData:
+  mysql-root-password: "CHANGE_ME"  # Use Infisical in production
+  mysql-password: "CHANGE_ME"       # Use Infisical in production
+  mysql-user: "wordpress"
+  mysql-database: "wordpress"
+
+---
+# WordPress Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: wordpress
+  namespace: SITE_NAMESPACE  # Update this
+spec:
+  type: LoadBalancer
+  loadBalancerIP: "192.168.80.XXX"  # Update with available IP
+  selector:
+    app: wordpress
+  ports:
+  - port: 80
+    targetPort: 80
+
+---
+# WordPress Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: wordpress-ingress
+  namespace: SITE_NAMESPACE  # Update this
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: "SITE_DOMAIN"  # Update this
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: SITE_DOMAIN  # Update this
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: wordpress
+            port:
+              number: 80
