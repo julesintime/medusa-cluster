@@ -14,12 +14,7 @@ metadata:
     nginx.ingress.kubernetes.io/grpc-backend: "true"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-    nginx.ingress.kubernetes.io/server-snippet: |
-      grpc_read_timeout 300;
-      grpc_send_timeout 300;
-      client_body_timeout 60;
-      client_header_timeout 60;
-      client_max_body_size 1m;
+    nginx.ingress.kubernetes.io/proxy-body-size: "1m"
 spec:
   ingressClassName: nginx
   rules:
