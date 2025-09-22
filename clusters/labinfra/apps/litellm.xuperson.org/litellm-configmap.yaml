@@ -35,8 +35,108 @@ data:
           health_check_timeout: 8
           cooldown_time: 30
 
-      # === GEMINI MODELS TEMPORARILY DISABLED ===
-      # All Gemini models are disabled - using only Sonoma models via AI Gateway
+      # === GEMINI MODELS WITH FALLBACK CHAIN ===
+      # Gemini models with proper fallback: pro -> flash -> lite -> 2.0 -> sonoma
+
+      # Gemini 2.5 Pro - Enhanced thinking and reasoning
+      - model_name: "gemini-2.5-pro"
+        litellm_params:
+          model: "gemini/gemini-2.5-pro"
+          api_key: "os.environ/GEMINI_KEY_1"
+          rpm: 5
+          tpm: 250000
+        model_info:
+          health_check_timeout: 15
+          cooldown_time: 180
+      - model_name: "gemini-2.5-pro"
+        litellm_params:
+          model: "gemini/gemini-2.5-pro"
+          api_key: "os.environ/GEMINI_KEY_2"
+          rpm: 5
+          tpm: 250000
+        model_info:
+          health_check_timeout: 15
+          cooldown_time: 180
+
+      # Gemini 2.5 Flash - Adaptive thinking, cost efficient
+      - model_name: "gemini-2.5-flash"
+        litellm_params:
+          model: "gemini/gemini-2.5-flash"
+          api_key: "os.environ/GEMINI_KEY_1"
+          rpm: 10
+          tpm: 250000
+        model_info:
+          health_check_timeout: 10
+          cooldown_time: 120
+      - model_name: "gemini-2.5-flash"
+        litellm_params:
+          model: "gemini/gemini-2.5-flash"
+          api_key: "os.environ/GEMINI_KEY_2"
+          rpm: 10
+          tpm: 250000
+        model_info:
+          health_check_timeout: 10
+          cooldown_time: 120
+
+      # Gemini 2.5 Flash-Lite - Most cost-efficient
+      - model_name: "gemini-2.5-flash-lite"
+        litellm_params:
+          model: "gemini/gemini-2.5-flash-lite"
+          api_key: "os.environ/GEMINI_KEY_1"
+          rpm: 15
+          tpm: 250000
+        model_info:
+          health_check_timeout: 8
+          cooldown_time: 90
+      - model_name: "gemini-2.5-flash-lite"
+        litellm_params:
+          model: "gemini/gemini-2.5-flash-lite"
+          api_key: "os.environ/GEMINI_KEY_2"
+          rpm: 15
+          tpm: 250000
+        model_info:
+          health_check_timeout: 8
+          cooldown_time: 90
+
+      # Gemini 2.0 Flash - High throughput
+      - model_name: "gemini-2.0-flash"
+        litellm_params:
+          model: "gemini/gemini-2.0-flash"
+          api_key: "os.environ/GEMINI_KEY_1"
+          rpm: 15
+          tpm: 1000000
+        model_info:
+          health_check_timeout: 8
+          cooldown_time: 60
+      - model_name: "gemini-2.0-flash"
+        litellm_params:
+          model: "gemini/gemini-2.0-flash"
+          api_key: "os.environ/GEMINI_KEY_2"
+          rpm: 15
+          tpm: 1000000
+        model_info:
+          health_check_timeout: 8
+          cooldown_time: 60
+
+      # Gemini 2.0 Flash Experimental
+      - model_name: "gemini-2.0-flash-exp"
+        litellm_params:
+          model: "gemini/gemini-2.0-flash-exp"
+          api_key: "os.environ/GEMINI_KEY_1"
+          rpm: 15
+          tpm: 1000000
+        model_info:
+          health_check_timeout: 8
+          cooldown_time: 60
+      - model_name: "gemini-2.0-flash-exp"
+        litellm_params:
+          model: "gemini/gemini-2.0-flash-exp"
+          api_key: "os.environ/GEMINI_KEY_2"
+          rpm: 15
+          tpm: 1000000
+        model_info:
+          health_check_timeout: 8
+          cooldown_time: 60
           
       # === DEFAULT ROTATION POOL ===
       # "gpt-4" and catch-all models now use AI Gateway stealth/sonoma models
@@ -87,13 +187,13 @@ data:
     litellm_settings:
       # All models fallback to AI Gateway stealth/sonoma models
       fallbacks:
-        # Specific model fallbacks
-        - "gemini-2.5-pro": ["stealth/sonoma-dusk-alpha"]
-        - "gemini-2.5-flash": ["stealth/sonoma-dusk-alpha"]
-        - "gemini-2.5-flash-lite": ["stealth/sonoma-dusk-alpha"]
-        - "gemini-2.0-flash": ["stealth/sonoma-dusk-alpha"]
-        - "gemini-2.0-flash-lite": ["stealth/sonoma-dusk-alpha"]
-        - "gemini/*": ["stealth/sonoma-dusk-alpha"]
+        # Gemini fallback chain: pro -> flash -> lite -> 2.0 -> sonoma
+        - "gemini-2.5-pro": ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash", "stealth/sonoma-dusk-alpha"]
+        - "gemini-2.5-flash": ["gemini-2.5-flash-lite", "gemini-2.0-flash", "gemini-2.0-flash-exp", "stealth/sonoma-dusk-alpha"]
+        - "gemini-2.5-flash-lite": ["gemini-2.0-flash", "gemini-2.0-flash-exp", "stealth/sonoma-dusk-alpha"]
+        - "gemini-2.0-flash": ["gemini-2.0-flash-exp", "stealth/sonoma-dusk-alpha"]
+        - "gemini-2.0-flash-exp": ["stealth/sonoma-dusk-alpha"]
+        - "gemini/*": ["gemini-2.5-flash", "stealth/sonoma-dusk-alpha"]
         # GPT models fallback to sonoma
         - "gpt-3.5-turbo": ["stealth/sonoma-dusk-alpha"]
         - "gpt-4-turbo": ["stealth/sonoma-dusk-alpha"]
