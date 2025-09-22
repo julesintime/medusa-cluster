@@ -46,11 +46,10 @@ spec:
     defaultUser:
       enabled: true
       role: Admin
-      username: admin
-      email: admin@example.com
-      firstName: admin
-      lastName: user
-      password: admin
+      existingSecret: airflow-secrets
+      userPasswordKey: admin-password
+      userEmailKey: admin-email
+      userUsernameKey: admin-username
 
     # Configure ingress
     ingress:
