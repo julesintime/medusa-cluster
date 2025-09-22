@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: firecrawl
+  annotations:
+    config.kubernetes.io/local-config: "true"
+
+resources:
+  - firecrawl-namespace.yaml
+  - firecrawl-infisical-secrets.yaml
+  - firecrawl-redis.yaml
+  - firecrawl-postgres.yaml
+  - firecrawl-playwright.yaml
+  - firecrawl-api.yaml
+  - firecrawl-worker.yaml
+  - firecrawl-ingress.yaml

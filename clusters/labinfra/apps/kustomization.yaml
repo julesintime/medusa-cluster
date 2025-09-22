@@ -14,3 +14,4 @@ resources:
   - redis.xuperson.org
   - cronicle.xuperson.org
   - dkron.xuperson.org
+  - firecrawl.xuperson.org
