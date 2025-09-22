@@ -14,9 +14,8 @@ data:
       # Default model - stealth/sonoma-dusk-alpha
       - model_name: "stealth/sonoma-dusk-alpha"
         litellm_params:
-          model: "vercel-ai/stealth/sonoma-dusk-alpha"
+          model: "vercel_ai_gateway/stealth/sonoma-dusk-alpha"
           api_key: "os.environ/VERCEL_AI_GATEWAY_API_KEY"
-          api_base: "https://ai-gateway.vercel.sh/v1"
           rpm: 20
           tpm: 1000000
         model_info:
@@ -26,9 +25,8 @@ data:
       # Fast model - stealth/sonoma-sky-alpha
       - model_name: "stealth/sonoma-sky-alpha"
         litellm_params:
-          model: "vercel-ai/stealth/sonoma-sky-alpha"
+          model: "vercel_ai_gateway/stealth/sonoma-sky-alpha"
           api_key: "os.environ/VERCEL_AI_GATEWAY_API_KEY"
-          api_base: "https://ai-gateway.vercel.sh/v1"
           rpm: 30
           tpm: 1000000
         model_info:
@@ -43,9 +41,8 @@ data:
 
       - model_name: "gpt-4"
         litellm_params:
-          model: "vercel-ai/stealth/sonoma-dusk-alpha"
+          model: "vercel_ai_gateway/stealth/sonoma-dusk-alpha"
           api_key: "os.environ/VERCEL_AI_GATEWAY_API_KEY"
-          api_base: "https://ai-gateway.vercel.sh/v1"
           rpm: 20
           tpm: 1000000
         model_info:
@@ -54,9 +51,8 @@ data:
 
       - model_name: "gpt-4"
         litellm_params:
-          model: "vercel-ai/stealth/sonoma-sky-alpha"
+          model: "vercel_ai_gateway/stealth/sonoma-sky-alpha"
           api_key: "os.environ/VERCEL_AI_GATEWAY_API_KEY"
-          api_base: "https://ai-gateway.vercel.sh/v1"
           rpm: 30
           tpm: 1000000
         model_info:
