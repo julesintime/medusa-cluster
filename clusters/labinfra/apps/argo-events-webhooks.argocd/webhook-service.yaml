@@ -3,7 +3,7 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: portfolio-webhook-ingress
+  name: git-webhook-ingress
   namespace: argocd
   labels:
     app.kubernetes.io/name: argo-events-webhooks
@@ -20,12 +20,12 @@ spec:
   - host: webhooks.xuperson.org
     http:
       paths:
-      # Portfolio webhook endpoint
-      - path: /portfolio-webhook/?(.*)
+      # Git webhook endpoint
+      - path: /git-webhook/?(.*)
         pathType: Prefix
         backend:
           service:
-            name: portfolio-git-webhook-eventsource-svc
+            name: git-webhook-eventsource-svc
             port:
               number: 12000
       # Generic Git webhook endpoint
@@ -33,7 +33,7 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: portfolio-git-webhook-eventsource-svc
+            name: git-webhook-eventsource-svc
             port:
               number: 13000
 
@@ -53,18 +53,11 @@ data:
 
     ## Configuration for Git Repository Webhooks
 
-    ### Portfolio Specific Webhook
-    - **URL**: https://webhooks.xuperson.org/portfolio-webhook
-    - **Method**: POST
-    - **Content-Type**: application/json
-    - **Events**: Push events to main/master branch
-    - **Purpose**: Triggers CI/CD for avada-portfolio application
-
-    ### Generic Git Webhook
+    ### Git Webhook
     - **URL**: https://webhooks.xuperson.org/git-webhook
     - **Method**: POST
     - **Content-Type**: application/json
-    - **Events**: Push events to main/master branch for labinfra or avada-portfolio repos
+    - **Events**: Push events to main/master branch for labinfra repos
     - **Purpose**: General CI/CD trigger for any supported repository
 
     ## Setup Instructions
@@ -78,12 +71,7 @@ data:
 
     ### Testing:
     ```bash
-    # Test portfolio webhook
-    curl -X POST https://webhooks.xuperson.org/portfolio-webhook \
-      -H "Content-Type: application/json" \
-      -d '{"ref":"refs/heads/main","repository":{"full_name":"test/repo"}}'
-
-    # Test generic webhook
+    # Test git webhook
     curl -X POST https://webhooks.xuperson.org/git-webhook \
       -H "Content-Type: application/json" \
       -d '{"ref":"refs/heads/main","repository":{"full_name":"labinfra/test"}}'
