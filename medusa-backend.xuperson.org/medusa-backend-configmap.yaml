@@ -92,3 +92,31 @@ data:
         },
       },
     }
+  tsconfig.json: |
+    {
+      "compilerOptions": {
+        "target": "es2020",
+        "lib": ["es2020"],
+        "allowJs": true,
+        "skipLibCheck": true,
+        "allowSyntheticDefaultImports": true,
+        "strict": true,
+        "forceConsistentCasingInFileNames": true,
+        "module": "commonjs",
+        "moduleResolution": "node",
+        "resolveJsonModule": true,
+        "isolatedModules": true,
+        "noEmit": true,
+        "esModuleInterop": true,
+        "experimentalDecorators": true,
+        "emitDecoratorMetadata": true,
+        "rootDir": "./",
+        "baseUrl": ".",
+        "paths": {
+          "@/*": ["./*"]
+        }
+      },
+      "include": [
+        "**/*"
+      ]
+    }
