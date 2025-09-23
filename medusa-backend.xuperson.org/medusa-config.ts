@@ -16,8 +16,8 @@ export default {
     }
   },
   admin: {
-    disable: process.env.DISABLE_MEDUSA_ADMIN === "true" || false,
-    path: "/app/medusa-app/.medusa/admin",
+    disable: true, // Temporarily disable to test server startup
+    // path: "/app/medusa-app/.medusa/admin",
   },
   modules: {
     cache: {
