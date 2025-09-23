@@ -1,0 +1,20 @@
+# Workflow to build and deploy Archon platform
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  name: archon-build-and-deploy
+  namespace: archon
+  labels:
+    app.kubernetes.io/name: archon-build
+    app.kubernetes.io/part-of: archon-cluster
+spec:
+  workflowTemplateRef:
+    name: archon-build-deploy
+  arguments:
+    parameters:
+    - name: repo-url
+      value: "https://github.com/coleam00/Archon.git"
+    - name: revision
+      value: "main"
+    - name: registry-url
+      value: "registry.registry.svc.cluster.local:5000"

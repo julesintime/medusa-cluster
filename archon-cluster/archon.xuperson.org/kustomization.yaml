@@ -12,19 +12,16 @@ resources:
   - archon-rbac.yaml
   - archon-infisical-secrets.yaml
 
-  # Microservices deployments
-  - archon-server-deployment.yaml
-  - archon-mcp-deployment.yaml
-  - archon-agents-deployment.yaml
-  - archon-frontend-deployment.yaml
+  # Build workspace
+  - archon-pvc.yaml
+
+  # Build and deployment workflow
+  - archon-build-workflow.yaml
+  - archon-build-job.yaml
 
   # Networking
   - archon-services.yaml
   - archon-ingress.yaml
-
-  # Workflows
-  - archon-workflow.yaml
-  - archon-service-key-workflow.yaml
 
 # Labels applied to all resources
 commonLabels:
@@ -37,18 +34,3 @@ commonAnnotations:
 
 # Namespace for all resources
 namespace: archon
-
-# Use working placeholder images until real ones are built
-images:
-  - name: coleam00/archon-server
-    newName: nginx
-    newTag: alpine
-  - name: coleam00/archon-mcp
-    newName: nginx
-    newTag: alpine
-  - name: coleam00/archon-agents
-    newName: nginx
-    newTag: alpine
-  - name: coleam00/archon-frontend
-    newName: nginx
-    newTag: alpine

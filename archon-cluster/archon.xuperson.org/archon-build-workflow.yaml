@@ -1,0 +1,397 @@
+# Argo Workflow Template for Archon AI Platform Build and Deploy
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: archon-build-deploy
+  namespace: archon
+spec:
+  entrypoint: archon-pipeline
+  serviceAccountName: archon-workflow
+
+  # Build parameters
+  arguments:
+    parameters:
+    - name: repo-url
+      value: "https://github.com/coleam00/Archon.git"
+    - name: revision
+      value: "main"
+    - name: registry-url
+      value: "registry.registry.svc.cluster.local:5000"
+
+  # Shared workspace for build artifacts
+  volumes:
+  - name: archon-workspace
+    persistentVolumeClaim:
+      claimName: archon-workspace-pvc
+
+  templates:
+  # Main pipeline orchestration
+  - name: archon-pipeline
+    dag:
+      tasks:
+      - name: build-archon-images
+        template: build-images
+      - name: deploy-archon-server
+        template: deploy-server
+        dependencies: [build-archon-images]
+      - name: deploy-archon-mcp
+        template: deploy-mcp
+        dependencies: [build-archon-images]
+      - name: deploy-archon-agents
+        template: deploy-agents
+        dependencies: [build-archon-images]
+      - name: deploy-archon-frontend
+        template: deploy-frontend
+        dependencies: [build-archon-images]
+
+  # Step 1: Build All Archon Images
+  - name: build-images
+    inputs:
+      artifacts:
+      - name: source
+        path: /src
+        git:
+          repo: "{{workflow.parameters.repo-url}}"
+          revision: "{{workflow.parameters.revision}}"
+    container:
+      image: moby/buildkit:latest
+      command: [sh, -c]
+      args:
+      - |
+        set -ex
+
+        echo "=== STEP 1: Setup Build Environment ==="
+        apk add --no-cache git curl
+
+        cd /src
+        echo "Source code downloaded to: $(pwd)"
+        ls -la
+
+        echo "=== STEP 2: Build Archon Server Image ==="
+        # Create Dockerfile for server if it doesn't exist
+        if [ ! -f Dockerfile.server ]; then
+          cat > Dockerfile.server << 'DOCKERFILE'
+        FROM node:20-alpine
+        WORKDIR /app
+        COPY package*.json ./
+        RUN npm ci --only=production && npm cache clean --force
+        COPY . .
+        EXPOSE 8181
+        CMD ["node", "server/index.js"]
+        DOCKERFILE
+        fi
+
+        buildctl --addr tcp://buildkitd.gitea.svc.cluster.local:1234 \
+          build \
+          --frontend dockerfile.v0 \
+          --local context=. \
+          --local dockerfile=. \
+          --opt filename=Dockerfile.server \
+          --output type=image,name={{workflow.parameters.registry-url}}/archon-server:latest,push=true
+
+        echo "=== STEP 3: Build Archon MCP Image ==="
+        if [ ! -f Dockerfile.mcp ]; then
+          cat > Dockerfile.mcp << 'DOCKERFILE'
+        FROM node:20-alpine
+        WORKDIR /app
+        COPY package*.json ./
+        RUN npm ci --only=production && npm cache clean --force
+        COPY . .
+        EXPOSE 8051
+        CMD ["node", "mcp/index.js"]
+        DOCKERFILE
+        fi
+
+        buildctl --addr tcp://buildkitd.gitea.svc.cluster.local:1234 \
+          build \
+          --frontend dockerfile.v0 \
+          --local context=. \
+          --local dockerfile=. \
+          --opt filename=Dockerfile.mcp \
+          --output type=image,name={{workflow.parameters.registry-url}}/archon-mcp:latest,push=true
+
+        echo "=== STEP 4: Build Archon Agents Image ==="
+        if [ ! -f Dockerfile.agents ]; then
+          cat > Dockerfile.agents << 'DOCKERFILE'
+        FROM python:3.11-alpine
+        WORKDIR /app
+        COPY requirements.txt ./
+        RUN pip install --no-cache-dir -r requirements.txt
+        COPY . .
+        EXPOSE 8052
+        CMD ["python", "agents/main.py"]
+        DOCKERFILE
+        fi
+
+        buildctl --addr tcp://buildkitd.gitea.svc.cluster.local:1234 \
+          build \
+          --frontend dockerfile.v0 \
+          --local context=. \
+          --local dockerfile=. \
+          --opt filename=Dockerfile.agents \
+          --output type=image,name={{workflow.parameters.registry-url}}/archon-agents:latest,push=true
+
+        echo "=== STEP 5: Build Archon Frontend Image ==="
+        if [ ! -f Dockerfile.frontend ]; then
+          cat > Dockerfile.frontend << 'DOCKERFILE'
+        FROM node:20-alpine AS builder
+        WORKDIR /app
+        COPY package*.json ./
+        RUN npm ci
+        COPY . .
+        RUN npm run build
+
+        FROM nginx:alpine
+        COPY --from=builder /app/dist /usr/share/nginx/html
+        COPY nginx.conf /etc/nginx/nginx.conf
+        EXPOSE 3737
+        CMD ["nginx", "-g", "daemon off;"]
+        DOCKERFILE
+        fi
+
+        # Create nginx config if needed
+        if [ ! -f nginx.conf ]; then
+          cat > nginx.conf << 'NGINXCONF'
+        events {
+            worker_connections 1024;
+        }
+        http {
+            include       /etc/nginx/mime.types;
+            default_type  application/octet-stream;
+
+            server {
+                listen 3737;
+                location / {
+                    root /usr/share/nginx/html;
+                    index index.html index.htm;
+                    try_files $uri $uri/ /index.html;
+                }
+            }
+        }
+        NGINXCONF
+        fi
+
+        buildctl --addr tcp://buildkitd.gitea.svc.cluster.local:1234 \
+          build \
+          --frontend dockerfile.v0 \
+          --local context=. \
+          --local dockerfile=. \
+          --opt filename=Dockerfile.frontend \
+          --output type=image,name={{workflow.parameters.registry-url}}/archon-frontend:latest,push=true
+
+        echo "=== BUILD COMPLETE ==="
+        echo "Images built and pushed to {{workflow.parameters.registry-url}}"
+        echo "Built at $(date)" > /workspace/archon-build/.ready
+
+      volumeMounts:
+      - name: archon-workspace
+        mountPath: /workspace
+      resources:
+        requests:
+          cpu: "2"
+          memory: "4Gi"
+        limits:
+          cpu: "4"
+          memory: "8Gi"
+
+  # Step 2: Deploy Archon Server
+  - name: deploy-server
+    resource:
+      action: apply
+      manifest: |
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: archon-server
+          namespace: archon
+          labels:
+            app.kubernetes.io/name: archon-server
+            app.kubernetes.io/component: server
+            app.kubernetes.io/part-of: archon-cluster
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app.kubernetes.io/name: archon-server
+              app.kubernetes.io/component: server
+          template:
+            metadata:
+              labels:
+                app.kubernetes.io/name: archon-server
+                app.kubernetes.io/component: server
+                app.kubernetes.io/part-of: archon-cluster
+            spec:
+              serviceAccountName: archon-app
+              containers:
+              - name: archon-server
+                image: {{workflow.parameters.registry-url}}/archon-server:latest
+                imagePullPolicy: Always
+                ports:
+                - containerPort: 8181
+                  name: http
+                env:
+                - name: HOST
+                  valueFrom:
+                    secretKeyRef:
+                      name: archon-secrets
+                      key: host
+                - name: ARCHON_SERVER_PORT
+                  valueFrom:
+                    secretKeyRef:
+                      name: archon-secrets
+                      key: server-port
+                - name: SUPABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: archon-secrets
+                      key: supabase-url
+                - name: SUPABASE_SERVICE_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: archon-secrets
+                      key: supabase-service-key
+                resources:
+                  requests:
+                    cpu: 250m
+                    memory: 512Mi
+                  limits:
+                    cpu: 1000m
+                    memory: 2Gi
+
+  # Step 3: Deploy Archon MCP
+  - name: deploy-mcp
+    resource:
+      action: apply
+      manifest: |
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: archon-mcp
+          namespace: archon
+          labels:
+            app.kubernetes.io/name: archon-mcp
+            app.kubernetes.io/component: mcp
+            app.kubernetes.io/part-of: archon-cluster
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app.kubernetes.io/name: archon-mcp
+              app.kubernetes.io/component: mcp
+          template:
+            metadata:
+              labels:
+                app.kubernetes.io/name: archon-mcp
+                app.kubernetes.io/component: mcp
+                app.kubernetes.io/part-of: archon-cluster
+            spec:
+              serviceAccountName: archon-app
+              containers:
+              - name: archon-mcp
+                image: {{workflow.parameters.registry-url}}/archon-mcp:latest
+                imagePullPolicy: Always
+                ports:
+                - containerPort: 8051
+                  name: http
+                env:
+                - name: ARCHON_SERVER_URL
+                  value: "http://archon-server:8181"
+                resources:
+                  requests:
+                    cpu: 100m
+                    memory: 256Mi
+                  limits:
+                    cpu: 500m
+                    memory: 1Gi
+
+  # Step 4: Deploy Archon Agents
+  - name: deploy-agents
+    resource:
+      action: apply
+      manifest: |
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: archon-agents
+          namespace: archon
+          labels:
+            app.kubernetes.io/name: archon-agents
+            app.kubernetes.io/component: agents
+            app.kubernetes.io/part-of: archon-cluster
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app.kubernetes.io/name: archon-agents
+              app.kubernetes.io/component: agents
+          template:
+            metadata:
+              labels:
+                app.kubernetes.io/name: archon-agents
+                app.kubernetes.io/component: agents
+                app.kubernetes.io/part-of: archon-cluster
+            spec:
+              serviceAccountName: archon-app
+              containers:
+              - name: archon-agents
+                image: {{workflow.parameters.registry-url}}/archon-agents:latest
+                imagePullPolicy: Always
+                ports:
+                - containerPort: 8052
+                  name: http
+                env:
+                - name: ARCHON_SERVER_URL
+                  value: "http://archon-server:8181"
+                resources:
+                  requests:
+                    cpu: 500m
+                    memory: 1Gi
+                  limits:
+                    cpu: 2000m
+                    memory: 4Gi
+
+  # Step 5: Deploy Archon Frontend
+  - name: deploy-frontend
+    resource:
+      action: apply
+      manifest: |
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: archon-frontend
+          namespace: archon
+          labels:
+            app.kubernetes.io/name: archon-frontend
+            app.kubernetes.io/component: frontend
+            app.kubernetes.io/part-of: archon-cluster
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app.kubernetes.io/name: archon-frontend
+              app.kubernetes.io/component: frontend
+          template:
+            metadata:
+              labels:
+                app.kubernetes.io/name: archon-frontend
+                app.kubernetes.io/component: frontend
+                app.kubernetes.io/part-of: archon-cluster
+            spec:
+              serviceAccountName: archon-app
+              containers:
+              - name: archon-frontend
+                image: {{workflow.parameters.registry-url}}/archon-frontend:latest
+                imagePullPolicy: Always
+                ports:
+                - containerPort: 3737
+                  name: http
+                env:
+                - name: VITE_API_URL
+                  value: "http://archon-server:8181"
+                resources:
+                  requests:
+                    cpu: 100m
+                    memory: 256Mi
+                  limits:
+                    cpu: 500m
+                    memory: 1Gi
