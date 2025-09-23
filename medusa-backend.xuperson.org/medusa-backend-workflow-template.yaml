@@ -62,12 +62,9 @@ spec:
         echo "=== STEP 2: Install All Dependencies (including dev deps for build) ==="
         npm install
 
-        echo "=== STEP 3: Build Medusa Backend ==="
+        echo "=== STEP 3: Build Medusa Backend and Admin UI ==="
+        # Build both backend and admin UI together (admin goes to .medusa/server/public/admin)
         npm run build
-
-        echo "=== STEP 4: Build Admin UI ==="
-        # This builds the admin panel that was missing
-        npx medusa build --admin-only
 
         echo "=== STEP 5: Create Production Bundle ==="
         mkdir -p /workspace/medusa-app
@@ -79,16 +76,16 @@ spec:
         cd /workspace/medusa-app
         echo "Keeping all dependencies for runtime..."
 
-        # Verify admin build exists
+        # Verify admin build exists at correct integrated location
         ls -la /workspace/medusa-app/.medusa/
-        ls -la /workspace/medusa-app/.medusa/admin/
+        ls -la /workspace/medusa-app/.medusa/server/public/admin/
 
         # Make start script executable
         chmod +x /workspace/medusa-app/start.sh
 
         # Create ready marker
         echo "Build completed at $(date)" > /workspace/medusa-app/.ready
-        echo "Admin UI: $(ls -la /workspace/medusa-app/.medusa/admin/index.html)" >> /workspace/medusa-app/.ready
+        echo "Admin UI: $(ls -la /workspace/medusa-app/.medusa/server/public/admin/index.html)" >> /workspace/medusa-app/.ready
 
         echo "=== BUILD COMPLETE ==="
         cat /workspace/medusa-app/.ready
@@ -167,12 +164,12 @@ spec:
                   echo "Build status:"
                   cat /app/medusa-app/.ready
 
-                  if [ ! -f /app/medusa-app/.medusa/admin/index.html ]; then
+                  if [ ! -f /app/medusa-app/.medusa/server/public/admin/index.html ]; then
                     echo "ERROR: Admin UI build missing!"
                     exit 1
                   fi
 
-                  echo "Admin UI verified: /app/medusa-app/.medusa/admin/index.html exists"
+                  echo "Admin UI verified: /app/medusa-app/.medusa/server/public/admin/index.html exists"
                   echo "=== Build verification complete ==="
                 volumeMounts:
                 - name: medusa-workspace

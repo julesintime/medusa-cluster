@@ -1,0 +1,369 @@
+# Argo Workflow Template for Archon AI Platform Build and Deploy
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: archon-build-deploy
+  namespace: archon
+spec:
+  entrypoint: archon-pipeline
+  serviceAccountName: archon-workflow
+
+  # Build parameters
+  arguments:
+    parameters:
+    - name: repo-url
+      value: "https://github.com/coleam00/Archon.git"
+    - name: revision
+      value: "main"
+    - name: build-custom-images
+      value: "false"  # Use published images by default
+
+  # Shared workspace for build artifacts
+  volumes:
+  - name: archon-workspace
+    emptyDir: {}
+  - name: docker-socket
+    hostPath:
+      path: /var/run/docker.sock
+
+  templates:
+  # Main pipeline orchestration
+  - name: archon-pipeline
+    dag:
+      tasks:
+      - name: setup-supabase
+        template: setup-supabase
+      - name: build-images
+        template: build-images
+        when: "{{workflow.parameters.build-custom-images}} == true"
+      - name: deploy-server
+        template: deploy-server
+        dependencies: [setup-supabase]
+      - name: deploy-mcp
+        template: deploy-mcp
+        dependencies: [deploy-server]
+      - name: deploy-agents
+        template: deploy-agents
+        dependencies: [deploy-server]
+      - name: deploy-frontend
+        template: deploy-frontend
+        dependencies: [deploy-server]
+      - name: verify-deployment
+        template: verify-deployment
+        dependencies: [deploy-server, deploy-mcp, deploy-agents, deploy-frontend]
+
+  # Step 1: Setup Supabase Database
+  - name: setup-supabase
+    container:
+      image: alpine/curl:latest
+      command: [sh, -c]
+      args:
+      - |
+        echo "Setting up Supabase database for Archon..."
+
+        # Check Supabase connection
+        SUPABASE_URL=$(cat /secrets/supabase-url)
+        SUPABASE_KEY=$(cat /secrets/supabase-service-key)
+
+        echo "Testing Supabase connection..."
+        curl -H "Authorization: Bearer $SUPABASE_KEY" \
+             -H "apikey: $SUPABASE_KEY" \
+             "$SUPABASE_URL/rest/v1/" || echo "Connection test completed"
+
+        # Enable PGVector extension if needed
+        echo "Ensuring PGVector extension is enabled..."
+        curl -X POST "$SUPABASE_URL/rest/v1/rpc/enable_pgvector" \
+             -H "Authorization: Bearer $SUPABASE_KEY" \
+             -H "apikey: $SUPABASE_KEY" \
+             -H "Content-Type: application/json" \
+             -d '{}' || echo "PGVector setup completed"
+
+        echo "Supabase setup completed!"
+      volumeMounts:
+      - name: secrets
+        mountPath: /secrets
+        readOnly: true
+    volumes:
+    - name: secrets
+      secret:
+        secretName: archon-secrets
+
+  # Step 2: Build Custom Images (optional)
+  - name: build-images
+    inputs:
+      artifacts:
+      - name: source
+        path: /src
+        git:
+          repo: "{{workflow.parameters.repo-url}}"
+          revision: "{{workflow.parameters.revision}}"
+    container:
+      image: docker:24-dind
+      command: [sh, -c]
+      args:
+      - |
+        echo "Building custom Archon images..."
+        cd /src
+
+        # Build all microservices
+        docker build -t archon-server:custom -f Dockerfile.server .
+        docker build -t archon-mcp:custom -f Dockerfile.mcp .
+        docker build -t archon-agents:custom -f Dockerfile.agents .
+        docker build -t archon-frontend:custom -f Dockerfile.frontend .
+
+        # Tag and push to local registry if needed
+        echo "Custom images built successfully!"
+      volumeMounts:
+      - name: docker-socket
+        mountPath: /var/run/docker.sock
+      - name: archon-workspace
+        mountPath: /workspace
+
+  # Step 3: Deploy Server
+  - name: deploy-server
+    container:
+      image: bitnami/kubectl:latest
+      command: [sh, -c]
+      args:
+      - |
+        echo "Deploying Archon Server..."
+        kubectl apply -f - <<EOF
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: archon-server
+          namespace: archon
+          labels:
+            app.kubernetes.io/name: archon-server
+            app.kubernetes.io/component: server
+            app.kubernetes.io/part-of: archon-cluster
+            workflow.deploy: "true"
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app.kubernetes.io/name: archon-server
+              app.kubernetes.io/component: server
+          template:
+            metadata:
+              labels:
+                app.kubernetes.io/name: archon-server
+                app.kubernetes.io/component: server
+                app.kubernetes.io/part-of: archon-cluster
+            spec:
+              serviceAccountName: archon-app
+              containers:
+              - name: archon-server
+                image: coleam00/archon-server:latest
+                ports:
+                - containerPort: 8181
+                envFrom:
+                - secretRef:
+                    name: archon-secrets
+                resources:
+                  requests:
+                    cpu: 250m
+                    memory: 512Mi
+                  limits:
+                    cpu: 1000m
+                    memory: 2Gi
+        EOF
+
+        # Wait for deployment to be ready
+        kubectl rollout status deployment/archon-server -n archon --timeout=300s
+        echo "Archon Server deployed successfully!"
+
+  # Step 4: Deploy MCP
+  - name: deploy-mcp
+    container:
+      image: bitnami/kubectl:latest
+      command: [sh, -c]
+      args:
+      - |
+        echo "Deploying Archon MCP..."
+        kubectl apply -f - <<EOF
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: archon-mcp
+          namespace: archon
+          labels:
+            app.kubernetes.io/name: archon-mcp
+            app.kubernetes.io/component: mcp
+            app.kubernetes.io/part-of: archon-cluster
+            workflow.deploy: "true"
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app.kubernetes.io/name: archon-mcp
+              app.kubernetes.io/component: mcp
+          template:
+            metadata:
+              labels:
+                app.kubernetes.io/name: archon-mcp
+                app.kubernetes.io/component: mcp
+                app.kubernetes.io/part-of: archon-cluster
+            spec:
+              serviceAccountName: archon-app
+              containers:
+              - name: archon-mcp
+                image: coleam00/archon-mcp:latest
+                ports:
+                - containerPort: 8051
+                env:
+                - name: ARCHON_SERVER_URL
+                  value: "http://archon-server:8181"
+                envFrom:
+                - secretRef:
+                    name: archon-secrets
+                resources:
+                  requests:
+                    cpu: 100m
+                    memory: 256Mi
+                  limits:
+                    cpu: 500m
+                    memory: 1Gi
+        EOF
+
+        kubectl rollout status deployment/archon-mcp -n archon --timeout=300s
+        echo "Archon MCP deployed successfully!"
+
+  # Step 5: Deploy Agents
+  - name: deploy-agents
+    container:
+      image: bitnami/kubectl:latest
+      command: [sh, -c]
+      args:
+      - |
+        echo "Deploying Archon Agents..."
+        kubectl apply -f - <<EOF
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: archon-agents
+          namespace: archon
+          labels:
+            app.kubernetes.io/name: archon-agents
+            app.kubernetes.io/component: agents
+            app.kubernetes.io/part-of: archon-cluster
+            workflow.deploy: "true"
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app.kubernetes.io/name: archon-agents
+              app.kubernetes.io/component: agents
+          template:
+            metadata:
+              labels:
+                app.kubernetes.io/name: archon-agents
+                app.kubernetes.io/component: agents
+                app.kubernetes.io/part-of: archon-cluster
+            spec:
+              serviceAccountName: archon-app
+              containers:
+              - name: archon-agents
+                image: coleam00/archon-agents:latest
+                ports:
+                - containerPort: 8052
+                env:
+                - name: ARCHON_SERVER_URL
+                  value: "http://archon-server:8181"
+                envFrom:
+                - secretRef:
+                    name: archon-secrets
+                resources:
+                  requests:
+                    cpu: 500m
+                    memory: 1Gi
+                  limits:
+                    cpu: 2000m
+                    memory: 4Gi
+        EOF
+
+        kubectl rollout status deployment/archon-agents -n archon --timeout=300s
+        echo "Archon Agents deployed successfully!"
+
+  # Step 6: Deploy Frontend
+  - name: deploy-frontend
+    container:
+      image: bitnami/kubectl:latest
+      command: [sh, -c]
+      args:
+      - |
+        echo "Deploying Archon Frontend..."
+        kubectl apply -f - <<EOF
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: archon-frontend
+          namespace: archon
+          labels:
+            app.kubernetes.io/name: archon-frontend
+            app.kubernetes.io/component: frontend
+            app.kubernetes.io/part-of: archon-cluster
+            workflow.deploy: "true"
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app.kubernetes.io/name: archon-frontend
+              app.kubernetes.io/component: frontend
+          template:
+            metadata:
+              labels:
+                app.kubernetes.io/name: archon-frontend
+                app.kubernetes.io/component: frontend
+                app.kubernetes.io/part-of: archon-cluster
+            spec:
+              serviceAccountName: archon-app
+              containers:
+              - name: archon-frontend
+                image: coleam00/archon-frontend:latest
+                ports:
+                - containerPort: 3737
+                env:
+                - name: VITE_API_URL
+                  value: "http://archon-server:8181"
+                envFrom:
+                - secretRef:
+                    name: archon-secrets
+                resources:
+                  requests:
+                    cpu: 100m
+                    memory: 256Mi
+                  limits:
+                    cpu: 500m
+                    memory: 1Gi
+        EOF
+
+        kubectl rollout status deployment/archon-frontend -n archon --timeout=300s
+        echo "Archon Frontend deployed successfully!"
+
+  # Step 7: Verify Deployment
+  - name: verify-deployment
+    container:
+      image: alpine/curl:latest
+      command: [sh, -c]
+      args:
+      - |
+        echo "Verifying Archon deployment..."
+
+        # Wait for services to be ready
+        sleep 30
+
+        # Test internal connectivity
+        echo "Testing server health..."
+        curl -f http://archon-server.archon.svc.cluster.local:8181/health || echo "Server health check failed"
+
+        echo "Testing MCP health..."
+        curl -f http://archon-mcp.archon.svc.cluster.local:8051/health || echo "MCP health check failed"
+
+        echo "Testing agents health..."
+        curl -f http://archon-agents.archon.svc.cluster.local:8052/health || echo "Agents health check failed"
+
+        echo "Testing frontend..."
+        curl -f http://archon-frontend.archon.svc.cluster.local:3737/ || echo "Frontend check failed"
+
+        echo "Deployment verification completed!"

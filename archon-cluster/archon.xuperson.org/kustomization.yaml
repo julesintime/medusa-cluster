@@ -1,0 +1,53 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: archon-platform
+  namespace: archon
+
+# Resources in deployment order
+resources:
+  # Core infrastructure
+  - archon-namespace.yaml
+  - archon-rbac.yaml
+  - archon-infisical-secrets.yaml
+
+  # Microservices deployments
+  - archon-server-deployment.yaml
+  - archon-mcp-deployment.yaml
+  - archon-agents-deployment.yaml
+  - archon-frontend-deployment.yaml
+
+  # Networking
+  - archon-services.yaml
+  - archon-ingress.yaml
+
+  # Workflows
+  - archon-workflow.yaml
+<<<<<<< HEAD
+  - archon-service-key-workflow.yaml
+=======
+>>>>>>> b6e0b2a (🚀 Add Archon AI Platform with GitOps automation)
+
+# Labels applied to all resources
+commonLabels:
+  app.kubernetes.io/part-of: archon-cluster
+  app.kubernetes.io/managed-by: argocd
+
+# Annotations applied to all resources
+commonAnnotations:
+  argocd.argoproj.io/sync-wave: "1"
+
+# Namespace for all resources
+namespace: archon
+
+# Images - can be overridden for custom builds
+images:
+  - name: coleam00/archon-server
+    newTag: latest
+  - name: coleam00/archon-mcp
+    newTag: latest
+  - name: coleam00/archon-agents
+    newTag: latest
+  - name: coleam00/archon-frontend
+    newTag: latest

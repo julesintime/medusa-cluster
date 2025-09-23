@@ -1,0 +1,79 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: archon-app
+  namespace: archon
+  labels:
+    app.kubernetes.io/name: archon
+    app.kubernetes.io/component: app
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: archon-workflow
+  namespace: archon
+  labels:
+    app.kubernetes.io/name: archon
+    app.kubernetes.io/component: workflow
+---
+# RBAC for Argo Workflow
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: archon-workflow
+  namespace: archon
+rules:
+- apiGroups: [""]
+  resources: ["pods", "pods/log"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: [""]
+  resources: ["configmaps", "secrets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch"]
+- apiGroups: [""]
+  resources: ["persistentvolumeclaims"]
+  verbs: ["get", "list", "watch", "create"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets"]
+  verbs: ["get", "list", "watch", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: archon-workflow
+  namespace: archon
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: archon-workflow
+subjects:
+- kind: ServiceAccount
+  name: archon-workflow
+  namespace: archon
+---
+# RBAC for Application
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: archon-app
+  namespace: archon
+rules:
+- apiGroups: [""]
+  resources: ["secrets", "configmaps"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["persistentvolumeclaims"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: archon-app
+  namespace: archon
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: archon-app
+subjects:
+- kind: ServiceAccount
+  name: archon-app
+  namespace: archon

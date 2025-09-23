@@ -1,0 +1,79 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: archon-server
+  namespace: archon
+  labels:
+    app.kubernetes.io/name: archon-server
+    app.kubernetes.io/component: server
+    app.kubernetes.io/part-of: archon-cluster
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8181
+    targetPort: http
+    protocol: TCP
+    name: http
+  selector:
+    app.kubernetes.io/name: archon-server
+    app.kubernetes.io/component: server
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: archon-mcp
+  namespace: archon
+  labels:
+    app.kubernetes.io/name: archon-mcp
+    app.kubernetes.io/component: mcp
+    app.kubernetes.io/part-of: archon-cluster
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8051
+    targetPort: http
+    protocol: TCP
+    name: http
+  selector:
+    app.kubernetes.io/name: archon-mcp
+    app.kubernetes.io/component: mcp
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: archon-agents
+  namespace: archon
+  labels:
+    app.kubernetes.io/name: archon-agents
+    app.kubernetes.io/component: agents
+    app.kubernetes.io/part-of: archon-cluster
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8052
+    targetPort: http
+    protocol: TCP
+    name: http
+  selector:
+    app.kubernetes.io/name: archon-agents
+    app.kubernetes.io/component: agents
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: archon-frontend
+  namespace: archon
+  labels:
+    app.kubernetes.io/name: archon-frontend
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/part-of: archon-cluster
+spec:
+  type: ClusterIP
+  ports:
+  - port: 3737
+    targetPort: http
+    protocol: TCP
+    name: http
+  selector:
+    app.kubernetes.io/name: archon-frontend
+    app.kubernetes.io/component: frontend

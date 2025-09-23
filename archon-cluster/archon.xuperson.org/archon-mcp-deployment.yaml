@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: archon-mcp
+  namespace: archon
+  labels:
+    app.kubernetes.io/name: archon-mcp
+    app.kubernetes.io/component: mcp
+    app.kubernetes.io/part-of: archon-cluster
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: archon-mcp
+      app.kubernetes.io/component: mcp
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: archon-mcp
+        app.kubernetes.io/component: mcp
+        app.kubernetes.io/part-of: archon-cluster
+    spec:
+      serviceAccountName: archon-app
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 2000
+      containers:
+      - name: archon-mcp
+        image: coleam00/archon-mcp:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8051
+          name: http
+          protocol: TCP
+        env:
+        - name: HOST
+          valueFrom:
+            secretKeyRef:
+              name: archon-secrets
+              key: host
+        - name: ARCHON_MCP_PORT
+          valueFrom:
+            secretKeyRef:
+              name: archon-secrets
+              key: mcp-port
+        - name: ARCHON_SERVER_URL
+          value: "http://archon-server:8181"
+        - name: LOG_LEVEL
+          valueFrom:
+            secretKeyRef:
+              name: archon-secrets
+              key: log-level
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 1Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL

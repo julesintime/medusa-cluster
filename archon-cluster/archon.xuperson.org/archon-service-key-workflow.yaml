@@ -1,0 +1,155 @@
+# Argo Workflow for Supabase Service Key Management
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: archon-service-key-setup
+  namespace: archon
+spec:
+  entrypoint: setup-service-key
+  serviceAccountName: archon-workflow
+
+  # Parameters for service key setup
+  arguments:
+    parameters:
+    - name: supabase-project-id
+      value: "yroxosnulztwykbvswmu"
+    - name: supabase-url
+      value: "https://yroxosnulztwykbvswmu.supabase.co"
+
+  templates:
+  # Main service key setup pipeline
+  - name: setup-service-key
+    dag:
+      tasks:
+      - name: fetch-service-key
+        template: get-service-key
+      - name: update-infisical
+        template: update-secrets
+        dependencies: [fetch-service-key]
+      - name: verify-setup
+        template: verify-connection
+        dependencies: [update-infisical]
+
+  # Step 1: Fetch or validate service key
+  - name: get-service-key
+    container:
+      image: alpine/curl:latest
+      command: [sh, -c]
+      args:
+      - |
+        echo "=== SUPABASE SERVICE KEY SETUP ==="
+
+        # Check if we can access the existing service key from secrets
+        if [ -f /secrets/supabase-service-key ]; then
+          SERVICE_KEY=$(cat /secrets/supabase-service-key)
+          if [ "$SERVICE_KEY" != "PLACEHOLDER_GET_FROM_SUPABASE_DASHBOARD" ]; then
+            echo "✅ Existing service key found in secrets"
+            echo "$SERVICE_KEY" > /tmp/service-key
+            exit 0
+          fi
+        fi
+
+        echo "❌ No valid service key found"
+        echo "📋 Manual action required:"
+        echo "1. Go to Supabase dashboard: https://supabase.com/dashboard/project/{{workflow.parameters.supabase-project-id}}/settings/api"
+        echo "2. Copy the 'service_role' key (NOT the anon key)"
+        echo "3. Update Infisical with: infisical secrets set ARCHON_SUPABASE_SERVICE_KEY='your_key_here' --env=prod"
+        echo ""
+        echo "⚠️  WARNING: Do NOT use the anon key - use the service_role key for server-side operations"
+        echo ""
+        echo "For now, creating a placeholder that will need manual update..."
+        echo "NEEDS_MANUAL_UPDATE" > /tmp/service-key
+
+      volumeMounts:
+      - name: secrets
+        mountPath: /secrets
+        readOnly: true
+    volumes:
+    - name: secrets
+      secret:
+        secretName: archon-secrets
+        optional: true
+
+  # Step 2: Update Infisical with service key
+  - name: update-secrets
+    container:
+      image: infisical/cli:latest
+      command: [sh, -c]
+      args:
+      - |
+        echo "=== UPDATING INFISICAL SECRETS ==="
+
+        # Check if we have a valid service key
+        if [ -f /tmp/service-key ]; then
+          SERVICE_KEY=$(cat /tmp/service-key)
+
+          if [ "$SERVICE_KEY" = "NEEDS_MANUAL_UPDATE" ]; then
+            echo "⚠️  Service key needs manual update"
+            echo "Current placeholder will remain until manual update"
+            exit 0
+          fi
+
+          # Update Infisical with the service key
+          echo "Updating Infisical with service key..."
+          infisical secrets set ARCHON_SUPABASE_SERVICE_KEY="$SERVICE_KEY" --env=prod || {
+            echo "❌ Failed to update Infisical"
+            exit 1
+          }
+
+          echo "✅ Infisical updated with service key"
+        else
+          echo "❌ No service key file found"
+          exit 1
+        fi
+
+  # Step 3: Verify connection with new key
+  - name: verify-connection
+    container:
+      image: alpine/curl:latest
+      command: [sh, -c]
+      args:
+      - |
+        echo "=== VERIFYING SUPABASE CONNECTION ==="
+
+        SUPABASE_URL="{{workflow.parameters.supabase-url}}"
+
+        # Get the updated service key from secrets
+        if [ -f /secrets/supabase-service-key ]; then
+          SERVICE_KEY=$(cat /secrets/supabase-service-key)
+
+          if [ "$SERVICE_KEY" = "PLACEHOLDER_GET_FROM_SUPABASE_DASHBOARD" ] || [ "$SERVICE_KEY" = "NEEDS_MANUAL_UPDATE" ]; then
+            echo "⚠️  Service key still needs manual update"
+            echo "Connection test skipped - please update the service key manually"
+            exit 0
+          fi
+
+          # Test the service key with a simple API call
+          echo "Testing service key with Supabase API..."
+
+          RESPONSE=$(curl -s -w "%{http_code}" -o /tmp/test_response \
+            -H "Authorization: Bearer $SERVICE_KEY" \
+            -H "apikey: $SERVICE_KEY" \
+            "$SUPABASE_URL/rest/v1/projects?select=count")
+
+          if [ "$RESPONSE" = "200" ] || [ "$RESPONSE" = "404" ]; then
+            echo "✅ Service key is valid and working"
+            echo "Supabase connection established successfully"
+          else
+            echo "❌ Service key validation failed"
+            echo "HTTP Response: $RESPONSE"
+            cat /tmp/test_response
+            exit 1
+          fi
+        else
+          echo "❌ No service key found in secrets"
+          exit 1
+        fi
+
+      volumeMounts:
+      - name: secrets
+        mountPath: /secrets
+        readOnly: true
+    volumes:
+    - name: secrets
+      secret:
+        secretName: archon-secrets

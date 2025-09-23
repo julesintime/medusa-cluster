@@ -1,0 +1,107 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: archon-server
+  namespace: archon
+  labels:
+    app.kubernetes.io/name: archon-server
+    app.kubernetes.io/component: server
+    app.kubernetes.io/part-of: archon-cluster
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: archon-server
+      app.kubernetes.io/component: server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: archon-server
+        app.kubernetes.io/component: server
+        app.kubernetes.io/part-of: archon-cluster
+    spec:
+      serviceAccountName: archon-app
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 2000
+      containers:
+      - name: archon-server
+        image: coleam00/archon-server:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8181
+          name: http
+          protocol: TCP
+        env:
+        - name: HOST
+          valueFrom:
+            secretKeyRef:
+              name: archon-secrets
+              key: host
+        - name: ARCHON_SERVER_PORT
+          valueFrom:
+            secretKeyRef:
+              name: archon-secrets
+              key: server-port
+        - name: SUPABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: archon-secrets
+              key: supabase-url
+        - name: SUPABASE_SERVICE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: archon-secrets
+              key: supabase-service-key
+        - name: LOG_LEVEL
+          valueFrom:
+            secretKeyRef:
+              name: archon-secrets
+              key: log-level
+        - name: PROD
+          valueFrom:
+            secretKeyRef:
+              name: archon-secrets
+              key: prod
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: archon-secrets
+              key: openai-api-key
+              optional: true
+        - name: LOGFIRE_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: archon-secrets
+              key: logfire-token
+              optional: true
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: 1000m
+            memory: 2Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
