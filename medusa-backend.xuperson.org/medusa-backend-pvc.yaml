@@ -11,8 +11,8 @@ metadata:
     app.kubernetes.io/component: storage
 spec:
   accessModes:
-  - ReadWriteMany  # Required for sharing between workflow and deployment pods
-  storageClassName: nfs-client  # Use your RWX storage class
+  - ReadWriteOnce  # Longhorn supports RWO
+  storageClassName: longhorn  # Use longhorn storage class
   resources:
     requests:
       storage: 10Gi
