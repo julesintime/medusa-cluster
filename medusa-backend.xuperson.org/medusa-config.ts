@@ -17,6 +17,7 @@ export default {
   },
   admin: {
     disable: process.env.DISABLE_MEDUSA_ADMIN === "true" || false,
+    path: "/app/medusa-app/.medusa/admin",
   },
   modules: {
     cache: {
