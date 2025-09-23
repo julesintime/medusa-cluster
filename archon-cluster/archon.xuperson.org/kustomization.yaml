@@ -24,10 +24,7 @@ resources:
 
   # Workflows
   - archon-workflow.yaml
-<<<<<<< HEAD
   - archon-service-key-workflow.yaml
-=======
->>>>>>> b6e0b2a (🚀 Add Archon AI Platform with GitOps automation)
 
 # Labels applied to all resources
 commonLabels:
