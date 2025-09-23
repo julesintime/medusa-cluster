@@ -62,8 +62,12 @@ spec:
           chmod +x /server/start.sh
           chown -R 1001:1001 /server
 
-          # Install dependencies as root
-          npm install
+          # Clean install without cache
+          rm -rf /server/node_modules /server/package-lock.json
+          npm install --no-cache
+
+          # Fix node_modules permissions for migrations
+          chmod -R 755 /server/node_modules
 
           # Create user data directory
           mkdir -p /server/data
