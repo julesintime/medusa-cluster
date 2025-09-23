@@ -49,6 +49,8 @@ spec:
         - sh
         - -c
         - |
+          set -ex
+
           # Create medusa user and home directory
           addgroup -g 1001 -S nodejs || true
           adduser -S medusa -u 1001 -G nodejs || true
@@ -60,18 +62,28 @@ spec:
           # Copy app files from ConfigMap
           cp /app-config/* /server/
           chmod +x /server/start.sh
+
+          # Install dependencies with proper permissions
+          npm install --unsafe-perm --no-fund --no-audit
+
+          # Create writable node_modules migration directories
+          mkdir -p /server/node_modules/@medusajs/cache-redis/dist/migrations
+          mkdir -p /server/node_modules/@medusajs/event-bus-redis/dist/migrations
+          mkdir -p /server/node_modules/@medusajs/event-bus-local/dist/migrations
+
+          # Create admin build directory
+          mkdir -p /server/.medusa/admin
+          mkdir -p /server/.medusa/server
+
+          # Fix ALL permissions for medusa user
           chown -R 1001:1001 /server
-
-          # Clean install without cache
-          rm -rf /server/node_modules /server/package-lock.json
-          npm install --no-cache
-
-          # Fix node_modules permissions for migrations
           chmod -R 755 /server/node_modules
 
           # Create required Medusa directories
           mkdir -p /server/data /server/src/links /server/src/workflows /server/src/admin
-          chown -R 1001:1001 /server/data
+          chown -R 1001:1001 /server
+
+          echo "Setup completed successfully!"
         env:
         - name: DATABASE_URL
           valueFrom:
@@ -215,4 +227,4 @@ spec:
     protocol: TCP
     name: http
   selector:
-    app: medusa-server
+    app: medusa-worker  # Temporarily point to working worker until server is fixed
