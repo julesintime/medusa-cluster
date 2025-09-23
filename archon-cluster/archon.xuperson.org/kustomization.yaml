@@ -38,13 +38,17 @@ commonAnnotations:
 # Namespace for all resources
 namespace: archon
 
-# Images - can be overridden for custom builds
+# Use working placeholder images until real ones are built
 images:
   - name: coleam00/archon-server
-    newTag: latest
+    newName: nginx
+    newTag: alpine
   - name: coleam00/archon-mcp
-    newTag: latest
+    newName: nginx
+    newTag: alpine
   - name: coleam00/archon-agents
-    newTag: latest
+    newName: nginx
+    newTag: alpine
   - name: coleam00/archon-frontend
-    newTag: latest
+    newName: nginx
+    newTag: alpine
