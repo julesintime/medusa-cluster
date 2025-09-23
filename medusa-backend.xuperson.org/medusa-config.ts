@@ -1,6 +1,4 @@
-import { defineConfig } from "@medusajs/medusa/utils"
-
-export default defineConfig({
+export default {
   projectConfig: {
     databaseUrl: process.env.DATABASE_URL,
     redisUrl: process.env.REDIS_URL,
@@ -42,4 +40,4 @@ export default defineConfig({
       },
     },
   },
-})
+}
