@@ -16,8 +16,8 @@ export default {
     }
   },
   admin: {
-    disable: true, // Temporarily disable to test server startup
-    // path: "/app/medusa-app/.medusa/admin",
+    disable: false, // Enable admin UI
+    path: "/app", // Admin accessible at /app endpoint
   },
   modules: {
     cache: {
