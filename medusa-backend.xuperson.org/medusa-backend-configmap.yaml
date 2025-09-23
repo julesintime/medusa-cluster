@@ -20,7 +20,6 @@ data:
         "@medusajs/admin-bundler": "2.9.0",
         "@medusajs/cache-redis": "2.9.0",
         "@medusajs/event-bus-redis": "2.9.0",
-        "@medusajs/workflow-engine-redis": "2.9.0",
         "@mikro-orm/core": "6.4.3",
         "@mikro-orm/postgresql": "6.4.3",
         "pg": "^8.13.0",
@@ -89,14 +88,6 @@ data:
           resolve: "@medusajs/event-bus-redis",
           options: {
             redisUrl: process.env.REDIS_URL,
-          },
-        },
-        workflowEngine: {
-          resolve: "@medusajs/workflow-engine-redis",
-          options: {
-            redis: {
-              url: process.env.REDIS_URL,
-            },
           },
         },
       },
