@@ -159,20 +159,20 @@ spec:
                 - |
                   echo "=== Verifying Medusa build ==="
 
-                  if [ ! -f /app/.ready ]; then
+                  if [ ! -f /app/medusa-app/.ready ]; then
                     echo "ERROR: Build not ready. Run workflow first."
                     exit 1
                   fi
 
                   echo "Build status:"
-                  cat /app/.ready
+                  cat /app/medusa-app/.ready
 
-                  if [ ! -f /app/.medusa/admin/index.html ]; then
+                  if [ ! -f /app/medusa-app/.medusa/admin/index.html ]; then
                     echo "ERROR: Admin UI build missing!"
                     exit 1
                   fi
 
-                  echo "Admin UI verified: /app/.medusa/admin/index.html exists"
+                  echo "Admin UI verified: /app/medusa-app/.medusa/admin/index.html exists"
                   echo "=== Build verification complete ==="
                 volumeMounts:
                 - name: medusa-workspace
@@ -182,8 +182,8 @@ spec:
               containers:
               - name: medusa-server
                 image: node:20-alpine
-                workingDir: /app
-                command: ["/app/start.sh"]
+                workingDir: /app/medusa-app
+                command: ["/app/medusa-app/start.sh"]
                 ports:
                 - containerPort: 9000
                   name: http
@@ -321,13 +321,13 @@ spec:
                 command: [sh, -c]
                 args:
                 - |
-                  if [ ! -f /app/.ready ]; then
+                  if [ ! -f /app/medusa-app/.ready ]; then
                     echo "ERROR: Build not ready. Run workflow first."
                     exit 1
                   fi
 
                   echo "Build ready for worker:"
-                  cat /app/.ready
+                  cat /app/medusa-app/.ready
                 volumeMounts:
                 - name: medusa-workspace
                   mountPath: /app
@@ -336,8 +336,8 @@ spec:
               containers:
               - name: medusa-worker
                 image: node:20-alpine
-                workingDir: /app
-                command: ["/app/start.sh"]
+                workingDir: /app/medusa-app
+                command: ["/app/medusa-app/start.sh"]
                 env:
                 - name: NODE_ENV
                   value: "production"
