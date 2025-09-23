@@ -67,7 +67,7 @@ spec:
 
         echo "=== STEP 4: Build Admin UI ==="
         # This builds the admin panel that was missing
-        npx medusa build --admin
+        npx medusa build --admin-only
 
         echo "=== STEP 5: Create Production Bundle ==="
         mkdir -p /workspace/medusa-app
