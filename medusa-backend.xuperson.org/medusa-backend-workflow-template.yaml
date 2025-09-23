@@ -60,7 +60,7 @@ spec:
         cd /src/{{workflow.parameters.medusa-path}}
 
         echo "=== STEP 2: Install All Dependencies ==="
-        npm ci
+        npm install
 
         echo "=== STEP 3: Build Medusa Backend ==="
         npm run build
@@ -77,8 +77,8 @@ spec:
 
         # Remove dev dependencies and install production only
         cd /workspace/medusa-app
-        rm -rf node_modules package-lock.json
-        npm ci --only=production
+        rm -rf node_modules
+        npm install --production
 
         # Verify admin build exists
         ls -la /workspace/medusa-app/.medusa/
