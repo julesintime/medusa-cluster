@@ -18,12 +18,15 @@ data:
       "dependencies": {
         "@medusajs/medusa": "2.9.0",
         "@medusajs/admin-bundler": "2.9.0",
+        "@medusajs/admin-vite-plugin": "2.9.0",
         "@medusajs/cache-redis": "2.9.0",
         "@medusajs/event-bus-redis": "2.9.0",
         "@mikro-orm/core": "6.4.3",
         "@mikro-orm/postgresql": "6.4.3",
         "pg": "^8.13.0",
-        "awilix": "^8.0.1"
+        "awilix": "^8.0.1",
+        "react": "^18.2.0",
+        "react-dom": "^18.2.0"
       },
       "devDependencies": {
         "@medusajs/cli": "2.9.0",
@@ -42,6 +45,9 @@ data:
 
     # Run database migrations if this is the server instance
     if [ "$MEDUSA_WORKER_MODE" = "server" ]; then
+        echo "Building admin panel..."
+        npm run build
+
         echo "Running database migrations..."
         npx medusa db:migrate
 
@@ -75,7 +81,7 @@ data:
         }
       },
       admin: {
-        disable: true,
+        disable: process.env.DISABLE_MEDUSA_ADMIN === "true" || false,
       },
       modules: {
         cache: {

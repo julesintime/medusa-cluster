@@ -69,8 +69,8 @@ spec:
           # Fix node_modules permissions for migrations
           chmod -R 755 /server/node_modules
 
-          # Create user data directory
-          mkdir -p /server/data
+          # Create required Medusa directories
+          mkdir -p /server/data /server/src/links /server/src/workflows /server/src/admin
           chown -R 1001:1001 /server/data
         env:
         - name: DATABASE_URL
