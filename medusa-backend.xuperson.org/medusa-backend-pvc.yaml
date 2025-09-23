@@ -1,0 +1,18 @@
+# Persistent Volume Claim for Medusa Backend Workspace
+# Shared storage for built application across workflow and deployments
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: medusa-workspace-pvc
+  namespace: medusa-backend
+  labels:
+    app.kubernetes.io/name: medusa-backend
+    app.kubernetes.io/component: storage
+spec:
+  accessModes:
+  - ReadWriteMany  # Required for sharing between workflow and deployment pods
+  storageClassName: nfs-client  # Use your RWX storage class
+  resources:
+    requests:
+      storage: 10Gi

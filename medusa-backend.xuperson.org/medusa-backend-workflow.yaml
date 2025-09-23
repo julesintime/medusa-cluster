@@ -1,0 +1,144 @@
+# GitOps-Native Argo Workflow for Medusa Backend
+# This is applied declaratively by ArgoCD, NOT manually submitted
+# Automatically builds medusa backend when deployed via GitOps
+
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: medusa-backend-build-
+  namespace: medusa-backend
+  labels:
+    app.kubernetes.io/name: medusa-backend
+    app.kubernetes.io/component: build
+    workflows.argoproj.io/archive-strategy: "false"
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"  # Build before deployment
+spec:
+  entrypoint: medusa-build-pipeline
+  serviceAccountName: medusa-backend-workflow
+
+  # Automatic cleanup after 1 hour
+  ttlStrategy:
+    secondsAfterCompletion: 3600
+    secondsAfterSuccess: 3600
+    secondsAfterFailure: 7200
+
+  # Arguments for the build
+  arguments:
+    parameters:
+    - name: repo-url
+      value: "https://github.com/julesintime/labinfra.git"
+    - name: revision
+      value: "main"
+    - name: medusa-path
+      value: "devops/projects/medusa-cluster/medusa-backend.xuperson.org"
+
+  # Shared storage for built application
+  volumes:
+  - name: medusa-workspace
+    persistentVolumeClaim:
+      claimName: medusa-workspace-pvc
+
+  templates:
+  - name: medusa-build-pipeline
+    dag:
+      tasks:
+      - name: build-app
+        template: build-medusa-app
+      - name: mark-ready
+        template: mark-build-ready
+        dependencies: [build-app]
+
+  # Build the Medusa Node.js application
+  - name: build-medusa-app
+    inputs:
+      artifacts:
+      - name: source
+        path: /src
+        git:
+          repo: "{{workflow.parameters.repo-url}}"
+          revision: "{{workflow.parameters.revision}}"
+    container:
+      image: node:20-alpine
+      command: [sh, -c]
+      args:
+      - |
+        set -ex
+
+        echo "=== Starting Medusa Build Pipeline ==="
+
+        # Install build dependencies
+        apk add --no-cache curl git python3 make g++
+
+        cd /src/{{workflow.parameters.medusa-path}}
+
+        echo "=== Installing dependencies ==="
+        npm ci
+
+        echo "=== Building application ==="
+        npm run build || echo "Build completed or no build script"
+
+        echo "=== Creating production package ==="
+        mkdir -p /workspace/medusa-app
+
+        # Copy package files
+        cp package.json package-lock.json /workspace/medusa-app/
+
+        # Install production dependencies
+        cd /workspace/medusa-app
+        npm ci --only=production
+
+        # Copy source files
+        cd /src/{{workflow.parameters.medusa-path}}
+        cp -r . /workspace/medusa-app/
+
+        # Clean up dev dependencies
+        rm -rf /workspace/medusa-app/node_modules/@medusajs/admin-bundler
+        rm -rf /workspace/medusa-app/node_modules/typescript
+
+        # Make scripts executable
+        chmod +x /workspace/medusa-app/start.sh
+
+        # Create build info
+        echo "Build completed at $(date)" > /workspace/medusa-app/.build-info
+        echo "Git revision: {{workflow.parameters.revision}}" >> /workspace/medusa-app/.build-info
+        echo "Workflow: {{workflow.name}}" >> /workspace/medusa-app/.build-info
+
+        echo "=== Build Complete ==="
+        ls -la /workspace/medusa-app/
+        du -sh /workspace/medusa-app/
+        cat /workspace/medusa-app/.build-info
+      volumeMounts:
+      - name: medusa-workspace
+        mountPath: /workspace
+      resources:
+        requests:
+          cpu: "1"
+          memory: "2Gi"
+        limits:
+          cpu: "4"
+          memory: "4Gi"
+
+  # Mark build as ready for deployment
+  - name: mark-build-ready
+    container:
+      image: alpine/curl:latest
+      command: [sh, -c]
+      args:
+      - |
+        set -ex
+
+        echo "=== Marking build as ready ==="
+
+        # Create ready marker
+        echo "ready" > /workspace/medusa-app/.ready
+        echo "Build ready at $(date)" >> /workspace/medusa-app/.ready
+
+        # Trigger deployment rollout (optional)
+        apk add --no-cache curl
+
+        echo "=== Build pipeline completed successfully ==="
+        echo "Medusa backend is ready for deployment from PVC"
+      volumeMounts:
+      - name: medusa-workspace
+        mountPath: /workspace

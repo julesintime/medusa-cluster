@@ -1,0 +1,222 @@
+# GitOps-Native Medusa Backend Server
+# Uses pre-built application from PVC created by Argo Workflow
+# No build process needed - instant startup!
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medusa-backend-server
+  namespace: medusa-backend
+  labels:
+    app.kubernetes.io/name: medusa-backend
+    app.kubernetes.io/component: server
+    app.kubernetes.io/part-of: medusa-cluster
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"  # Deploy after build workflow
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: medusa-backend
+      app.kubernetes.io/component: server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: medusa-backend
+        app.kubernetes.io/component: server
+        app.kubernetes.io/part-of: medusa-cluster
+    spec:
+      serviceAccountName: medusa-backend
+
+      # Wait for dependencies and verify build
+      initContainers:
+      - name: wait-for-postgres
+        image: postgres:15-alpine
+        command: [sh, -c]
+        args:
+        - |
+          until pg_isready -h medusa-postgres -p 5432 -U postgres; do
+            echo "Waiting for PostgreSQL..."
+            sleep 2
+          done
+          echo "PostgreSQL is ready!"
+
+      - name: wait-for-redis
+        image: redis:7-alpine
+        command: [sh, -c]
+        args:
+        - |
+          until redis-cli -h medusa-redis -p 6379 ping; do
+            echo "Waiting for Redis..."
+            sleep 2
+          done
+          echo "Redis is ready!"
+
+      - name: verify-build
+        image: alpine:latest
+        command: [sh, -c]
+        args:
+        - |
+          echo "=== Verifying Medusa build ==="
+
+          if [ ! -f /app/.ready ]; then
+            echo "ERROR: Build not ready. Please ensure workflow completed successfully."
+            exit 1
+          fi
+
+          echo "Build ready marker found:"
+          cat /app/.ready
+
+          echo "Build info:"
+          cat /app/.build-info
+
+          echo "Application files:"
+          ls -la /app/
+
+          echo "=== Build verification complete ==="
+        volumeMounts:
+        - name: medusa-workspace
+          mountPath: /app
+          readOnly: true
+
+      containers:
+      - name: medusa-server
+        image: node:20-alpine
+        workingDir: /app
+        command: ["/app/start.sh"]
+        ports:
+        - containerPort: 9000
+          name: http
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: MEDUSA_WORKER_MODE
+          value: "server"
+        - name: PORT
+          value: "9000"
+        - name: DISABLE_MEDUSA_ADMIN
+          value: "false"
+        - name: MEDUSA_BACKEND_URL
+          value: "https://medusa-backend.xuperson.org"
+
+        # Database Configuration
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: medusa-backend-secrets
+              key: database-url
+
+        # Redis Configuration
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: medusa-backend-secrets
+              key: redis-url
+
+        # Security Configuration
+        - name: COOKIE_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: medusa-backend-secrets
+              key: cookie-secret
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: medusa-backend-secrets
+              key: jwt-secret
+
+        # CORS Configuration
+        - name: STORE_CORS
+          valueFrom:
+            secretKeyRef:
+              name: medusa-backend-secrets
+              key: store-cors
+        - name: ADMIN_CORS
+          valueFrom:
+            secretKeyRef:
+              name: medusa-backend-secrets
+              key: admin-cors
+        - name: AUTH_CORS
+          valueFrom:
+            secretKeyRef:
+              name: medusa-backend-secrets
+              key: auth-cors
+
+        volumeMounts:
+        - name: medusa-workspace
+          mountPath: /app
+          readOnly: true
+
+        # Health checks
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 9000
+          initialDelaySeconds: 60
+          timeoutSeconds: 10
+          periodSeconds: 30
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 9000
+          initialDelaySeconds: 30
+          timeoutSeconds: 5
+          periodSeconds: 10
+
+        # Resource management
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "1"
+
+        # Security context
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1001
+          runAsGroup: 1001
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop:
+            - ALL
+
+      volumes:
+      - name: medusa-workspace
+        persistentVolumeClaim:
+          claimName: medusa-workspace-pvc
+
+      # Pod security and scheduling
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+
+---
+# Service for Medusa Backend Server
+apiVersion: v1
+kind: Service
+metadata:
+  name: medusa-backend-service
+  namespace: medusa-backend
+  labels:
+    app.kubernetes.io/name: medusa-backend
+    app.kubernetes.io/component: server
+    app.kubernetes.io/part-of: medusa-cluster
+spec:
+  type: ClusterIP
+  ports:
+  - port: 9000
+    targetPort: 9000
+    protocol: TCP
+    name: http
+  selector:
+    app.kubernetes.io/name: medusa-backend
+    app.kubernetes.io/component: server

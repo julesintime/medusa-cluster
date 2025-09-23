@@ -1,3 +1,4 @@
+# Service Account for Medusa Backend Application
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -7,6 +8,18 @@ metadata:
     app.kubernetes.io/name: medusa-backend
     app.kubernetes.io/part-of: medusa-cluster
 ---
+# Service Account for Medusa Backend Workflow
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: medusa-backend-workflow
+  namespace: medusa-backend
+  labels:
+    app.kubernetes.io/name: medusa-backend
+    app.kubernetes.io/component: workflow
+    app.kubernetes.io/part-of: medusa-cluster
+---
+# Role for Application Pods
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -23,6 +36,31 @@ rules:
   resources: ["pods"]
   verbs: ["get", "list"]
 ---
+# Role for Workflow (Build Process)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: medusa-backend
+  name: medusa-backend-workflow
+  labels:
+    app.kubernetes.io/name: medusa-backend
+    app.kubernetes.io/component: workflow
+    app.kubernetes.io/part-of: medusa-cluster
+rules:
+- apiGroups: [""]
+  resources: ["configmaps", "secrets"]
+  verbs: ["get", "list", "create", "update", "patch"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["persistentvolumeclaims"]
+  verbs: ["get", "list"]
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "list", "patch"]
+---
+# RoleBinding for Application
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
@@ -38,4 +76,23 @@ subjects:
 roleRef:
   kind: Role
   name: medusa-backend
+  apiGroup: rbac.authorization.k8s.io
+---
+# RoleBinding for Workflow
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: medusa-backend-workflow
+  namespace: medusa-backend
+  labels:
+    app.kubernetes.io/name: medusa-backend
+    app.kubernetes.io/component: workflow
+    app.kubernetes.io/part-of: medusa-cluster
+subjects:
+- kind: ServiceAccount
+  name: medusa-backend-workflow
+  namespace: medusa-backend
+roleRef:
+  kind: Role
+  name: medusa-backend-workflow
   apiGroup: rbac.authorization.k8s.io

@@ -1,15 +1,34 @@
+# GitOps-Native Medusa Backend Kustomization
+# Automatically deployed by Flux CD
+# No manual intervention required - everything is declarative!
+
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
+  # Core Infrastructure
   - medusa-backend-namespace.yaml
-  - medusa-backend-infisical-secrets.yaml
-  - medusa-backend-configmap.yaml
-  - medusa-backend-postgresql.yaml
-  - medusa-backend-redis.yaml
-  - medusa-backend-server.yaml
-  - medusa-backend-worker.yaml
-  - medusa-backend-ingress.yaml
   - medusa-backend-rbac.yaml
 
+  # Secrets Management (Infisical)
+  - medusa-backend-infisical-secrets.yaml
+
+  # Database Dependencies
+  - medusa-backend-postgresql.yaml
+  - medusa-backend-redis.yaml
+
+  # Application Deployments (Use existing ConfigMap approach for now)
+  - medusa-backend-configmap.yaml
+  - medusa-backend-server.yaml
+  - medusa-backend-worker.yaml
+
+  # External Access
+  - medusa-backend-ingress.yaml
+
+# No name prefix needed for GitOps approach
 namePrefix: ""
+
+# Labels for all resources
+commonLabels:
+  app.kubernetes.io/part-of: medusa-cluster
+  app.kubernetes.io/managed-by: flux
