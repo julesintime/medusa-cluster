@@ -1,0 +1,403 @@
+# Argo Workflow Template for Medusa Backend Build and Deploy
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: medusa-backend-build-deploy
+  namespace: medusa-backend
+spec:
+  entrypoint: medusa-pipeline
+  serviceAccountName: medusa-backend-workflow
+
+  # Build parameters
+  arguments:
+    parameters:
+    - name: repo-url
+      value: "https://github.com/julesintime/medusa-cluster.git"
+    - name: revision
+      value: "main"
+    - name: medusa-path
+      value: "medusa-backend.xuperson.org"
+
+  # Shared workspace for build artifacts
+  volumes:
+  - name: medusa-workspace
+    persistentVolumeClaim:
+      claimName: medusa-workspace-pvc
+
+  templates:
+  # Main pipeline orchestration
+  - name: medusa-pipeline
+    dag:
+      tasks:
+      - name: build-medusa-app
+        template: build-app
+      - name: deploy-medusa-server
+        template: deploy-server
+        dependencies: [build-medusa-app]
+      - name: deploy-medusa-worker
+        template: deploy-worker
+        dependencies: [build-medusa-app]
+
+  # Step 1: Build Medusa Application with Admin UI
+  - name: build-app
+    inputs:
+      artifacts:
+      - name: source
+        path: /src
+        git:
+          repo: "{{workflow.parameters.repo-url}}"
+          revision: "{{workflow.parameters.revision}}"
+    container:
+      image: node:20-alpine
+      command: [sh, -c]
+      args:
+      - |
+        set -ex
+
+        echo "=== STEP 1: Setup Build Environment ==="
+        apk add --no-cache git python3 make g++ curl
+
+        cd /src/{{workflow.parameters.medusa-path}}
+
+        echo "=== STEP 2: Install All Dependencies ==="
+        npm ci
+
+        echo "=== STEP 3: Build Medusa Backend ==="
+        npm run build
+
+        echo "=== STEP 4: Build Admin UI ==="
+        # This builds the admin panel that was missing
+        npx medusa build --admin
+
+        echo "=== STEP 5: Create Production Bundle ==="
+        mkdir -p /workspace/medusa-app
+
+        # Copy ALL files
+        cp -r . /workspace/medusa-app/
+
+        # Remove dev dependencies and install production only
+        cd /workspace/medusa-app
+        rm -rf node_modules package-lock.json
+        npm ci --only=production
+
+        # Verify admin build exists
+        ls -la /workspace/medusa-app/.medusa/
+        ls -la /workspace/medusa-app/.medusa/admin/
+
+        # Make start script executable
+        chmod +x /workspace/medusa-app/start.sh
+
+        # Create ready marker
+        echo "Build completed at $(date)" > /workspace/medusa-app/.ready
+        echo "Admin UI: $(ls -la /workspace/medusa-app/.medusa/admin/index.html)" >> /workspace/medusa-app/.ready
+
+        echo "=== BUILD COMPLETE ==="
+        cat /workspace/medusa-app/.ready
+      volumeMounts:
+      - name: medusa-workspace
+        mountPath: /workspace
+      resources:
+        requests:
+          cpu: "2"
+          memory: "4Gi"
+        limits:
+          cpu: "4"
+          memory: "8Gi"
+
+  # Step 2: Deploy Medusa Server
+  - name: deploy-server
+    resource:
+      action: apply
+      manifest: |
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: medusa-backend-server
+          namespace: medusa-backend
+          labels:
+            app.kubernetes.io/name: medusa-backend
+            app.kubernetes.io/component: server
+        spec:
+          replicas: 2
+          selector:
+            matchLabels:
+              app.kubernetes.io/name: medusa-backend
+              app.kubernetes.io/component: server
+          template:
+            metadata:
+              labels:
+                app.kubernetes.io/name: medusa-backend
+                app.kubernetes.io/component: server
+            spec:
+              serviceAccountName: medusa-backend
+
+              # Wait for dependencies and verify build
+              initContainers:
+              - name: wait-for-postgres
+                image: postgres:15-alpine
+                command: [sh, -c]
+                args:
+                - |
+                  until pg_isready -h medusa-postgres -p 5432 -U postgres; do
+                    echo "Waiting for PostgreSQL..."
+                    sleep 2
+                  done
+
+              - name: wait-for-redis
+                image: redis:7-alpine
+                command: [sh, -c]
+                args:
+                - |
+                  until redis-cli -h medusa-redis -p 6379 ping; do
+                    echo "Waiting for Redis..."
+                    sleep 2
+                  done
+
+              - name: verify-build
+                image: alpine:latest
+                command: [sh, -c]
+                args:
+                - |
+                  echo "=== Verifying Medusa build ==="
+
+                  if [ ! -f /app/.ready ]; then
+                    echo "ERROR: Build not ready. Run workflow first."
+                    exit 1
+                  fi
+
+                  echo "Build status:"
+                  cat /app/.ready
+
+                  if [ ! -f /app/.medusa/admin/index.html ]; then
+                    echo "ERROR: Admin UI build missing!"
+                    exit 1
+                  fi
+
+                  echo "Admin UI verified: /app/.medusa/admin/index.html exists"
+                  echo "=== Build verification complete ==="
+                volumeMounts:
+                - name: medusa-workspace
+                  mountPath: /app
+                  readOnly: true
+
+              containers:
+              - name: medusa-server
+                image: node:20-alpine
+                workingDir: /app
+                command: ["/app/start.sh"]
+                ports:
+                - containerPort: 9000
+                  name: http
+                env:
+                - name: NODE_ENV
+                  value: "production"
+                - name: MEDUSA_WORKER_MODE
+                  value: "server"
+                - name: PORT
+                  value: "9000"
+                - name: MEDUSA_BACKEND_URL
+                  value: "https://medusa-backend.xuperson.org"
+
+                # Database Configuration
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: medusa-backend-secrets
+                      key: database-url
+
+                # Redis Configuration
+                - name: REDIS_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: medusa-backend-secrets
+                      key: redis-url
+
+                # Security Configuration
+                - name: COOKIE_SECRET
+                  valueFrom:
+                    secretKeyRef:
+                      name: medusa-backend-secrets
+                      key: cookie-secret
+                - name: JWT_SECRET
+                  valueFrom:
+                    secretKeyRef:
+                      name: medusa-backend-secrets
+                      key: jwt-secret
+
+                volumeMounts:
+                - name: medusa-workspace
+                  mountPath: /app
+                  readOnly: true
+
+                # Health checks
+                livenessProbe:
+                  httpGet:
+                    path: /health
+                    port: 9000
+                  initialDelaySeconds: 60
+                  timeoutSeconds: 10
+                  periodSeconds: 30
+                readinessProbe:
+                  httpGet:
+                    path: /health
+                    port: 9000
+                  initialDelaySeconds: 30
+                  timeoutSeconds: 5
+                  periodSeconds: 10
+
+                # Resource management
+                resources:
+                  requests:
+                    memory: "512Mi"
+                    cpu: "250m"
+                  limits:
+                    memory: "1Gi"
+                    cpu: "1"
+
+                # Security context
+                securityContext:
+                  allowPrivilegeEscalation: false
+                  runAsNonRoot: true
+                  runAsUser: 1000
+                  runAsGroup: 1000
+                  readOnlyRootFilesystem: false
+
+              volumes:
+              - name: medusa-workspace
+                persistentVolumeClaim:
+                  claimName: medusa-workspace-pvc
+
+              restartPolicy: Always
+        ---
+        apiVersion: v1
+        kind: Service
+        metadata:
+          name: medusa-backend-service
+          namespace: medusa-backend
+          labels:
+            app.kubernetes.io/name: medusa-backend
+            app.kubernetes.io/component: server
+        spec:
+          type: ClusterIP
+          ports:
+          - port: 9000
+            targetPort: 9000
+            protocol: TCP
+            name: http
+          selector:
+            app.kubernetes.io/name: medusa-backend
+            app.kubernetes.io/component: server
+
+  # Step 3: Deploy Medusa Worker
+  - name: deploy-worker
+    resource:
+      action: apply
+      manifest: |
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: medusa-backend-worker
+          namespace: medusa-backend
+          labels:
+            app.kubernetes.io/name: medusa-backend
+            app.kubernetes.io/component: worker
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app.kubernetes.io/name: medusa-backend
+              app.kubernetes.io/component: worker
+          template:
+            metadata:
+              labels:
+                app.kubernetes.io/name: medusa-backend
+                app.kubernetes.io/component: worker
+            spec:
+              serviceAccountName: medusa-backend
+
+              # Verify build before starting worker
+              initContainers:
+              - name: verify-build
+                image: alpine:latest
+                command: [sh, -c]
+                args:
+                - |
+                  if [ ! -f /app/.ready ]; then
+                    echo "ERROR: Build not ready. Run workflow first."
+                    exit 1
+                  fi
+
+                  echo "Build ready for worker:"
+                  cat /app/.ready
+                volumeMounts:
+                - name: medusa-workspace
+                  mountPath: /app
+                  readOnly: true
+
+              containers:
+              - name: medusa-worker
+                image: node:20-alpine
+                workingDir: /app
+                command: ["/app/start.sh"]
+                env:
+                - name: NODE_ENV
+                  value: "production"
+                - name: MEDUSA_WORKER_MODE
+                  value: "worker"
+                - name: MEDUSA_BACKEND_URL
+                  value: "https://medusa-backend.xuperson.org"
+
+                # Database Configuration
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: medusa-backend-secrets
+                      key: database-url
+
+                # Redis Configuration
+                - name: REDIS_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: medusa-backend-secrets
+                      key: redis-url
+
+                # Security Configuration
+                - name: COOKIE_SECRET
+                  valueFrom:
+                    secretKeyRef:
+                      name: medusa-backend-secrets
+                      key: cookie-secret
+                - name: JWT_SECRET
+                  valueFrom:
+                    secretKeyRef:
+                      name: medusa-backend-secrets
+                      key: jwt-secret
+
+                volumeMounts:
+                - name: medusa-workspace
+                  mountPath: /app
+                  readOnly: true
+
+                # Resource management
+                resources:
+                  requests:
+                    memory: "256Mi"
+                    cpu: "100m"
+                  limits:
+                    memory: "512Mi"
+                    cpu: "500m"
+
+                # Security context
+                securityContext:
+                  allowPrivilegeEscalation: false
+                  runAsNonRoot: true
+                  runAsUser: 1000
+                  runAsGroup: 1000
+                  readOnlyRootFilesystem: false
+
+              volumes:
+              - name: medusa-workspace
+                persistentVolumeClaim:
+                  claimName: medusa-workspace-pvc
+
+              restartPolicy: Always

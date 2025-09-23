@@ -1,34 +1,28 @@
-# GitOps-Native Medusa Backend Kustomization
-# Automatically deployed by Flux CD
-# No manual intervention required - everything is declarative!
-
+# Clean Medusa Backend - Argo Workflow Based
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-  # Core Infrastructure
+  # Step 1: Core Infrastructure
   - medusa-backend-namespace.yaml
   - medusa-backend-rbac.yaml
 
-  # Secrets Management (Infisical)
+  # Step 2: Storage for Build Artifacts
+  - medusa-backend-pvc.yaml
+
+  # Step 3: Secrets
   - medusa-backend-infisical-secrets.yaml
 
-  # Database Dependencies
+  # Step 4: Database Dependencies
   - medusa-backend-postgresql.yaml
   - medusa-backend-redis.yaml
 
-  # Application Deployments (Use existing ConfigMap approach for now)
-  - medusa-backend-configmap.yaml
-  - medusa-backend-server.yaml
-  - medusa-backend-worker.yaml
+  # Step 5: Argo Workflow for Build and Deploy
+  - medusa-backend-workflow-template.yaml
 
-  # External Access
+  # Step 6: External Access
   - medusa-backend-ingress.yaml
 
-# No name prefix needed for GitOps approach
-namePrefix: ""
-
-# Labels for all resources
 commonLabels:
+  app.kubernetes.io/name: medusa-backend
   app.kubernetes.io/part-of: medusa-cluster
-  app.kubernetes.io/managed-by: flux
