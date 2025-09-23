@@ -31,13 +31,13 @@ export default {
         redisUrl: process.env.REDIS_URL,
       },
     },
-    workflowEngine: {
-      resolve: "@medusajs/workflow-engine-redis",
-      options: {
-        redis: {
-          url: process.env.REDIS_URL,
-        },
-      },
-    },
+    // workflowEngine: {
+    //   resolve: "@medusajs/workflow-engine-redis",
+    //   options: {
+    //     redis: {
+    //       url: process.env.REDIS_URL,
+    //     },
+    //   },
+    // },
   },
 }
