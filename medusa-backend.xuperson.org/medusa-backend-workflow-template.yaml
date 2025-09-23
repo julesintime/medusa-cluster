@@ -59,7 +59,7 @@ spec:
 
         cd /src/{{workflow.parameters.medusa-path}}
 
-        echo "=== STEP 2: Install All Dependencies ==="
+        echo "=== STEP 2: Install All Dependencies (including dev deps for build) ==="
         npm install
 
         echo "=== STEP 3: Build Medusa Backend ==="
@@ -72,13 +72,12 @@ spec:
         echo "=== STEP 5: Create Production Bundle ==="
         mkdir -p /workspace/medusa-app
 
-        # Copy ALL files
+        # Copy ALL files (including built artifacts)
         cp -r . /workspace/medusa-app/
 
-        # Remove dev dependencies and install production only
+        # Keep node_modules for runtime (medusa needs them)
         cd /workspace/medusa-app
-        rm -rf node_modules
-        npm install --production
+        echo "Keeping all dependencies for runtime..."
 
         # Verify admin build exists
         ls -la /workspace/medusa-app/.medusa/
