@@ -42,9 +42,6 @@ data:
 
     # Run database migrations if this is the server instance
     if [ "$MEDUSA_WORKER_MODE" = "server" ]; then
-        echo "Building admin bundle..."
-        npm run build
-
         echo "Running database migrations..."
         npx medusa db:migrate
 
@@ -78,7 +75,7 @@ data:
         }
       },
       admin: {
-        disable: process.env.DISABLE_MEDUSA_ADMIN === "true" || false,
+        disable: true,
       },
       modules: {
         cache: {
