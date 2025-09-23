@@ -59,6 +59,9 @@ rules:
 - apiGroups: ["apps"]
   resources: ["deployments"]
   verbs: ["get", "list", "patch"]
+- apiGroups: ["argoproj.io"]
+  resources: ["workflowtaskresults"]
+  verbs: ["create", "patch"]
 ---
 # RoleBinding for Application
 apiVersion: rbac.authorization.k8s.io/v1
