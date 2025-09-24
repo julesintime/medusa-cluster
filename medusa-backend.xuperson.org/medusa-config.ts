@@ -1,4 +1,6 @@
-export default {
+import { defineConfig } from "@medusajs/framework/utils"
+
+module.exports = defineConfig({
   projectConfig: {
     databaseUrl: process.env.DATABASE_URL,
     redisUrl: process.env.REDIS_URL,
@@ -16,8 +18,9 @@ export default {
     }
   },
   admin: {
-    disable: false, // Enable admin UI
-    path: "/app", // Admin accessible at /app endpoint
+    disable: process.env.ADMIN_DISABLED === "true" || false,
+    path: "/app",
+    backendUrl: process.env.MEDUSA_BACKEND_URL || "http://localhost:9000",
   },
   modules: {
     cache: {
@@ -41,4 +44,4 @@ export default {
     //   },
     // },
   },
-}
+})

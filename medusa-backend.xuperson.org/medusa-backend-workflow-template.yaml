@@ -76,16 +76,24 @@ spec:
         cd /workspace/medusa-app
         echo "Keeping all dependencies for runtime..."
 
-        # Verify admin build exists at correct integrated location
-        ls -la /workspace/medusa-app/.medusa/
-        ls -la /workspace/medusa-app/.medusa/server/public/admin/
+        # Verify admin build exists at correct location
+        echo "Checking admin build locations..."
+        ls -la /workspace/medusa-app/.medusa/ || echo "No .medusa directory"
+        ls -la /workspace/medusa-app/.medusa/server/public/admin/ || echo "No .medusa/server/public/admin directory"
+        ls -la /workspace/medusa-app/dist/public/admin/ || echo "No dist/public/admin directory"
 
         # Make start script executable
         chmod +x /workspace/medusa-app/start.sh
 
         # Create ready marker
         echo "Build completed at $(date)" > /workspace/medusa-app/.ready
-        echo "Admin UI: $(ls -la /workspace/medusa-app/.medusa/server/public/admin/index.html)" >> /workspace/medusa-app/.ready
+        if [ -f /workspace/medusa-app/.medusa/server/public/admin/index.html ]; then
+          echo "Admin UI: Found at .medusa/server/public/admin/index.html" >> /workspace/medusa-app/.ready
+        elif [ -f /workspace/medusa-app/dist/public/admin/index.html ]; then
+          echo "Admin UI: Found at dist/public/admin/index.html" >> /workspace/medusa-app/.ready
+        else
+          echo "Admin UI: NOT FOUND" >> /workspace/medusa-app/.ready
+        fi
 
         echo "=== BUILD COMPLETE ==="
         cat /workspace/medusa-app/.ready
@@ -164,12 +172,20 @@ spec:
                   echo "Build status:"
                   cat /app/medusa-app/.ready
 
-                  if [ ! -f /app/medusa-app/.medusa/server/public/admin/index.html ]; then
-                    echo "ERROR: Admin UI build missing!"
+                  # Check for admin build in v2 location first, then fallback
+                  if [ -f /app/medusa-app/.medusa/server/public/admin/index.html ]; then
+                    echo "Admin UI verified: Found at .medusa/server/public/admin/index.html"
+                  elif [ -f /app/medusa-app/dist/public/admin/index.html ]; then
+                    echo "Admin UI verified: Found at dist/public/admin/index.html"
+                  else
+                    echo "ERROR: Admin UI build missing! Checked both locations:"
+                    echo "  - .medusa/server/public/admin/index.html"
+                    echo "  - dist/public/admin/index.html"
+                    ls -la /app/medusa-app/.medusa/ || echo "No .medusa directory"
+                    ls -la /app/medusa-app/dist/ || echo "No dist directory"
                     exit 1
                   fi
 
-                  echo "Admin UI verified: /app/medusa-app/.medusa/server/public/admin/index.html exists"
                   echo "=== Build verification complete ==="
                 volumeMounts:
                 - name: medusa-workspace
@@ -193,6 +209,8 @@ spec:
                   value: "9000"
                 - name: MEDUSA_BACKEND_URL
                   value: "https://medusa-backend.xuperson.org"
+                - name: MEDUSA_ADMIN_BUILD_PATH
+                  value: "/app/medusa-app/.medusa/server/public/admin"
 
                 # Database Configuration
                 - name: DATABASE_URL

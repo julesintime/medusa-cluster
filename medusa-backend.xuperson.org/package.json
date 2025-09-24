@@ -6,7 +6,7 @@
     "dev": "medusa develop",
     "start": "medusa start",
     "build": "medusa build",
-    "seed": "medusa seed -f ./data/seed.json"
+    "seed": "medusa seed"
   },
   "dependencies": {
     "@medusajs/medusa": "2.9.0",
