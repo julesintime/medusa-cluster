@@ -122,7 +122,7 @@ spec:
             app.kubernetes.io/name: medusa-backend
             app.kubernetes.io/component: server
         spec:
-          replicas: 2
+          replicas: 1
           selector:
             matchLabels:
               app.kubernetes.io/name: medusa-backend
