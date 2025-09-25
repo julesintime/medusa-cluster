@@ -209,8 +209,6 @@ spec:
                   value: "9000"
                 - name: MEDUSA_BACKEND_URL
                   value: "https://medusa-backend.xuperson.org"
-                - name: MEDUSA_ADMIN_BUILD_PATH
-                  value: "/app/medusa-app/.medusa/server/public/admin"
 
                 # Database Configuration
                 - name: DATABASE_URL
